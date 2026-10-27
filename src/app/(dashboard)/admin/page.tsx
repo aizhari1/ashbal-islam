@@ -29,24 +29,27 @@ export default async function AdminDashboard() {
   const dueTotal = (dues ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
 
   const menu = [
-    { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة والطلاب', color: '#176b52' },
+    { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة', color: '#176b52' },
     { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
-    { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر والإحصائيات', color: '#176b52' },
-    { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء الأمور والإدارة', color: '#c5a45d' },
-    { href: '/admin/schedule', icon: 'event', title: 'الحضور والتحضير', desc: 'أرشيف حصص أكتوبر', color: '#3d665a' },
-    { href: '/admin/finance', icon: 'receipt_long', title: 'متأخرات وتذكير', desc: 'المستحقات والمدفوعات', color: '#c74747' },
+    { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر', color: '#176b52' },
+    { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء + إدارة', color: '#c5a45d' },
+    { href: '/admin/schedule', icon: 'event', title: 'الحضور والتحضير', desc: 'أرشيف أكتوبر', color: '#3d665a' },
+    { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'المواعيد الثابتة', desc: 'جدول + روابط Zoom', color: '#176b52' },
+    { href: '/admin/families', icon: 'family_restroom', title: 'العائلات (الإخوة)', desc: 'تجميع بالهاتف', color: '#3d665a' },
+    { href: '/admin/supervisor-eval', icon: 'military_tech', title: 'تقييم الإشراف', desc: 'نقاط شهرية', color: '#c5a45d' },
+    { href: '/admin/finance', icon: 'receipt_long', title: 'متأخرات وتذكير', desc: 'المستحقات', color: '#c74747' },
     { href: '/admin/cashbox', icon: 'account_balance', title: 'الصندوق المالي', desc: 'إيرادات ومصروفات', color: '#176b52' },
-    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × 25 ج.م', color: '#755b1b' },
+    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × 25', color: '#755b1b' },
     { href: '/admin/supervisors', icon: 'supervisor_account', title: 'رواتب الإشراف', desc: 'مدفوع ومتبقي', color: '#755b1b' },
-    { href: '/admin/students?status=تجريبي', icon: 'how_to_reg', title: 'حصص تجريبية', desc: 'طلاب محتملون', color: '#3d665a' },
-    { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'موقوفة مؤقتاً', desc: 'إجازات ومتوقفين', color: '#d49a35' },
-    { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف الانسحاب', color: '#6f7974' },
+    { href: '/admin/students?status=تجريبي', icon: 'how_to_reg', title: 'حصص تجريبية', desc: 'محتملون', color: '#3d665a' },
+    { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'موقوفة مؤقتاً', desc: 'متوقفين', color: '#d49a35' },
+    { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف', color: '#6f7974' },
     { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين', desc: 'تقييم الإدارة', color: '#c5a45d' },
-    { href: '/evaluate', icon: 'family_restroom', title: 'فورم أولياء الأمور', desc: 'تقييم عام بدون دخول', color: '#176b52' },
-    { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أكواد وأدوار', color: '#00513c' },
-    { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف الباقات', color: '#3d665a' },
+    { href: '/evaluate', icon: 'family_restroom', title: 'فورم أولياء الأمور', desc: 'بدون دخول', color: '#176b52' },
+    { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أدوار', color: '#00513c' },
+    { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف', color: '#3d665a' },
     { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور وحفظ', color: '#176b52' },
-    { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج وإعدادات', color: '#6f7974' },
+    { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج', color: '#6f7974' },
   ]
 
   return (
@@ -57,80 +60,51 @@ export default async function AdminDashboard() {
             <span className="material-symbols-outlined text-white text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>menu_book</span>
           </div>
           <div>
-            <p className="text-[11px] font-medium" style={{ color: '#6f7974' }}>الإدارة</p>
-            <h1 className="text-[15px] font-bold leading-tight" style={{ color: '#00513c' }}>أكاديمية أشبال الإسلام</h1>
+            <p className="text-[11px]" style={{ color: '#6f7974' }}>الإدارة</p>
+            <h1 className="text-[15px] font-bold" style={{ color: '#00513c' }}>أكاديمية أشبال الإسلام</h1>
           </div>
         </div>
-        <Link href="/admin/more" className="w-9 h-9 rounded-full bg-white flex items-center justify-center" style={{ border: '1px solid rgba(18,61,50,0.08)' }}>
-          <span className="material-symbols-outlined text-[20px]" style={{ color: '#3f4944' }}>notifications</span>
-        </Link>
       </header>
 
       <div className="px-4 mt-2 mb-4">
-        <div className="card p-4" style={{ background: 'linear-gradient(135deg, #176b52 0%, #00513c 100%)', border: 'none' }}>
-          <div className="flex items-start justify-between text-white">
-            <div>
-              <p className="text-[12px] opacity-80">مرحباً</p>
-              <h2 className="text-[18px] font-bold mt-0.5">{profile?.full_name || 'الإدارة'}</h2>
-              <span className="inline-flex items-center gap-1 mt-2 text-[11px] bg-white/15 px-2 py-0.5 rounded-full">
-                <span className="material-symbols-outlined text-[14px]">verified</span>
-                مدير الأكاديمية
-              </span>
-            </div>
-            <span className="material-symbols-outlined text-4xl opacity-30">school</span>
-          </div>
+        <div className="card p-4" style={{ background: 'linear-gradient(135deg, #176b52, #00513c)', border: 'none' }}>
+          <p className="text-white text-[12px] opacity-80">مرحباً</p>
+          <h2 className="text-white text-[18px] font-bold">{profile?.full_name || 'الإدارة'}</h2>
         </div>
       </div>
 
       <div className="px-4 grid grid-cols-3 gap-2 mb-4">
         {[
-          { label: 'طالب نشط', value: active ?? 0, icon: 'school' },
-          { label: 'متوقف', value: paused ?? 0, icon: 'pause_circle' },
-          { label: 'معلم', value: teachers ?? 0, icon: 'record_voice_over' },
+          { label: 'نشط', value: active ?? 0 },
+          { label: 'متوقف', value: paused ?? 0 },
+          { label: 'معلم', value: teachers ?? 0 },
         ].map((s) => (
           <div key={s.label} className="card p-3 text-center">
-            <span className="material-symbols-outlined text-[22px]" style={{ color: '#176b52' }}>{s.icon}</span>
-            <p className="text-[22px] font-bold leading-none mt-1" style={{ color: '#00513c' }}>{s.value}</p>
-            <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>{s.label}</p>
+            <p className="text-[22px] font-bold" style={{ color: '#00513c' }}>{s.value}</p>
+            <p className="text-[10px]" style={{ color: '#6f7974' }}>{s.label}</p>
           </div>
         ))}
       </div>
 
       <div className="px-4 mb-4">
         <div className="card p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[13px] font-bold">لمحة مالية</h3>
-            <Link href="/admin/cashbox" className="text-[11px] font-semibold" style={{ color: '#176b52' }}>الصندوق ←</Link>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>قبضنا</p>
-              <p className="text-[18px] font-bold" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>مستحقات</p>
-              <p className="text-[18px] font-bold" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>منسحب</p>
-              <p className="text-[16px] font-bold">{withdrawn ?? 0}</p>
-            </div>
-            <div>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>التقارير</p>
-              <Link href="/admin/reports" className="text-[13px] font-bold" style={{ color: '#176b52' }}>فتح</Link>
-            </div>
+          <p className="text-[13px] font-bold mb-2">لمحة مالية</p>
+          <div className="grid grid-cols-2 gap-2 text-[13px]">
+            <div><span style={{ color: '#6f7974' }}>قبضنا</span><p className="font-bold" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p></div>
+            <div><span style={{ color: '#6f7974' }}>مستحقات</span><p className="font-bold" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p></div>
+            <div><span style={{ color: '#6f7974' }}>منسحب</span><p className="font-bold">{withdrawn ?? 0}</p></div>
+            <div><Link href="/admin/reports" style={{ color: '#176b52' }} className="font-bold">التقارير ←</Link></div>
           </div>
         </div>
       </div>
 
       <div className="px-4">
-        <h3 className="text-[13px] font-bold mb-2 px-1" style={{ color: '#3f4944' }}>القائمة الرئيسية</h3>
         <div className="grid grid-cols-2 gap-2.5">
           {menu.map((m) => (
-            <Link key={m.href + m.title} href={m.href} className="card p-3.5 flex flex-col gap-1.5 min-h-[96px]">
-              <span className="material-symbols-outlined text-[24px]" style={{ color: m.color }}>{m.icon}</span>
-              <span className="text-[13px] font-bold leading-snug">{m.title}</span>
-              <span className="text-[11px] leading-snug" style={{ color: '#6f7974' }}>{m.desc}</span>
+            <Link key={m.href + m.title} href={m.href} className="card p-3.5 flex flex-col gap-1 min-h-[92px]">
+              <span className="material-symbols-outlined text-[22px]" style={{ color: m.color }}>{m.icon}</span>
+              <span className="text-[13px] font-bold">{m.title}</span>
+              <span className="text-[11px]" style={{ color: '#6f7974' }}>{m.desc}</span>
             </Link>
           ))}
         </div>
@@ -141,7 +115,7 @@ export default async function AdminDashboard() {
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
           { href: '/admin/students/new', icon: 'person_add', label: 'إضافة' },
           { href: '/admin/reports', icon: 'analytics', label: 'تقارير' },
-          { href: '/admin/schedule', icon: 'event', label: 'تحضير' },
+          { href: '/admin/fixed-schedule', icon: 'calendar_month', label: 'مواعيد' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
           <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
