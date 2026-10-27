@@ -1,86 +1,100 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function StudentsPage() {
+export default async function StudentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>
+}) {
   const supabase = await createClient()
-  let students: Array<{
-    id: string
-    code: string
-    name: string
-    status: string
-    amount_due: number
-    teachers: { name: string } | null
-  }> = []
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  try {
-    const { data } = await supabase
-      .from('students')
-      .select('id, code, name, status, amount_due, teachers(name)')
-      .order('code')
-      .limit(100)
-    students = (data as typeof students) ?? []
-  } catch {
-    // schema not ready
+  const params = await searchParams
+  let query = supabase
+    .from('students')
+    .select('id, code, name, status, amount_due, currency, last_session_date, teachers(name)')
+    .order('code')
+
+  if (params.q) {
+    query = query.or(`name.ilike.%${params.q}%,code.ilike.%${params.q}%`)
+  }
+  if (params.status) {
+    query = query.eq('status', params.status)
   }
 
-  const statusColor: Record<string, string> = {
-    'نشط': 'bg-[rgba(35,132,91,0.12)] text-[#23845b]',
-    'موقوف': 'bg-[#fff8e6] text-[#d49a35]',
-    'منسحب': 'bg-[#ffdad6] text-[#ba1a1a]',
-    'تجريبي': 'bg-[#e8f0fe] text-[#1a73e8]',
-  }
+  const { data: students } = await query.limit(200)
 
   return (
-    <div className="min-h-dvh bg-[#eefdf6] max-w-lg mx-auto">
-      <header className="sticky top-0 z-50 bg-[#eefdf6]/95 backdrop-blur-md px-4 py-3 flex items-center justify-between">
-        <Link href="/admin" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
-          <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-        </Link>
-        <h1 className="text-[16px] font-bold text-[#111e1a]">إدارة شؤون الطلاب</h1>
-        <Link href="/admin/students/new" className="w-9 h-9 rounded-full bg-[#176b52] flex items-center justify-center shadow-sm">
-          <span className="material-symbols-outlined text-white text-[20px]">add</span>
+    <div className="min-h-dvh bg-[#f5f0e8] max-w-lg mx-auto">
+      <header className="sticky top-0 z-50 bg-[#f5f0e8]/95 backdrop-blur-md px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/admin" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
+            <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+          </Link>
+          <h1 className="text-[16px] font-bold">الطلاب ({students?.length ?? 0})</h1>
+        </div>
+        <Link href="/admin/students/new" className="bg-[#176b52] text-white text-[12px] font-bold px-3 py-2 rounded-full">
+          + إضافة
         </Link>
       </header>
 
       <main className="px-4 pb-24">
-        <p className="text-[13px] text-[#6f7974] mb-3">{students.length} طالب</p>
+        <form className="mb-3">
+          <input
+            name="q"
+            defaultValue={params.q || ''}
+            placeholder="بحث بالاسم أو الكود..."
+            className="w-full bg-white border border-[#e5efe8] rounded-xl px-4 py-2.5 text-[14px]"
+          />
+        </form>
+
+        <div className="flex gap-2 mb-3 overflow-x-auto">
+          {[
+            { label: 'الكل', status: '' },
+            { label: 'نشط', status: 'نشط' },
+            { label: 'موقوف', status: 'موقوف' },
+            { label: 'منسحب', status: 'منسحب' },
+            { label: 'تجريبي', status: 'تجريبي' },
+          ].map((f) => (
+            <Link
+              key={f.label}
+              href={f.status ? `/admin/students?status=${encodeURIComponent(f.status)}` : '/admin/students'}
+              className={`px-3 py-1 rounded-full text-[12px] whitespace-nowrap ${
+                (params.status || '') === f.status
+                  ? 'bg-[#176b52] text-white'
+                  : 'bg-white text-[#3f4944] border border-[#e5efe8]'
+              }`}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </div>
 
         <div className="space-y-2">
-          {students.map((s) => (
+          {(students ?? []).map((s: any) => (
             <Link
               key={s.id}
               href={`/admin/students/${s.id}`}
-              className="flex items-center gap-3 bg-white rounded-2xl p-3.5 shadow-sm border border-[rgba(18,61,50,0.06)]"
+              className="flex items-center gap-3 bg-white rounded-2xl p-3.5 shadow-sm"
             >
-              <div className="w-11 h-11 rounded-full bg-[#e8f7f0] flex items-center justify-center text-[#176b52] font-bold shrink-0">
-                {s.name.charAt(0)}
+              <div className="w-10 h-10 rounded-full bg-[#e8f7f0] flex items-center justify-center text-[#176b52] font-bold">
+                {s.name?.charAt(0) || '?'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-bold text-[#111e1a] truncate">{s.name}</p>
+                <p className="text-[14px] font-bold truncate">{s.name}</p>
                 <p className="text-[11px] text-[#6f7974]">
-                  {s.code} · {s.teachers?.name || 'بدون معلم'}
+                  {s.code} · {s.teachers?.name || 'بدون معلم'} · {s.status}
                 </p>
               </div>
-              <div className="text-left shrink-0">
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColor[s.status] || 'bg-gray-100 text-gray-600'}`}>
-                  {s.status}
-                </span>
-                {s.amount_due > 0 && (
-                  <p className="text-[11px] text-[#ba1a1a] mt-1 font-medium">{s.amount_due} ج.م</p>
-                )}
-              </div>
+              {Number(s.amount_due) > 0 && (
+                <span className="text-[12px] font-bold text-[#ba1a1a]">{s.amount_due}</span>
+              )}
             </Link>
           ))}
-
-          {students.length === 0 && (
-            <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-              <span className="material-symbols-outlined text-[40px] text-[#bec9c2]">school</span>
-              <p className="text-[#6f7974] mt-2">لا يوجد طلاب بعد</p>
-              <p className="text-[12px] text-[#bec9c2] mt-1">نفّذ migration الاستيراد في Supabase</p>
-              <Link href="/admin/students/new" className="inline-block mt-3 text-[#176b52] font-bold text-[14px]">
-                إضافة طالب
-              </Link>
-            </div>
+          {(!students || students.length === 0) && (
+            <div className="bg-white rounded-2xl p-6 text-center text-[#6f7974]">لا يوجد طلاب</div>
           )}
         </div>
       </main>

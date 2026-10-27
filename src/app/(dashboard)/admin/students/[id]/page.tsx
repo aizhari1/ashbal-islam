@@ -17,8 +17,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { data: attendance } = await supabase.from('attendance').select('*').eq('student_id', id).order('session_date', { ascending: false }).limit(10)
 
   return (
-    <div className="min-h-dvh bg-[#eefdf6] max-w-lg mx-auto">
-      <header className="sticky top-0 z-50 bg-[#eefdf6]/95 backdrop-blur-md px-4 py-3 flex items-center gap-3">
+    <div className="min-h-dvh bg-[#f5f0e8] max-w-lg mx-auto">
+      <header className="sticky top-0 z-50 bg-[#f5f0e8]/95 backdrop-blur-md px-4 py-3 flex items-center gap-3">
         <Link href="/admin/students" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
@@ -26,6 +26,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <h1 className="text-[16px] font-bold truncate">{student.name}</h1>
           <p className="text-[12px] text-[#6f7974]">{student.code}</p>
         </div>
+        <Link href={`/admin/students/${id}/certificate`} className="text-[#c5a45d]">
+          <span className="material-symbols-outlined">workspace_premium</span>
+        </Link>
       </header>
 
       <main className="px-4 pb-28">
@@ -65,3 +68,5 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     </div>
   )
 }
+
+// fix: StudentActions import was already there
