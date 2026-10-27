@@ -7,30 +7,40 @@ export default async function TeacherAttendancePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
-  let query = supabase.from('attendance').select('*, students(name, code)').order('session_date', { ascending: false }).limit(40)
-  if (teacher) query = query.eq('teacher_id', teacher.id)
-  const { data: rows } = await query
+  const { data: teacher } = await supabase.from('teachers').select('id, name').eq('profile_id', user.id).maybeSingle()
+
+  let rows: any[] = []
+  if (teacher) {
+    const { data } = await supabase
+      .from('attendance')
+      .select('id, session_date, status, notes, students(name, code)')
+      .eq('teacher_id', teacher.id)
+      .gte('session_date', '2026-10-01')
+      .lte('session_date', '2026-10-31')
+      .order('session_date', { ascending: false })
+      .limit(50)
+    rows = data ?? []
+  }
 
   return (
-    <div className="min-h-dvh bg-[#eefdf6] max-w-lg mx-auto">
-      <header className="px-4 py-3 flex items-center gap-3">
-        <Link href="/teacher" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </Link>
-        <h1 className="text-[16px] font-bold">سجل الحضور</h1>
-      </header>
-      <main className="px-4 pb-24 space-y-2">
-        {(rows ?? []).map((r: { id: string; session_date: string; status: string; hifz_from: string | null; hifz_to: string | null; muraja_from: string | null; muraja_to: string | null; students: { name: string; code: string } | null }) => (
-          <div key={r.id} className="bg-white rounded-2xl p-3.5 shadow-sm">
-            <div className="flex justify-between">
-              <p className="font-bold text-[14px]">{r.students?.name}</p>
-              <span className="text-[12px] font-semibold text-[#176b52]">{r.status}</span>
+    <div className="min-h-dvh max-w-lg mx-auto p-4 pb-20" style={{ background: '#eefdf6' }}>
+      <Link href="/teacher" className="text-[13px]" style={{ color: '#176b52' }}>← رجوع</Link>
+      <div className="flex justify-between items-center mt-2 mb-4">
+        <h1 className="text-[18px] font-bold">سجل حصصي — أكتوبر</h1>
+        <Link href="/teacher/session" className="btn-primary text-[12px] px-3 py-2">تحضير</Link>
+      </div>
+      <div className="space-y-2">
+        {rows.map((r) => (
+          <div key={r.id} className="card p-3 flex justify-between text-[13px]">
+            <div>
+              <p className="font-bold">{r.students?.name}</p>
+              <p className="text-[11px]" style={{ color: '#6f7974' }}>{r.session_date}</p>
             </div>
-            <p className="text-[11px] text-[#6f7974]">{r.session_date} · {r.students?.code}</p>
+            <span className={r.status === 'حاضر' ? 'badge-ok' : 'badge-err'}>{r.status}</span>
           </div>
         ))}
-      </main>
+        {rows.length === 0 && <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا حصص مسجّلة</p>}
+      </div>
     </div>
   )
 }
