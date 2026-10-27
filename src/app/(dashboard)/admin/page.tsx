@@ -18,7 +18,10 @@ export default async function AdminDashboard() {
     studentCount = sc ?? 0
     teacherCount = tc ?? 0
     activeCount = ac ?? 0
-    totalDue = (dues ?? []).reduce((s, r) => s + (Number(r.amount_due) || 0), 0)
+    totalDue = ((dues as { amount_due: number }[] | null) ?? []).reduce(
+      (s, r) => s + (Number(r.amount_due) || 0),
+      0
+    )
   } catch {
     // tables may not exist yet
   }
