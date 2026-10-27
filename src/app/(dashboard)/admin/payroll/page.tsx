@@ -8,6 +8,7 @@ export default async function PayrollPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // أكتوبر فقط
   const monthStart = '2026-10-01'
   const monthEnd = '2026-10-31'
 
@@ -52,7 +53,7 @@ export default async function PayrollPage() {
     if (d?.teacher_name) settledByName[d.teacher_name] = (settledByName[d.teacher_name] || 0) + Number(d.amount || 0)
   }
 
-  const DEFAULT_SESSION_RATE = 60
+  const DEFAULT_SESSION_RATE = 25
 
   const rows = (teachers ?? []).map((t) => {
     const sessions = sessionsByTeacher[t.id] || 0
@@ -85,7 +86,7 @@ export default async function PayrollPage() {
         </Link>
         <div>
           <h1 className="text-[16px] font-bold">الرواتب بعدد الحصص</h1>
-          <p className="text-[11px]" style={{ color: '#6f7974' }}>أكتوبر 2026 · راتب = عدد الحصص × سعر الحصة</p>
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>أكتوبر 2026 فقط · راتب = حصص × 25 ج.م</p>
         </div>
       </header>
 
@@ -106,7 +107,7 @@ export default async function PayrollPage() {
             </div>
           </div>
           <p className="text-[11px] mt-3 text-center" style={{ color: '#6f7974' }}>
-            السعر الافتراضي للحصة: {DEFAULT_SESSION_RATE} ج.م — يمكن تعديله لكل معلم
+            سعر الحصة للكل: {DEFAULT_SESSION_RATE} ج.م · من حضور أكتوبر فقط
           </p>
         </div>
 

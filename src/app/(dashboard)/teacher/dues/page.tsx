@@ -17,6 +17,7 @@ export default async function TeacherDuesPage() {
     )
   }
 
+  // أكتوبر فقط
   const monthStart = '2026-10-01'
   const monthEnd = '2026-10-31'
 
@@ -35,7 +36,7 @@ export default async function TeacherDuesPage() {
     .eq('entity_id', teacher.id)
     .limit(1)
 
-  const sessionRate = Number((rateLogs?.[0]?.details as any)?.session_rate) || 60
+  const sessionRate = Number((rateLogs?.[0]?.details as any)?.session_rate) || 25
   const sessionsCount = sessions ?? 0
   const salary = sessionsCount * sessionRate
 
@@ -54,11 +55,11 @@ export default async function TeacherDuesPage() {
     <div className="min-h-dvh max-w-lg mx-auto p-4" style={{ background: '#eefdf6' }}>
       <Link href="/teacher" className="text-[13px]" style={{ color: '#176b52' }}>← رجوع</Link>
       <h1 className="text-[18px] font-bold mt-2">مستحقاتي — أكتوبر 2026</h1>
-      <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>الراتب = عدد الحصص الحاضرة × سعر الحصة</p>
+      <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>الراتب = حصص أكتوبر × 25 ج.م</p>
 
       <div className="card p-5 mt-4 space-y-3">
         <div className="flex justify-between text-[14px]">
-          <span style={{ color: '#6f7974' }}>الحصص المسجّلة (حاضر)</span>
+          <span style={{ color: '#6f7974' }}>الحصص (أكتوبر · حاضر)</span>
           <b>{sessionsCount}</b>
         </div>
         <div className="flex justify-between text-[14px]">
