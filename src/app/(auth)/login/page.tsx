@@ -5,12 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-function passwordCandidates(code: string): string[] {
+function padPwd(code: string) {
   const c = code.trim()
-  const upper = c.toUpperCase()
-  const list = [c, upper, (c * 6).slice(0, 6), (upper * 6).slice(0, 6)]
-  if (upper === 'ADMIN') list.push('AshbalADMIN')
-  return [...new Set(list.filter((x) => x.length >= 6 || upper === 'ADMIN'))]
+  if (c.length >= 6) return c
+  return (c + c + c + c + c + c).slice(0, 6)
 }
 
 export default function LoginPage() {
@@ -27,43 +25,70 @@ export default function LoginPage() {
       setError('اكتب كود الدخول')
       return
     }
+
     startTransition(async () => {
+      const upper = raw.toUpperCase()
+      const email = `${upper}@ashbal.local`
+      const emailLower = `${raw.toLowerCase()}@ashbal.local`
+
+      const attempts: [string, string][] =
+        upper === 'ADMIN'
+          ? [
+              ['ADMIN@ashbal.local', 'AshbalADMIN'],
+              ['admin@ashbal.local', 'AshbalADMIN'],
+            ]
+          : [
+              [email, padPwd(raw)],
+              [emailLower, padPwd(raw)],
+              [email, raw],
+              [emailLower, raw],
+            ]
+
       try {
         const supabase = createClient()
-        const emails = [
-          `${raw.toUpperCase()}@ashbal.local`,
-          `${raw.toLowerCase()}@ashbal.local`,
-          `${raw}@ashbal.local`,
-        ]
-        const passwords = passwordCandidates(raw)
-        let ok = false
-        for (const email of emails) {
-          for (const password of passwords) {
-            const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-            if (!err) {
-              ok = true
-              break
+        let lastMsg = 'الكود غير صحيح'
+
+        for (const [em, pw] of attempts) {
+          const { data, error: err } = await supabase.auth.signInWithPassword({
+            email: em,
+            password: pw,
+          })
+          if (!err && data.session) {
+            let role = 'admin'
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user!.id)
+                .maybeSingle()
+              if (profile?.role) role = profile.role
+            } catch {
+              /* ignore */
             }
+
+            if (role === 'teacher') router.replace('/teacher')
+            else if (role === 'supervisor') router.replace('/supervisor')
+            else if (role === 'parent') router.replace('/parent')
+            else router.replace('/admin')
+            return
           }
-          if (ok) break
+          if (err) lastMsg = err.message || lastMsg
         }
-        if (!ok) {
+
+        if (/invalid login|invalid credentials/i.test(lastMsg)) {
           setError('الكود غير صحيح')
-          return
+        } else if (/network|fetch|failed to fetch/i.test(lastMsg)) {
+          setError('مشكلة في الاتصال بالخادم — جرّب نت تاني')
+        } else {
+          setError(lastMsg)
         }
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          setError('حصل خطأ في الجلسة — جرّب تاني')
-          return
+      } catch (e: any) {
+        const msg = String(e?.message || e || '')
+        if (/fetch|network|Failed/i.test(msg)) {
+          setError('الاتصال بـ Supabase فشل. تأكد إن النت شغال وأن الموقع مش محجوب.')
+        } else {
+          setError(msg || 'خطأ غير متوقع')
         }
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        const role = profile?.role
-        if (role === 'teacher') router.replace('/teacher')
-        else if (role === 'supervisor') router.replace('/supervisor')
-        else if (role === 'parent') router.replace('/parent')
-        else router.replace('/admin')
-      } catch {
-        setError('مشكلة في الاتصال — تأكد من النت وحاول مرة أخرى')
       }
     })
   }
@@ -91,7 +116,7 @@ export default function LoginPage() {
               className="input text-center text-[18px] tracking-widest"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="مثال: 2468 أو ADMIN"
+              placeholder="ADMIN أو كود المشرف/المعلم"
               autoComplete="username"
               required
               dir="ltr"
@@ -99,7 +124,7 @@ export default function LoginPage() {
             />
           </div>
           {error && (
-            <p className="text-[13px] text-center rounded-lg py-2" style={{ background: '#ffdad6', color: '#93000a' }}>
+            <p className="text-[12px] text-center rounded-lg py-2 px-2 break-words" style={{ background: '#ffdad6', color: '#93000a' }}>
               {error}
             </p>
           )}
@@ -108,7 +133,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="text-center mt-5">
+        <p className="text-[11px] text-center mt-4" style={{ color: '#6f7974' }}>
+          مثال: ADMIN · 2468 · 147258
+        </p>
+        <div className="text-center mt-3">
           <Link href="/evaluate" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
             تقييم أولياء الأمور ←
           </Link>
