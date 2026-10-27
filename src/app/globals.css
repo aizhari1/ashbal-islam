@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #eefdf6;
+  --foreground: #111e1a;
+  --surface: #eefdf6;
+  --surface-dim: #ceddd7;
+  --surface-bright: #eefdf6;
+  --surface-container-lowest: #ffffff;
+  --primary: #176b52;
+  --primary-dark: #00513c;
+  --primary-container: #e8f7f0;
+  --on-primary: #ffffff;
+  --secondary: #c5a45d;
+  --error: #ba1a1a;
+  --outline: #bec9c2;
+  --muted: #6f7974;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-container: var(--primary-container);
+  --color-secondary: var(--secondary);
+  --color-error: var(--error);
+  --color-muted: var(--muted);
+  --color-outline: var(--outline);
+  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  min-height: 100dvh;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  vertical-align: middle;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #bec9c2;
+  border-radius: 3px;
+}
