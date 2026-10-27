@@ -31,19 +31,21 @@ export default async function AdminDashboard() {
   const menu = [
     { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة والطلاب', color: '#176b52' },
     { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
+    { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر والإحصائيات', color: '#176b52' },
+    { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء الأمور والإدارة', color: '#c5a45d' },
+    { href: '/admin/schedule', icon: 'event', title: 'الحضور والتحضير', desc: 'أرشيف حصص أكتوبر', color: '#3d665a' },
     { href: '/admin/finance', icon: 'receipt_long', title: 'متأخرات وتذكير', desc: 'المستحقات والمدفوعات', color: '#c74747' },
     { href: '/admin/cashbox', icon: 'account_balance', title: 'الصندوق المالي', desc: 'إيرادات ومصروفات', color: '#176b52' },
-    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'رواتب بعدد الحصص', color: '#755b1b' },
+    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × 25 ج.م', color: '#755b1b' },
     { href: '/admin/supervisors', icon: 'supervisor_account', title: 'رواتب الإشراف', desc: 'مدفوع ومتبقي', color: '#755b1b' },
     { href: '/admin/students?status=تجريبي', icon: 'how_to_reg', title: 'حصص تجريبية', desc: 'طلاب محتملون', color: '#3d665a' },
     { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'موقوفة مؤقتاً', desc: 'إجازات ومتوقفين', color: '#d49a35' },
     { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف الانسحاب', color: '#6f7974' },
     { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين', desc: 'تقييم الإدارة', color: '#c5a45d' },
-    { href: '/evaluate', icon: 'family_restroom', title: 'تقييمات أولياء الأمور', desc: 'فورم عام', color: '#176b52' },
+    { href: '/evaluate', icon: 'family_restroom', title: 'فورم أولياء الأمور', desc: 'تقييم عام بدون دخول', color: '#176b52' },
     { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أكواد وأدوار', color: '#00513c' },
     { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف الباقات', color: '#3d665a' },
     { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور وحفظ', color: '#176b52' },
-    { href: '/admin/schedule', icon: 'event', title: 'الحضور والجدول', desc: 'سجلات الحصص', color: '#3d665a' },
     { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج وإعدادات', color: '#6f7974' },
   ]
 
@@ -114,8 +116,8 @@ export default async function AdminDashboard() {
               <p className="text-[16px] font-bold">{withdrawn ?? 0}</p>
             </div>
             <div>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>الرواتب</p>
-              <Link href="/admin/payroll" className="text-[13px] font-bold" style={{ color: '#176b52' }}>عرض المسير</Link>
+              <p className="text-[11px]" style={{ color: '#6f7974' }}>التقارير</p>
+              <Link href="/admin/reports" className="text-[13px] font-bold" style={{ color: '#176b52' }}>فتح</Link>
             </div>
           </div>
         </div>
@@ -138,8 +140,8 @@ export default async function AdminDashboard() {
         {[
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
           { href: '/admin/students/new', icon: 'person_add', label: 'إضافة' },
-          { href: '/admin/finance', icon: 'receipt_long', label: 'الرسوم' },
-          { href: '/admin/cashbox', icon: 'account_balance', label: 'الصندوق' },
+          { href: '/admin/reports', icon: 'analytics', label: 'تقارير' },
+          { href: '/admin/schedule', icon: 'event', label: 'تحضير' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
           <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
