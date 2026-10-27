@@ -13,9 +13,12 @@ export default function HomePage() {
         </div>
         <Link
           href="/login"
-          className="block w-full bg-[#176b52] text-white py-3.5 rounded-xl text-[15px] font-bold shadow-sm hover:bg-[#123d32] transition-colors"
+          className="block w-full bg-[#176b52] text-white py-3.5 rounded-xl text-[15px] font-bold shadow-sm"
         >
           تسجيل الدخول
+        </Link>
+        <Link href="/evaluate" className="block text-[13px] text-[#176b52] font-medium">
+          تقييم أولياء الأمور
         </Link>
       </div>
     </main>
