@@ -28,36 +28,43 @@ export default function LoginPage() {
       return
     }
     startTransition(async () => {
-      const supabase = createClient()
-      const emails = [
-        `${raw.toUpperCase()}@ashbal.local`,
-        `${raw.toLowerCase()}@ashbal.local`,
-        `${raw}@ashbal.local`,
-      ]
-      const passwords = passwordCandidates(raw)
-      let ok = false
-      for (const email of emails) {
-        for (const password of passwords) {
-          const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-          if (!err) {
-            ok = true
-            break
+      try {
+        const supabase = createClient()
+        const emails = [
+          `${raw.toUpperCase()}@ashbal.local`,
+          `${raw.toLowerCase()}@ashbal.local`,
+          `${raw}@ashbal.local`,
+        ]
+        const passwords = passwordCandidates(raw)
+        let ok = false
+        for (const email of emails) {
+          for (const password of passwords) {
+            const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+            if (!err) {
+              ok = true
+              break
+            }
           }
+          if (ok) break
         }
-        if (ok) break
+        if (!ok) {
+          setError('الكود غير صحيح')
+          return
+        }
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          setError('حصل خطأ في الجلسة — جرّب تاني')
+          return
+        }
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+        const role = profile?.role
+        if (role === 'teacher') router.replace('/teacher')
+        else if (role === 'supervisor') router.replace('/supervisor')
+        else if (role === 'parent') router.replace('/parent')
+        else router.replace('/admin')
+      } catch {
+        setError('مشكلة في الاتصال — تأكد من النت وحاول مرة أخرى')
       }
-      if (!ok) {
-        setError('الكود غير صحيح')
-        return
-      }
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user!.id).maybeSingle()
-      const role = profile?.role
-      if (role === 'teacher') router.replace('/teacher')
-      else if (role === 'supervisor') router.replace('/supervisor')
-      else if (role === 'parent') router.replace('/parent')
-      else router.replace('/admin')
-      router.refresh()
     })
   }
 
@@ -74,7 +81,7 @@ export default function LoginPage() {
             </span>
           </div>
           <h1 className="text-[22px] font-bold" style={{ color: '#00513c' }}>أكاديمية أشبال الإسلام</h1>
-          <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>دخول بالكود فقط · معلم / مشرف / إدارة</p>
+          <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>دخول بالكود فقط</p>
         </div>
 
         <form onSubmit={submit} className="card p-5 space-y-4">
@@ -101,10 +108,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-[11px] mt-4" style={{ color: '#6f7974' }}>
-          المعلم والمشرف: الكود فقط · الإدارة: ADMIN
-        </p>
-        <div className="text-center mt-3">
+        <div className="text-center mt-5">
           <Link href="/evaluate" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
             تقييم أولياء الأمور ←
           </Link>
