@@ -5,36 +5,58 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+function passwordCandidates(code: string): string[] {
+  const c = code.trim()
+  const upper = c.toUpperCase()
+  const list = [c, upper, (c * 6).slice(0, 6), (upper * 6).slice(0, 6)]
+  if (upper === 'ADMIN') list.push('AshbalADMIN')
+  return [...new Set(list.filter((x) => x.length >= 6 || upper === 'ADMIN'))]
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [code, setCode] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    const raw = code.trim()
+    if (!raw) {
+      setError('اكتب كود الدخول')
+      return
+    }
     startTransition(async () => {
       const supabase = createClient()
-      const tryLogin = async (email: string) =>
-        supabase.auth.signInWithPassword({ email, password })
-
-      let res = await tryLogin(`${code.trim().toUpperCase()}@ashbal.local`)
-      if (res.error) res = await tryLogin(`${code.trim().toLowerCase()}@ashbal.local`)
-      if (res.error) {
-        setError('الكود أو كلمة المرور غير صحيحة')
+      const emails = [
+        `${raw.toUpperCase()}@ashbal.local`,
+        `${raw.toLowerCase()}@ashbal.local`,
+        `${raw}@ashbal.local`,
+      ]
+      const passwords = passwordCandidates(raw)
+      let ok = false
+      for (const email of emails) {
+        for (const password of passwords) {
+          const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+          if (!err) {
+            ok = true
+            break
+          }
+        }
+        if (ok) break
+      }
+      if (!ok) {
+        setError('الكود غير صحيح')
         return
       }
-
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/admin'); return }
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user!.id).maybeSingle()
       const role = profile?.role
-      if (role === 'teacher') router.push('/teacher')
-      else if (role === 'supervisor') router.push('/supervisor')
-      else if (role === 'parent') router.push('/parent')
-      else router.push('/admin')
+      if (role === 'teacher') router.replace('/teacher')
+      else if (role === 'supervisor') router.replace('/supervisor')
+      else if (role === 'parent') router.replace('/parent')
+      else router.replace('/admin')
       router.refresh()
     })
   }
@@ -52,50 +74,37 @@ export default function LoginPage() {
             </span>
           </div>
           <h1 className="text-[22px] font-bold" style={{ color: '#00513c' }}>أكاديمية أشبال الإسلام</h1>
-          <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>تحفيظ القرآن · إدارة الحلقات والطلاب</p>
+          <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>دخول بالكود فقط · معلم / مشرف / إدارة</p>
         </div>
 
-        <form onSubmit={submit} className="card p-6 space-y-4">
+        <form onSubmit={submit} className="card p-5 space-y-4">
           <div>
             <label className="block text-[12px] font-semibold mb-1.5" style={{ color: '#3f4944' }}>كود الدخول</label>
             <input
-              className="input"
+              className="input text-center text-[18px] tracking-widest"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="مثال: ADMIN أو كود المعلم"
+              placeholder="مثال: 2468 أو ADMIN"
               autoComplete="username"
               required
               dir="ltr"
-              style={{ textAlign: 'center', letterSpacing: '0.05em' }}
+              autoFocus
             />
           </div>
-          <div>
-            <label className="block text-[12px] font-semibold mb-1.5" style={{ color: '#3f4944' }}>كلمة المرور</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-              dir="ltr"
-              style={{ textAlign: 'center' }}
-            />
-          </div>
-
           {error && (
             <p className="text-[13px] text-center rounded-lg py-2" style={{ background: '#ffdad6', color: '#93000a' }}>
               {error}
             </p>
           )}
-
           <button type="submit" disabled={isPending} className="btn-primary w-full py-3.5 text-[15px] disabled:opacity-60">
             {isPending ? 'جاري الدخول...' : 'دخول'}
           </button>
         </form>
 
-        <div className="text-center mt-5">
+        <p className="text-center text-[11px] mt-4" style={{ color: '#6f7974' }}>
+          المعلم والمشرف: الكود فقط · الإدارة: ADMIN
+        </p>
+        <div className="text-center mt-3">
           <Link href="/evaluate" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
             تقييم أولياء الأمور ←
           </Link>

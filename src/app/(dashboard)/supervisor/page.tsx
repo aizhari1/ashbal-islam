@@ -7,80 +7,60 @@ export default async function SupervisorDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, role')
+    .eq('id', user.id)
+    .single()
+
   if (profile && !['supervisor', 'admin'].includes(profile.role)) redirect('/login')
 
-  const [
-    { count: active },
-    { count: paused },
-    { count: withdrawn },
-    { count: trial },
-    { data: dues },
-  ] = await Promise.all([
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'نشط'),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'موقوف'),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'منسحب'),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'تجريبي'),
-    supabase.from('students').select('amount_due').gt('amount_due', 0),
-  ])
-  const dueTotal = (dues ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
-
   const cards = [
-    { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل' },
-    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك', desc: 'بيانات + مواعيد' },
-    { href: '/admin/students?status=تجريبي', icon: 'science', title: 'الحصص التجريبية', desc: 'متابعة المحتملين' },
-    { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'المتوقفين مؤقتاً', desc: 'للتواصل السريع' },
-    { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف الانسحاب' },
-    { href: '/admin/finance', icon: 'payments', title: 'تذكير بالمستحقات', desc: 'مين محتاج تذكير بالدفع' },
-    { href: '/admin/schedule', icon: 'event_available', title: 'الحضور والتحضير', desc: 'سجلات الحصص' },
-    { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص وإحصائيات' },
-    { href: '/admin/evaluations', icon: 'star', title: 'التقييمات', desc: 'أولياء الأمور والإدارة' },
-    { href: '/admin/families', icon: 'family_restroom', title: 'العائلات', desc: 'إخوة بنفس الهاتف' },
-    { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'المواعيد الثابتة', desc: 'جدول + روابط' },
-    { href: '/admin/supervisor-eval', icon: 'military_tech', title: 'تقييم الإشراف', desc: 'نقاط المعلمين' },
-    { href: '/evaluate', icon: 'family_restroom', title: 'فورم ولي الأمر', desc: 'رابط التقييم العام' },
-    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'رواتب المعلمين', desc: 'حصص أكتوبر × 25' },
-    { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'تسجيل حضور' },
+    { href: '/admin/students', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'الاسم، الاشتراك، سعر الحصة، أي بيان تاني' },
+    { href: '/admin/students', icon: 'group', title: 'قائمة كل الطلاب', desc: 'كل المسجلين في الأكاديمية مع تفاصيلهم' },
+    { href: '/admin/finance', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'طريقة الدفع، المبلغ، عدد الشهور' },
+    { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: 'إضافة أو حذف مواعيد ثابتة للطالب' },
+    { href: '/admin/finance', icon: 'notifications', title: 'تذكير بالمستحقات وتقرير مالي', desc: 'نفس تقرير الإدارة — مين محتاج تذكير بالدفع' },
+    { href: '/admin/students', icon: 'check_circle', title: 'تغيير حالة الطالب', desc: 'انسحاب / توقف / رجوع' },
+    { href: '/admin/students?status=منسحب', icon: 'menu_book', title: 'قائمة الطلاب المنسحبين', desc: 'أرشيف الانسحاب' },
+    { href: '/admin/supervisor-eval', icon: 'star', title: 'تقييماتي ونقاطي', desc: 'تقييم الإدارة ليك + تجميع نقاط الشهر' },
+    { href: '/admin/students?status=تجريبي', icon: 'assignment', title: 'قائمة الحصص التجريبية', desc: 'متابعة المحتملين' },
+    { href: '/admin/students?status=موقوف', icon: 'auto_stories', title: 'قائمة المتوقفين مؤقتًا', desc: 'للتواصل السريع معاهم' },
+    { href: '/admin/notes', icon: 'edit_note', title: 'ملاحظة أو مشكلة للإدارة', desc: 'أرسل ملاحظة للإدارة' },
+    { href: '/admin/subscriptions-log', icon: 'receipt_long', title: 'سجل الاشتراكات', desc: 'كل الدفعات المسجّلة' },
+    { href: '/admin/students/new?trial=1', icon: 'person_add', title: 'إضافة طالب تجريبي', desc: 'حصة تجريبية مستقلة' },
+    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك جديد', desc: 'بيانات + مواعيد حلقاته الثابتة' },
+    { href: '/admin/transfer', icon: 'swap_horiz', title: 'نقل طالب / تغيير معلم', desc: 'تحويل الطالب لمعلم آخر' },
   ]
 
   return (
-    <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
-      <div className="px-4 pt-5 pb-6" style={{ background: 'linear-gradient(160deg, #176b52, #00513c)' }}>
-        <div className="flex justify-between text-white mb-4">
-          <Link href="/login" className="text-[12px] opacity-80">خروج</Link>
-          <div className="text-left">
-            <h1 className="text-[18px] font-bold">أشبال الإسلام</h1>
-            <p className="text-[12px] opacity-85">تطبيق الإشراف · {profile?.full_name || 'مشرف'}</p>
-          </div>
+    <div className="min-h-dvh max-w-lg mx-auto pb-8" style={{ background: '#f5f3ef' }}>
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: '#176b52' }}>
+        <Link href="/login" className="text-white text-[12px] opacity-90">⏻ خروج</Link>
+        <div className="text-left text-white">
+          <h1 className="text-[16px] font-bold">أشبال الإسلام</h1>
+          <p className="text-[11px] opacity-85">تطبيق الإشراف · {profile?.full_name || 'مشرف'}</p>
         </div>
-        <div className="grid grid-cols-4 text-center text-white gap-1">
-          {[
-            { v: active ?? 0, l: 'نشط' },
-            { v: paused ?? 0, l: 'متوقف' },
-            { v: trial ?? 0, l: 'تجريبي' },
-            { v: withdrawn ?? 0, l: 'منسحب' },
-          ].map((s) => (
-            <div key={s.l}>
-              <p className="text-[20px] font-bold">{s.v}</p>
-              <p className="text-[10px] opacity-80">{s.l}</p>
-            </div>
-          ))}
-        </div>
-        {dueTotal > 0 && (
-          <p className="text-center text-white/90 text-[12px] mt-3">مستحقات مفتوحة: {dueTotal.toLocaleString('ar-EG')} ج.م</p>
-        )}
       </div>
 
-      <main className="px-3 -mt-3">
-        <div className="card p-2 grid grid-cols-2 gap-2">
-          {cards.map((c) => (
-            <Link key={c.href + c.title} href={c.href} className="rounded-2xl p-3.5 min-h-[96px] flex flex-col gap-1" style={{ background: '#fafaf8' }}>
-              <span className="material-symbols-outlined text-[22px]" style={{ color: '#176b52' }}>{c.icon}</span>
-              <span className="text-[13px] font-bold">{c.title}</span>
-              <span className="text-[11px]" style={{ color: '#6f7974' }}>{c.desc}</span>
-            </Link>
-          ))}
-        </div>
+      <main className="px-3 py-3 grid grid-cols-2 gap-2.5">
+        {cards.map((c) => (
+          <Link
+            key={c.title}
+            href={c.href}
+            className="bg-white rounded-2xl p-3.5 min-h-[100px] flex flex-col gap-1.5 shadow-sm"
+            style={{ border: '1px solid rgba(0,0,0,0.04)' }}
+          >
+            <span
+              className="w-9 h-9 rounded-xl flex items-center justify-center material-symbols-outlined text-[20px]"
+              style={{ background: '#eefdf6', color: '#176b52' }}
+            >
+              {c.icon}
+            </span>
+            <span className="text-[13px] font-bold leading-snug" style={{ color: '#1a3c34' }}>{c.title}</span>
+            <span className="text-[11px] leading-snug" style={{ color: '#6f7974' }}>{c.desc}</span>
+          </Link>
+        ))}
       </main>
     </div>
   )
