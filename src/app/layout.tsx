@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'موعظة ونور | أشبال الإسلام',
-  description: 'نظام إدارة أكاديمية موعظة ونور - أشبال الإسلام',
+  title: 'أكاديمية أشبال الإسلام',
+  description: 'نظام إدارة أكاديمية أشبال الإسلام — تحفيظ القرآن الكريم',
 }
 
 export default function RootLayout({

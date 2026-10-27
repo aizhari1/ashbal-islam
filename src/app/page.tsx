@@ -8,8 +8,8 @@ export default function HomePage() {
           <span className="material-symbols-outlined text-4xl text-white">menu_book</span>
         </div>
         <div>
-          <h1 className="text-[22px] font-bold text-[#00513c]">أكاديمية موعظة ونور</h1>
-          <p className="text-[13px] text-[#6f7974] mt-1">أشبال الإسلام · تحفيظ القرآن الكريم</p>
+          <h1 className="text-[22px] font-bold text-[#00513c]">أكاديمية أشبال الإسلام</h1>
+          <p className="text-[13px] text-[#6f7974] mt-1">تحفيظ القرآن الكريم · إدارة الحلقات</p>
         </div>
         <Link
           href="/login"
