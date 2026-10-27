@@ -29,20 +29,22 @@ export default async function AdminDashboard() {
   const dueTotal = (dues ?? []).reduce((s, d) => s + Number(d.amount_due || 0), 0)
 
   const cards = [
+    { href: '/admin/cashbox', icon: 'account_balance', title: 'الصندوق المالي', desc: 'إيرادات، مصروفات، والرصيد' },
+    { href: '/admin/supervisors', icon: 'supervisor_account', title: 'رواتب الإشراف', desc: 'المدفوع والمتبقي لكل مشرف' },
+    { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين (إدارة)', desc: 'تقييم الإدارة لكل معلم' },
     { href: '/admin/finance', icon: 'payments', title: 'تذكير بالمستحقات والتقرير المالي', desc: 'مين عليه فلوس + ملخص التحصيل' },
     { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'الطلاب في حالة انسحاب' },
     { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'المتوقفين مؤقتاً', desc: 'للتواصل السريع' },
     { href: '/admin/students?status=تجريبي', icon: 'science', title: 'الحصص التجريبية', desc: 'متابعة الطلاب المحتملين' },
-    { href: '/admin/finance', icon: 'receipt_long', title: 'سجل الاشتراكات', desc: 'كل الدفعات المسجّلة' },
-    { href: '/admin/schedule', icon: 'event_available', title: 'الحصص اللي حضروها', desc: 'أي حصة علّمها حضور تظهر هنا' },
-    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'الرواتب بعدد الحصص', desc: 'راتب كل معلم = عدد الحصص × النسبة' },
-    { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف باقات + إحصائية' },
-    { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع تفاصيلهم' },
-    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك جديد', desc: 'بيانات + مواعيد حلقاته' },
-    { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'إضافة/إزالة مدير، مشرف، أو معلم' },
-    { href: '/evaluate', icon: 'family_restroom', title: 'تقييمات أولياء الأمور', desc: 'فورم عام بدون تسجيل دخول' },
-    { href: '/admin/more', icon: 'settings', title: 'المزيد والإعدادات', desc: 'خروج وروابط إضافية' },
-    { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'تسجيل حضور + حفظ ومراجعة' },
+    { href: '/admin/schedule', icon: 'event_available', title: 'الحصص اللي حضروها', desc: 'سجلات الحضور' },
+    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'الرواتب بعدد الحصص', desc: 'راتب المعلم = الحصص × النسبة' },
+    { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف الباقات' },
+    { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين' },
+    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك جديد', desc: 'بيانات + حلقة' },
+    { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أكواد الدخول والأدوار' },
+    { href: '/evaluate', icon: 'family_restroom', title: 'تقييمات أولياء الأمور', desc: 'فورم عام بدون تسجيل' },
+    { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور + حفظ ومراجعة' },
+    { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج وروابط' },
   ]
 
   return (
@@ -85,8 +87,8 @@ export default async function AdminDashboard() {
               <p className="font-bold">{withdrawn ?? 0}</p>
             </div>
             <div className="text-left">
-              <span className="text-[#6f7974]">رواتب</span>
-              <p className="font-bold"><Link href="/admin/payroll" className="text-[#0d9b8a]">عرض</Link></p>
+              <span className="text-[#6f7974]">الصندوق</span>
+              <p className="font-bold"><Link href="/admin/cashbox" className="text-[#0d9b8a]">فتح</Link></p>
             </div>
           </div>
         </div>
@@ -108,7 +110,7 @@ export default async function AdminDashboard() {
           { href: '/admin', icon: 'home', label: 'الرئيسية' },
           { href: '/admin/students/new', icon: 'person_add', label: 'إضافة' },
           { href: '/admin/finance', icon: 'receipt_long', label: 'الرسوم' },
-          { href: '/admin/students', icon: 'swap_horiz', label: 'نقل' },
+          { href: '/admin/cashbox', icon: 'account_balance', label: 'الصندوق' },
           { href: '/admin/students', icon: 'tune', label: 'الحالة' },
         ].map((n) => (
           <Link key={n.label} href={n.href} className="flex flex-col items-center text-[#6f7974] min-w-[56px]">
