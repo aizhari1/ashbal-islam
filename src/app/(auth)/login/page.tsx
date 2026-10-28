@@ -116,7 +116,6 @@ export default function LoginPage() {
               className="input text-center text-[18px] tracking-widest"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="ADMIN أو كود المشرف/المعلم"
               autoComplete="username"
               required
               dir="ltr"
@@ -133,10 +132,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-[11px] text-center mt-4" style={{ color: '#6f7974' }}>
-          مثال: ADMIN · 2468 · 147258
-        </p>
-        <div className="text-center mt-3">
+        <div className="text-center mt-5">
           <Link href="/evaluate" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
             تقييم أولياء الأمور ←
           </Link>
