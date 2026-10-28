@@ -29,6 +29,7 @@ export default async function AdminDashboard() {
   const dueTotal = (dues ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
 
   const menu = [
+    { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
     { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة', color: '#176b52' },
     { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
     { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر', color: '#176b52' },
@@ -93,7 +94,7 @@ export default async function AdminDashboard() {
             <div><span style={{ color: '#6f7974' }}>قبضنا</span><p className="font-bold" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p></div>
             <div><span style={{ color: '#6f7974' }}>مستحقات</span><p className="font-bold" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p></div>
             <div><span style={{ color: '#6f7974' }}>منسحب</span><p className="font-bold">{withdrawn ?? 0}</p></div>
-            <div><Link href="/admin/reports" style={{ color: '#176b52' }} className="font-bold">التقارير ←</Link></div>
+            <div><Link href="/admin/monthly" style={{ color: '#176b52' }} className="font-bold">الملخص الشهري ←</Link></div>
           </div>
         </div>
       </div>
@@ -114,7 +115,7 @@ export default async function AdminDashboard() {
         {[
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
           { href: '/admin/students/new', icon: 'person_add', label: 'إضافة' },
-          { href: '/admin/reports', icon: 'analytics', label: 'تقارير' },
+          { href: '/admin/monthly', icon: 'calendar_view_month', label: 'ملخص' },
           { href: '/admin/fixed-schedule', icon: 'calendar_month', label: 'مواعيد' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
