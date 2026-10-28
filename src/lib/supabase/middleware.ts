@@ -39,7 +39,97 @@ export async function updateSession(request: NextRequest) {
     if (!user && !isPublic) {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/login'
+      redirectUrl.search = ''
       return NextResponse.redirect(redirectUrl)
+    }
+
+    if (user && !isPublic) {
+      let role = ''
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        role = String(profile?.role || '')
+      } catch {
+        role = ''
+      }
+
+      const homeForRole = (r: string) => {
+        if (r === 'teacher') return '/teacher'
+        if (r === 'supervisor') return '/supervisor'
+        if (r === 'parent') return '/parent'
+        return '/admin'
+      }
+
+      if (pathname.startsWith('/admin')) {
+        const supervisorAllowed =
+          pathname.startsWith('/admin/notes') ||
+          pathname.startsWith('/admin/students') ||
+          pathname.startsWith('/admin/finance') ||
+          pathname.startsWith('/admin/fixed-schedule') ||
+          pathname.startsWith('/admin/schedule') ||
+          pathname.startsWith('/admin/subscriptions-log') ||
+          pathname.startsWith('/admin/transfer') ||
+          pathname.startsWith('/admin/supervisor-eval') ||
+          pathname.startsWith('/admin/evaluations') ||
+          pathname.startsWith('/admin/reports') ||
+          pathname.startsWith('/admin/families') ||
+          pathname.startsWith('/admin/chat')
+
+        if (role === 'admin') {
+          // ok
+        } else if (role === 'supervisor' && supervisorAllowed) {
+          // ok
+        } else {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = homeForRole(role)
+          redirectUrl.search = ''
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
+
+      if (pathname.startsWith('/teacher')) {
+        if (role !== 'teacher' && role !== 'admin') {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = homeForRole(role)
+          redirectUrl.search = ''
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
+
+      if (pathname.startsWith('/supervisor')) {
+        if (role !== 'supervisor' && role !== 'admin') {
+          const redirectUrl = request.nextUrl.clone()
+          redirectUrl.pathname = homeForRole(role)
+          redirectUrl.search = ''
+          return NextResponse.redirect(redirectUrl)
+        }
+      }
+
+      // المعلم ممنوع من صفحات الإدارة حتى لو كتب اللينك
+      if (role === 'teacher' && pathname.startsWith('/admin')) {
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = '/teacher'
+        redirectUrl.search = ''
+        return NextResponse.redirect(redirectUrl)
+      }
+
+      // المشرف ممنوع من الملخص الشهري / الصندوق / المستخدمين / مسير الرواتب
+      if (
+        role === 'supervisor' &&
+        (pathname.startsWith('/admin/monthly') ||
+          pathname.startsWith('/admin/cashbox') ||
+          pathname.startsWith('/admin/users') ||
+          pathname.startsWith('/admin/payroll') ||
+          pathname === '/admin')
+      ) {
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = '/supervisor'
+        redirectUrl.search = ''
+        return NextResponse.redirect(redirectUrl)
+      }
     }
   } catch {
     return NextResponse.next({ request })
