@@ -9,6 +9,10 @@ export default async function AdminDashboard() {
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
+  // شهر العرض: أكتوبر 2026 (حسب طلب الإدارة)
+  const monthStart = '2026-10-01'
+  const monthEnd = '2026-10-31'
+
   const [
     { count: active },
     { count: paused },
@@ -21,12 +25,13 @@ export default async function AdminDashboard() {
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'موقوف'),
     supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'منسحب'),
-    supabase.from('payments').select('amount').limit(500),
+    supabase.from('payments').select('amount, payment_date').gte('payment_date', monthStart).lte('payment_date', monthEnd).limit(1000),
     supabase.from('students').select('amount_due').gt('amount_due', 0),
   ])
 
   const collected = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
   const dueTotal = (dues ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
+  const dueCount = dues?.length ?? 0
 
   const menu = [
     { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
@@ -93,12 +98,20 @@ export default async function AdminDashboard() {
 
       <div className="px-4 mb-4">
         <div className="card p-4">
-          <p className="text-[13px] font-bold mb-2">لمحة مالية</p>
+          <p className="text-[13px] font-bold mb-2">لمحة مالية — أكتوبر 2026</p>
           <div className="grid grid-cols-2 gap-2 text-[13px]">
-            <div><span style={{ color: '#6f7974' }}>قبضنا</span><p className="font-bold" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p></div>
-            <div><span style={{ color: '#6f7974' }}>مستحقات</span><p className="font-bold" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p></div>
+            <div>
+              <span style={{ color: '#6f7974' }}>قبضنا (أكتوبر)</span>
+              <p className="font-bold text-[18px]" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p>
+              <p className="text-[10px]" style={{ color: '#6f7974' }}>{payments?.length ?? 0} دفعة</p>
+            </div>
+            <div>
+              <span style={{ color: '#6f7974' }}>مستحقات مفتوحة</span>
+              <p className="font-bold text-[18px]" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p>
+              <p className="text-[10px]" style={{ color: '#6f7974' }}>{dueCount} طالب</p>
+            </div>
             <div><span style={{ color: '#6f7974' }}>منسحب</span><p className="font-bold">{withdrawn ?? 0}</p></div>
-            <div><Link href="/admin/analytics" style={{ color: '#176b52' }} className="font-bold">تحليلات ←</Link></div>
+            <div><Link href="/admin/monthly?month=2026-10" style={{ color: '#176b52' }} className="font-bold">الملخص الشهري ←</Link></div>
           </div>
         </div>
       </div>
@@ -119,7 +132,7 @@ export default async function AdminDashboard() {
         {[
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
           { href: '/admin/chat', icon: 'chat', label: 'شات' },
-          { href: '/admin/monthly', icon: 'calendar_view_month', label: 'ملخص' },
+          { href: '/admin/monthly?month=2026-10', icon: 'calendar_view_month', label: 'ملخص' },
           { href: '/admin/analytics', icon: 'bar_chart', label: 'تحليلات' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
