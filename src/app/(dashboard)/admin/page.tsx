@@ -30,12 +30,14 @@ export default async function AdminDashboard() {
 
   const menu = [
     { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
+    { href: '/admin/analytics', icon: 'bar_chart', title: 'تحليلات الباقات', desc: 'أكثر وأقل باقة · نسب', color: '#176b52' },
     { href: '/admin/notes', icon: 'sticky_note_2', title: 'الملاحظات', desc: 'ملاحظات الإدارة والإشراف', color: '#3d665a' },
     { href: '/admin/chat', icon: 'chat', title: 'شات المعلمين', desc: 'محادثة إدارة ↔ معلم', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة', color: '#176b52' },
     { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
     { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء + إدارة', color: '#c5a45d' },
+    { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين', desc: 'تقييم الإدارة لكل معلم', color: '#c5a45d' },
     { href: '/admin/schedule', icon: 'event', title: 'الحضور والتحضير', desc: 'أرشيف أكتوبر', color: '#3d665a' },
     { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'المواعيد الثابتة', desc: 'جدول + روابط Zoom', color: '#176b52' },
     { href: '/admin/families', icon: 'family_restroom', title: 'العائلات (الإخوة)', desc: 'تجميع بالهاتف', color: '#3d665a' },
@@ -47,11 +49,11 @@ export default async function AdminDashboard() {
     { href: '/admin/students?status=تجريبي', icon: 'how_to_reg', title: 'حصص تجريبية', desc: 'محتملون', color: '#3d665a' },
     { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'موقوفة مؤقتاً', desc: 'متوقفين', color: '#d49a35' },
     { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف', color: '#6f7974' },
-    { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين', desc: 'تقييم الإدارة', color: '#c5a45d' },
     { href: '/evaluate', icon: 'family_restroom', title: 'فورم أولياء الأمور', desc: 'بدون دخول', color: '#176b52' },
+    { href: '/student', icon: 'school', title: 'بوابة الطالب', desc: 'مواعيد ومستحق بالكود', color: '#176b52' },
     { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أدوار', color: '#00513c' },
     { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف', color: '#3d665a' },
-    { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور وحفظ', color: '#176b52' },
+    { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور + تقييم الحصة', color: '#176b52' },
     { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج', color: '#6f7974' },
   ]
 
@@ -96,7 +98,7 @@ export default async function AdminDashboard() {
             <div><span style={{ color: '#6f7974' }}>قبضنا</span><p className="font-bold" style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')}</p></div>
             <div><span style={{ color: '#6f7974' }}>مستحقات</span><p className="font-bold" style={{ color: '#ba1a1a' }}>{dueTotal.toLocaleString('ar-EG')}</p></div>
             <div><span style={{ color: '#6f7974' }}>منسحب</span><p className="font-bold">{withdrawn ?? 0}</p></div>
-            <div><Link href="/admin/monthly" style={{ color: '#176b52' }} className="font-bold">الملخص الشهري ←</Link></div>
+            <div><Link href="/admin/analytics" style={{ color: '#176b52' }} className="font-bold">تحليلات ←</Link></div>
           </div>
         </div>
       </div>
@@ -118,7 +120,7 @@ export default async function AdminDashboard() {
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
           { href: '/admin/chat', icon: 'chat', label: 'شات' },
           { href: '/admin/monthly', icon: 'calendar_view_month', label: 'ملخص' },
-          { href: '/admin/notes', icon: 'sticky_note_2', label: 'ملاحظات' },
+          { href: '/admin/analytics', icon: 'bar_chart', label: 'تحليلات' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
           <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
