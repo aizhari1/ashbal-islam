@@ -12,7 +12,8 @@ export async function updateSession(request: NextRequest) {
     pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
-    pathname.startsWith('/evaluate')
+    pathname.startsWith('/evaluate') ||
+    pathname.startsWith('/student')
 
   try {
     const supabase = createServerClient(url, key, {
@@ -108,7 +109,6 @@ export async function updateSession(request: NextRequest) {
         }
       }
 
-      // المعلم ممنوع من صفحات الإدارة حتى لو كتب اللينك
       if (role === 'teacher' && pathname.startsWith('/admin')) {
         const redirectUrl = request.nextUrl.clone()
         redirectUrl.pathname = '/teacher'
@@ -116,10 +116,10 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(redirectUrl)
       }
 
-      // المشرف ممنوع من الملخص الشهري / الصندوق / المستخدمين / مسير الرواتب
       if (
         role === 'supervisor' &&
         (pathname.startsWith('/admin/monthly') ||
+          pathname.startsWith('/admin/analytics') ||
           pathname.startsWith('/admin/cashbox') ||
           pathname.startsWith('/admin/users') ||
           pathname.startsWith('/admin/payroll') ||
