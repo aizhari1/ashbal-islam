@@ -30,6 +30,8 @@ export default async function AdminDashboard() {
 
   const menu = [
     { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
+    { href: '/admin/notes', icon: 'sticky_note_2', title: 'الملاحظات', desc: 'ملاحظات الإدارة والإشراف', color: '#3d665a' },
+    { href: '/admin/chat', icon: 'chat', title: 'شات المعلمين', desc: 'محادثة إدارة ↔ معلم', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة', color: '#176b52' },
     { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
     { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص أكتوبر', color: '#176b52' },
@@ -114,9 +116,9 @@ export default async function AdminDashboard() {
       <nav className="bottom-nav">
         {[
           { href: '/admin', icon: 'home', label: 'الرئيسية', active: true },
-          { href: '/admin/students/new', icon: 'person_add', label: 'إضافة' },
+          { href: '/admin/chat', icon: 'chat', label: 'شات' },
           { href: '/admin/monthly', icon: 'calendar_view_month', label: 'ملخص' },
-          { href: '/admin/fixed-schedule', icon: 'calendar_month', label: 'مواعيد' },
+          { href: '/admin/notes', icon: 'sticky_note_2', label: 'ملاحظات' },
           { href: '/admin/students', icon: 'groups', label: 'الطلاب' },
         ].map((n: any) => (
           <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
