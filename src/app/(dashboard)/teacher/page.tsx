@@ -8,6 +8,8 @@ export default async function TeacherDashboard() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  if (profile && profile.role !== 'teacher' && profile.role !== 'admin') redirect('/login')
+
   const { data: teacher } = await supabase.from('teachers').select('*').eq('profile_id', user.id).maybeSingle()
 
   let active = 0, sessions = 0
@@ -25,6 +27,7 @@ export default async function TeacherDashboard() {
     { href: '/teacher/dues', icon: 'payments', title: 'مستحقاتي', desc: 'كشف الحصص والمبلغ' },
     { href: '/teacher/ratings', icon: 'star', title: 'تقييماتي', desc: 'أولياء الأمور والإدارة' },
     { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: 'آخر الحصص المسجّلة' },
+    { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
     { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },
   ]
 
