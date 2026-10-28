@@ -1,57 +1,63 @@
-'use client'
-
-import { useState, useTransition, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { NoteForm } from './NoteForm'
 
-export default function NotesPage() {
-  const [note, setNote] = useState('')
-  const [msg, setMsg] = useState('')
-  const [list, setList] = useState<any[]>([])
-  const [isPending, startTransition] = useTransition()
+export default async function AdminNotesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  function load() {
-    const sb = createClient()
-    sb.from('activity_log').select('*').eq('action', 'note_to_admin').order('created_at', { ascending: false }).limit(30)
-      .then(({ data }) => setList(data ?? []))
-  }
-  useEffect(() => { load() }, [])
+  const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
 
-  function send() {
-    if (!note.trim()) return
-    startTransition(async () => {
-      const sb = createClient()
-      const { data: { user } } = await sb.auth.getUser()
-      const { data: profile } = await sb.from('profiles').select('full_name').eq('id', user!.id).single()
-      await sb.from('activity_log').insert({
-        actor_id: user?.id,
-        action: 'note_to_admin',
-        entity_type: 'note',
-        details: { text: note, from: profile?.full_name || 'مشرف' },
-      })
-      setNote('')
-      setMsg('تم إرسال الملاحظة')
-      load()
-    })
-  }
+  const { data: notes } = await supabase
+    .from('activity_log')
+    .select('id, actor_id, details, created_at, entity_type')
+    .eq('action', 'note')
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  const list = notes ?? []
 
   return (
-    <div className="min-h-dvh max-w-lg mx-auto p-4" style={{ background: '#eefdf6' }}>
-      <Link href="/supervisor" className="text-[13px]" style={{ color: '#176b52' }}>← رجوع</Link>
-      <h1 className="text-[18px] font-bold mt-2">ملاحظة أو مشكلة للإدارة</h1>
-      <textarea className="input mt-4" rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="اكتب الملاحظة..." />
-      {msg && <p className="text-[12px] mt-2" style={{ color: '#176b52' }}>{msg}</p>}
-      <button type="button" onClick={send} disabled={isPending} className="btn-primary w-full py-3 mt-3">إرسال</button>
-      <h2 className="text-[14px] font-bold mt-6 mb-2">آخر الملاحظات</h2>
-      <div className="space-y-2">
-        {list.map((n) => (
-          <div key={n.id} className="card p-3 text-[13px]">
-            <p className="font-bold">{(n.details as any)?.from}</p>
-            <p>{(n.details as any)?.text}</p>
-            <p className="text-[11px]" style={{ color: '#6f7974' }}>{n.created_at?.slice(0, 16)}</p>
-          </div>
-        ))}
+    <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
+      <header className="px-4 py-3 flex items-center gap-3">
+        <Link href={profile?.role === 'admin' ? '/admin' : '/supervisor'} className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
+          <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>الملاحظات</h1>
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>ملاحظات الإدارة والمشرفين</p>
+        </div>
+        <Link href="/admin/chat" className="text-[12px] font-bold" style={{ color: '#176b52' }}>الشات ←</Link>
+      </header>
+
+      <div className="px-4 mb-4">
+        <NoteForm />
       </div>
+
+      <main className="px-4 space-y-2.5">
+        {list.length === 0 && (
+          <div className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا ملاحظات بعد</div>
+        )}
+        {list.map((n) => {
+          const d = (n.details || {}) as any
+          return (
+            <div key={n.id} className="card p-3.5">
+              <div className="flex justify-between items-start gap-2 mb-1">
+                <p className="text-[13px] font-bold">{d.from_name || 'مستخدم'}</p>
+                <span className="text-[10px]" style={{ color: '#6f7974' }}>
+                  {n.created_at?.slice(0, 16).replace('T', ' ')}
+                </span>
+              </div>
+              <p className="text-[11px] mb-2" style={{ color: '#6f7974' }}>
+                {d.from_role === 'admin' ? 'إدارة' : d.from_role === 'supervisor' ? 'إشراف' : d.from_role || ''}
+              </p>
+              <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{d.body}</p>
+            </div>
+          )
+        })}
+      </main>
     </div>
   )
 }
