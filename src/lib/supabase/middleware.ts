@@ -13,7 +13,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/evaluate') ||
-    pathname.startsWith('/student')
+    pathname.startsWith('/student') ||
+    pathname.startsWith('/api/student-portal')
 
   try {
     const supabase = createServerClient(url, key, {
