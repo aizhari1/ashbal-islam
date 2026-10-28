@@ -17,6 +17,7 @@ type Student = {
   reminded_at: string
   contact_status: string
   wa: string
+  reason?: string
 }
 
 const STATUSES = ['لم يتم الاتصال', 'تم الاتصال', 'لا يرد', 'طلب التأجيل', 'اشترك', 'أخرى']
@@ -69,6 +70,10 @@ export function ReminderRow({ student: s }: { student: Student }) {
           <p className="text-[10px]" style={{ color: '#6f7974' }}>{s.sessions} حصة</p>
         </div>
       </div>
+
+      {s.reason && (
+        <p className="text-[11px] mb-2" style={{ color: '#176b52' }}>{s.reason}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-2 text-[11px] mb-3" style={{ color: '#6f7974' }}>
         <div>
