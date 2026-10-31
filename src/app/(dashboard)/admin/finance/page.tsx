@@ -27,10 +27,16 @@ export default async function FinanceReminderPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  const role = profile?.role || ''
+  const backHref = role === 'supervisor' ? '/supervisor' : '/admin'
+
   const { data: rawStudents } = await supabase
     .from('students')
-    .select('id, code, name, phone, status, subscription_type, amount_due, last_session_num, last_session_date, price_per_session, teachers(name)')
-    .limit(300)
+    .select(
+      'id, code, name, phone, status, subscription_type, monthly_sessions, amount_due, last_session_num, last_session_date, price_per_session, teachers(name)'
+    )
+    .limit(500)
 
   const students: ReminderStudent[] = (rawStudents ?? []).map((s: any) => ({
     id: s.id,
@@ -39,6 +45,7 @@ export default async function FinanceReminderPage() {
     phone: s.phone,
     status: s.status || 'نشط',
     subscription_type: s.subscription_type,
+    monthly_sessions: s.monthly_sessions,
     amount_due: Number(s.amount_due || 0),
     last_session_num: s.last_session_num,
     last_session_date: s.last_session_date,
@@ -51,7 +58,7 @@ export default async function FinanceReminderPage() {
     .select('student_id, payment_date, amount')
     .gt('amount', 0)
     .order('payment_date', { ascending: false })
-    .limit(2000)
+    .limit(3000)
 
   const lastPay: Record<string, { day: string; months: number }> = {}
   for (const p of pays ?? []) {
@@ -63,7 +70,7 @@ export default async function FinanceReminderPage() {
     .from('attendance')
     .select('student_id, session_date, status')
     .in('status', ['حاضر', 'متأخر'])
-    .limit(5000)
+    .limit(8000)
 
   const attDays: Record<string, string[]> = {}
   const seen: Record<string, true> = {}
@@ -78,6 +85,18 @@ export default async function FinanceReminderPage() {
   for (const id of Object.keys(attDays)) attDays[id].sort()
 
   const dueList = computeDueReminders(students, lastPay, attDays)
+
+  // مزامنة amount_due — نفس الرقم عند الإدارة والإشراف
+  const dueById: Record<string, number> = {}
+  for (const s of students) dueById[s.id] = 0
+  for (const r of dueList) dueById[r.id] = r.outstanding
+  await Promise.all(
+    Object.entries(dueById).map(async ([id, due]) => {
+      const prev = students.find((s) => s.id === id)?.amount_due ?? 0
+      if (Math.abs(Number(prev) - due) < 0.01) return
+      await supabase.from('students').update({ amount_due: due }).eq('id', id)
+    })
+  )
 
   const { data: reminders } = await supabase
     .from('activity_log')
@@ -98,7 +117,8 @@ export default async function FinanceReminderPage() {
   }
   const lastContact: Record<string, string> = {}
   for (const c of contacts ?? []) {
-    if (c.entity_id && !lastContact[c.entity_id]) lastContact[c.entity_id] = String((c.details as any)?.status || 'لم يتم الاتصال')
+    if (c.entity_id && !lastContact[c.entity_id])
+      lastContact[c.entity_id] = String((c.details as any)?.status || 'لم يتم الاتصال')
   }
 
   const total = dueList.reduce((s, x) => s + x.outstanding, 0)
@@ -106,7 +126,7 @@ export default async function FinanceReminderPage() {
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
       <header className="px-4 py-3 flex items-center gap-3">
-        <Link href="/supervisor" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
+        <Link href={backHref} className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
         <div className="flex-1">
@@ -119,7 +139,7 @@ export default async function FinanceReminderPage() {
 
       <div className="px-3 mb-3">
         <div className="card p-3 text-[11px] leading-relaxed" style={{ color: '#3f4944', background: '#e8f7f0' }}>
-          يظهر الطالب هنا بعد ما يخلّص عدد حصص باقته (4 أو 8…) بعد آخر دفعة. لما تسجّل له دفعة جديدة بيتشال من القائمة لحد ما يكمّل الباقة تاني.
+          يظهر الطالب بعد خلص حصص باقته بعد آخر دفعة. أول ما تتسجّل دفعة (من الإدارة أو الإشراف) بيتشال من القائمة عند الطرفين معًا.
         </div>
       </div>
 
@@ -143,11 +163,10 @@ export default async function FinanceReminderPage() {
             }}
           />
         ))}
-
         {dueList.length === 0 && (
-          <div className="card p-8 text-center text-[13px]" style={{ color: '#6f7974' }}>
-            مفيش طلاب محتاجين تذكير دلوقتي — يا إما مكملوش الباقة، أو اتسجّلت لهم دفعة.
-          </div>
+          <p className="text-center text-[13px] py-10" style={{ color: '#6f7974' }}>
+            مفيش طلاب محتاجين تذكير حالياً
+          </p>
         )}
       </main>
     </div>
