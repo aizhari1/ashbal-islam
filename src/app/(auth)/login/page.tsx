@@ -85,6 +85,13 @@ function LoginForm() {
               /* ignore */
             }
 
+            try {
+              document.cookie =
+                'ashbal_role=' + role + '; path=/; max-age=' + 60 * 60 * 24 * 30 + '; SameSite=Lax'
+            } catch {
+              /* ignore */
+            }
+
             if (role === 'teacher') router.replace('/teacher')
             else if (role === 'supervisor') router.replace('/supervisor')
             else if (role === 'parent') router.replace('/parent')
