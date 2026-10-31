@@ -28,7 +28,6 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
-  // للإدارة فقط — الإشراف ممنوع من دخل الأكاديمية
   if (!profile || profile.role !== 'admin') redirect('/login')
 
   const { key, year, month } = parseMonth(sp.month)
@@ -48,7 +47,7 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
   ] = await Promise.all([
     supabase.from('payments').select('amount, payment_date, student_id, method').gte('payment_date', start).lte('payment_date', end),
     supabase.from('attendance').select('id, teacher_id, student_id, session_date, status, session_num').gte('session_date', start).lte('session_date', end),
-    supabase.from('teachers').select('id, name, code, session_rate, status'),
+    supabase.from('teachers').select('id, name, code, is_active'),
     supabase.from('activity_log').select('details, created_at').eq('action', 'cash_expense').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
     supabase.from('activity_log').select('details, created_at').eq('action', 'parent_evaluation').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
     supabase.from('activity_log').select('details, created_at').eq('action', 'teacher_evaluation').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
@@ -60,14 +59,13 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
   const income = (payments ?? []).reduce((s, p) => s + Number(p.amount || 0), 0)
   const expenseTotal = (expenses ?? []).reduce((s, e) => s + Number((e.details as any)?.amount || 0), 0)
   const present = (attendance ?? []).filter((a) => a.status === 'حاضر' || a.status === 'متأخر')
-  const absent = (attendance ?? []).filter((a) => String(a.status || '').includes('غياب'))
+  const absent = (attendance ?? []).filter((a) => String(a.status || '').includes('غياب') || a.status === 'غائب')
   const sessionsCount = present.length
 
-  const rateMap: Record<string, number> = {}
+  const DEFAULT_RATE = 25
   const nameMap: Record<string, string> = {}
   for (const t of teachers ?? []) {
-    rateMap[t.id] = Number(t.session_rate || 25)
-    nameMap[t.id] = t.name
+    nameMap[t.id] = t.name || t.code || '—'
   }
   const teacherSessions: Record<string, number> = {}
   for (const a of present) {
@@ -75,7 +73,13 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
     teacherSessions[a.teacher_id] = (teacherSessions[a.teacher_id] || 0) + 1
   }
   const payrollRows = Object.entries(teacherSessions)
-    .map(([tid, cnt]) => ({ id: tid, name: nameMap[tid] || '—', sessions: cnt, rate: rateMap[tid] ?? 25, due: cnt * (rateMap[tid] ?? 25) }))
+    .map(([tid, cnt]) => ({
+      id: tid,
+      name: nameMap[tid] || 'معلم',
+      sessions: cnt,
+      rate: DEFAULT_RATE,
+      due: cnt * DEFAULT_RATE,
+    }))
     .sort((a, b) => b.due - a.due)
   const payrollTotal = payrollRows.reduce((s, r) => s + r.due, 0)
   const net = income - expenseTotal - payrollTotal
@@ -188,7 +192,7 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
         </div>
         <div className="card overflow-hidden">
           {payrollRows.length === 0 && <p className="p-4 text-center text-[12px]" style={{ color: '#6f7974' }}>لا حصص مسجّلة في هذا الشهر</p>}
-          {payrollRows.slice(0, 15).map((r) => (
+          {payrollRows.slice(0, 20).map((r) => (
             <div key={r.id} className="px-3.5 py-2.5 flex justify-between border-b last:border-0" style={{ borderColor: 'rgba(18,61,50,0.06)' }}>
               <div>
                 <p className="text-[13px] font-bold">{r.name}</p>
