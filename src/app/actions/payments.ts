@@ -50,6 +50,8 @@ export async function recordPayment(formData: FormData) {
 
   revalidatePath('/admin/finance')
   revalidatePath('/admin/students')
+  revalidatePath('/admin')
   revalidatePath('/supervisor')
+  revalidatePath('/admin/monthly')
   return { success: true, data }
 }
