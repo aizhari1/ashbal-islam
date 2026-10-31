@@ -1,10 +1,9 @@
 export default function Loading() {
   return (
-    <div className="min-h-dvh flex items-center justify-center" style={{ background: '#eefdf6' }}>
-      <div className="text-center">
-        <div className="w-10 h-10 mx-auto rounded-full border-4 animate-spin" style={{ borderColor: '#176b52', borderTopColor: 'transparent' }} />
-        <p className="text-[13px] mt-3" style={{ color: '#6f7974' }}>جاري التحميل...</p>
-      </div>
+    <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: '#ffffff' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.png" alt="" width={96} height={96} style={{ objectFit: 'contain' }} />
+      <p className="mt-3 text-[13px] font-semibold" style={{ color: '#0B6B3A' }}>جاري التحميل…</p>
     </div>
   )
 }
