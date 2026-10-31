@@ -1,6 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const ROLE_COOKIE = 'ashbal_role'
+const ROLE_MAX_AGE = 60 * 60 * 24 * 30
+
+function homeForRole(r: string) {
+  if (r === 'teacher') return '/teacher'
+  if (r === 'supervisor') return '/supervisor'
+  if (r === 'parent') return '/parent'
+  return '/admin'
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -16,6 +26,14 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/student') ||
     pathname.startsWith('/api/student-portal')
 
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.match(/\.(ico|png|jpg|jpeg|svg|webp|css|js|woff2?)$/)
+  ) {
+    return supabaseResponse
+  }
+
   try {
     const supabase = createServerClient(url, key, {
       cookies: {
@@ -26,17 +44,23 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              maxAge: options?.maxAge ?? 60 * 60 * 24 * 30,
+              sameSite: 'lax',
+              path: '/',
+            })
           )
         },
       },
     })
 
-    const userPromise = supabase.auth.getUser()
-    const timeout = new Promise<{ data: { user: null } }>((resolve) =>
-      setTimeout(() => resolve({ data: { user: null } }), 2500)
+    const sessionPromise = supabase.auth.getSession()
+    const timeout = new Promise<{ data: { session: null } }>((resolve) =>
+      setTimeout(() => resolve({ data: { session: null } }), 1500)
     )
-    const { data: { user } } = await Promise.race([userPromise, timeout]) as any
+    const { data: { session } } = (await Promise.race([sessionPromise, timeout])) as any
+    const user = session?.user
 
     if (!user && !isPublic) {
       const redirectUrl = request.nextUrl.clone()
@@ -46,23 +70,38 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (user && !isPublic) {
-      let role = ''
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle()
-        role = String(profile?.role || '')
-      } catch {
-        role = ''
+      let role = request.cookies.get(ROLE_COOKIE)?.value || ''
+
+      if (!role || !['admin', 'teacher', 'supervisor', 'parent'].includes(role)) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle()
+          role = String(profile?.role || 'admin')
+        } catch {
+          role = 'admin'
+        }
+        supabaseResponse.cookies.set(ROLE_COOKIE, role, {
+          maxAge: ROLE_MAX_AGE,
+          sameSite: 'lax',
+          path: '/',
+          httpOnly: false,
+        })
       }
 
-      const homeForRole = (r: string) => {
-        if (r === 'teacher') return '/teacher'
-        if (r === 'supervisor') return '/supervisor'
-        if (r === 'parent') return '/parent'
-        return '/admin'
+      const deny = () => {
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = homeForRole(role)
+        redirectUrl.search = ''
+        const res = NextResponse.redirect(redirectUrl)
+        res.cookies.set(ROLE_COOKIE, role, {
+          maxAge: ROLE_MAX_AGE,
+          sameSite: 'lax',
+          path: '/',
+        })
+        return res
       }
 
       if (pathname.startsWith('/admin')) {
@@ -85,36 +124,16 @@ export async function updateSession(request: NextRequest) {
         } else if (role === 'supervisor' && supervisorAllowed) {
           // ok
         } else {
-          const redirectUrl = request.nextUrl.clone()
-          redirectUrl.pathname = homeForRole(role)
-          redirectUrl.search = ''
-          return NextResponse.redirect(redirectUrl)
+          return deny()
         }
       }
 
-      if (pathname.startsWith('/teacher')) {
-        if (role !== 'teacher' && role !== 'admin') {
-          const redirectUrl = request.nextUrl.clone()
-          redirectUrl.pathname = homeForRole(role)
-          redirectUrl.search = ''
-          return NextResponse.redirect(redirectUrl)
-        }
+      if (pathname.startsWith('/teacher') && role !== 'teacher' && role !== 'admin') {
+        return deny()
       }
 
-      if (pathname.startsWith('/supervisor')) {
-        if (role !== 'supervisor' && role !== 'admin') {
-          const redirectUrl = request.nextUrl.clone()
-          redirectUrl.pathname = homeForRole(role)
-          redirectUrl.search = ''
-          return NextResponse.redirect(redirectUrl)
-        }
-      }
-
-      if (role === 'teacher' && pathname.startsWith('/admin')) {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/teacher'
-        redirectUrl.search = ''
-        return NextResponse.redirect(redirectUrl)
+      if (pathname.startsWith('/supervisor') && role !== 'supervisor' && role !== 'admin') {
+        return deny()
       }
 
       if (
@@ -126,11 +145,12 @@ export async function updateSession(request: NextRequest) {
           pathname.startsWith('/admin/payroll') ||
           pathname === '/admin')
       ) {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/supervisor'
-        redirectUrl.search = ''
-        return NextResponse.redirect(redirectUrl)
+        return deny()
       }
+    }
+
+    if (!user && isPublic && request.cookies.get(ROLE_COOKIE)) {
+      supabaseResponse.cookies.set(ROLE_COOKIE, '', { maxAge: 0, path: '/' })
     }
   } catch {
     return NextResponse.next({ request })

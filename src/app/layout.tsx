@@ -1,9 +1,21 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'أكاديمية أشبال الإسلام',
   description: 'نظام إدارة أكاديمية أشبال الإسلام — تحفيظ القرآن الكريم',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'أشبال الإسلام',
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: '#176b52',
 }
 
 export default function RootLayout({
@@ -14,6 +26,13 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <head>
+        <link rel="preconnect" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
+        <link rel="dns-prefetch" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
+        <link
+          rel="preload"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+          as="style"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
           rel="stylesheet"

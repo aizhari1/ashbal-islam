@@ -1,0 +1,10 @@
+{
+  "name": "أكاديمية أشبال الإسلام",
+  "short_name": "أشبال الإسلام",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eefdf6",
+  "theme_color": "#176b52",
+  "lang": "ar",
+  "dir": "rtl"
+}
