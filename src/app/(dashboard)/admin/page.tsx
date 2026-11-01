@@ -9,7 +9,6 @@ export default async function AdminDashboard() {
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
-  // شهر العرض: أكتوبر 2026 (حسب طلب الإدارة)
   const monthStart = '2026-10-01'
   const monthEnd = '2026-10-31'
 
@@ -36,6 +35,7 @@ export default async function AdminDashboard() {
   const menu = [
     { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
     { href: '/admin/sessions-detail', icon: 'list_alt', title: 'تفاصيل الحصص', desc: 'لكل معلم · طلاب · سعر ومدة', color: '#00513c' },
+    { href: '/admin/payments', icon: 'credit_card', title: 'المدفوعات', desc: 'إنستا · فودافون · بنكي', color: '#755b1b' },
     { href: '/admin/analytics', icon: 'bar_chart', title: 'تحليلات الباقات', desc: 'أكثر وأقل باقة · نسب', color: '#176b52' },
     { href: '/admin/notes', icon: 'sticky_note_2', title: 'الملاحظات', desc: 'ملاحظات الإدارة والإشراف', color: '#3d665a' },
     { href: '/admin/chat', icon: 'chat', title: 'شات المعلمين', desc: 'محادثة إدارة ↔ معلم', color: '#176b52' },
@@ -124,7 +124,7 @@ export default async function AdminDashboard() {
           { href: '/admin', icon: 'home', label: 'الرئيسية' },
           { href: '/admin/monthly?month=2026-10', icon: 'calendar_view_month', label: 'ملخص' },
           { href: '/admin/sessions-detail', icon: 'list_alt', label: 'حصص' },
-          { href: '/admin/finance', icon: 'payments', label: 'مالية' },
+          { href: '/admin/payments', icon: 'credit_card', label: 'دفع' },
           { href: '/admin/more', icon: 'more_horiz', label: 'المزيد' },
         ].map((i) => (
           <Link key={i.href} href={i.href} className="flex flex-col items-center gap-0.5 px-2">
