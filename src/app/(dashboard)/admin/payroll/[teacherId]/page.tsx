@@ -33,26 +33,31 @@ export default async function TeacherPayrollDetailPage({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: teacher } = await supabase
-    .from('teachers')
-    .select('id, code, name')
-    .eq('id', teacherId)
-    .maybeSingle()
-
+  const { data: teacher } = await supabase.from('teachers').select('id, code, name').eq('id', teacherId).maybeSingle()
   if (!teacher) notFound()
+
+  const { data: rateLogs } = await supabase
+    .from('activity_log')
+    .select('details')
+    .eq('action', 'teacher_session_rate')
+    .eq('entity_id', teacherId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const teacherDefault = Number((rateLogs?.[0]?.details as any)?.session_rate || 0) || DEFAULT_RATE
 
   const { data: attendance } = await supabase
     .from('attendance')
-    .select('id, student_id, session_date, status, session_num, rating, notes, students(name, code, session_duration, monthly_sessions, price_per_session)')
+    .select(
+      'id, student_id, session_date, status, session_num, rating, notes, students(name, code, session_duration, monthly_sessions, price_per_session)'
+    )
     .eq('teacher_id', teacherId)
     .gte('session_date', start)
     .lte('session_date', end)
     .order('session_date', { ascending: false })
 
   const present = (attendance ?? []).filter((a) => a.status === 'حاضر')
-  const other = (attendance ?? []).filter((a) => a.status !== 'حاضر')
 
-  // تجميع حسب الطالب
   type Stu = {
     id: string
     name: string
@@ -63,9 +68,11 @@ export default async function TeacherPayrollDetailPage({
     sessions: { id: string; date: string; num: number | null; rating: number | null; notes: string | null }[]
   }
   const byStudent: Record<string, Stu> = {}
+
   for (const a of present) {
     const sid = a.student_id || 'unknown'
     const st = a.students as any
+    const price = Number(st?.price_per_session || 0) > 0 ? Number(st.price_per_session) : teacherDefault
     if (!byStudent[sid]) {
       byStudent[sid] = {
         id: sid,
@@ -73,7 +80,7 @@ export default async function TeacherPayrollDetailPage({
         code: st?.code || '—',
         duration: Number(st?.session_duration || 30),
         packageSize: Number(st?.monthly_sessions || 0),
-        price: Number(st?.price_per_session || DEFAULT_RATE),
+        price,
         sessions: [],
       }
     }
@@ -88,7 +95,7 @@ export default async function TeacherPayrollDetailPage({
 
   const groups = Object.values(byStudent).sort((a, b) => b.sessions.length - a.sessions.length)
   const totalSessions = present.length
-  const due = totalSessions * DEFAULT_RATE
+  const due = groups.reduce((s, g) => s + g.sessions.length * g.price, 0)
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
@@ -104,7 +111,7 @@ export default async function TeacherPayrollDetailPage({
             {teacher.name}
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            {teacher.code} · {label} · تفاصيل الحصص
+            {teacher.code} · {label} · افتراضي {teacherDefault} ج
           </p>
         </div>
       </header>
@@ -123,7 +130,7 @@ export default async function TeacherPayrollDetailPage({
             {due.toLocaleString('ar-EG')}
           </p>
           <p className="text-[10px]" style={{ color: '#6f7974' }}>
-            مستحق (×{DEFAULT_RATE})
+            مستحق
           </p>
         </div>
         <div className="card p-3 text-center">
@@ -136,16 +143,14 @@ export default async function TeacherPayrollDetailPage({
         </div>
       </section>
 
-      {other.length > 0 && (
-        <p className="px-4 text-[11px] mb-2" style={{ color: '#b45309' }}>
-          سجلات غير حضور في الشهر: {other.length} (لا تدخل في الراتب)
-        </p>
-      )}
+      <p className="px-4 text-[11px] mb-3" style={{ color: '#6f7974' }}>
+        كل طالب بسعره · لو السعر فاضي يتحسب بالافتراضي ({teacherDefault} ج)
+      </p>
 
       <div className="px-4 space-y-3">
         {groups.length === 0 && (
           <div className="card p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
-            لا حصص حضور لهذا المعلم في {label}
+            لا حصص حضور في {label}
           </div>
         )}
 
@@ -157,7 +162,8 @@ export default async function TeacherPayrollDetailPage({
                   {g.name}
                 </p>
                 <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                  {g.code} · باقة {g.packageSize || '—'} · مدة {g.duration} د · سعر {g.price} ج
+                  {g.code} · باقة {g.packageSize || '—'} · مدة {g.duration} د ·{' '}
+                  <b style={{ color: '#176b52' }}>سعر {g.price} ج</b>
                 </p>
               </div>
               <div className="text-left shrink-0">
@@ -165,7 +171,7 @@ export default async function TeacherPayrollDetailPage({
                   {g.sessions.length} حصة
                 </p>
                 <p className="text-[11px]" style={{ color: '#00513c' }}>
-                  {(g.sessions.length * DEFAULT_RATE).toLocaleString('ar-EG')} ج
+                  {(g.sessions.length * g.price).toLocaleString('ar-EG')} ج
                 </p>
               </div>
             </div>
@@ -179,11 +185,10 @@ export default async function TeacherPayrollDetailPage({
                     <p className="text-[10px]" style={{ color: '#6f7974' }}>
                       {s.num != null ? `حصة رقم ${s.num}` : `#${i + 1}`}
                       {s.rating != null ? ` · تقييم ${s.rating}` : ''}
-                      {s.notes ? ` · ${s.notes}` : ''}
                     </p>
                   </div>
                   <span className="text-[11px] font-bold" style={{ color: '#176b52' }}>
-                    {DEFAULT_RATE} ج
+                    {g.price} ج
                   </span>
                 </div>
               ))}

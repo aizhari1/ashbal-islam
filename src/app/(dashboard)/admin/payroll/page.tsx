@@ -8,7 +8,6 @@ export const dynamic = 'force-dynamic'
 const DEFAULT_SESSION_RATE = 25
 
 function monthBounds(key?: string) {
-  const now = new Date()
   const y = key?.slice(0, 4) ? Number(key.slice(0, 4)) : 2026
   const m = key?.slice(5, 7) ? Number(key.slice(5, 7)) : 10
   const start = `${y}-${String(m).padStart(2, '0')}-01`
@@ -38,32 +37,44 @@ export default async function PayrollPage({
     .eq('is_active', true)
     .order('name')
 
+  // حضور مع سعر الطالب
   const { data: attendance } = await supabase
     .from('attendance')
-    .select('teacher_id, status, session_date')
+    .select('teacher_id, student_id, status, session_date, students(price_per_session)')
     .gte('session_date', monthStart)
     .lte('session_date', monthEnd)
     .eq('status', 'حاضر')
-
-  const sessionsByTeacher: Record<string, number> = {}
-  for (const a of attendance ?? []) {
-    if (!a.teacher_id) continue
-    sessionsByTeacher[a.teacher_id] = (sessionsByTeacher[a.teacher_id] || 0) + 1
-  }
 
   const { data: rateLogs } = await supabase
     .from('activity_log')
     .select('entity_id, details')
     .eq('action', 'teacher_session_rate')
 
-  const sessionRateByTeacher: Record<string, number> = {}
+  const teacherDefaultRate: Record<string, number> = {}
   for (const r of rateLogs ?? []) {
     const rate = Number((r.details as any)?.session_rate || 0)
-    if (r.entity_id && rate > 0) sessionRateByTeacher[r.entity_id] = rate
+    if (r.entity_id && rate > 0) teacherDefaultRate[r.entity_id] = rate
+  }
+
+  // لكل معلم: عدد الحصص + مجموع المستحق حسب سعر كل طالب
+  type Agg = { sessions: number; salary: number; rates: Record<number, number> }
+  const byTeacher: Record<string, Agg> = {}
+
+  for (const a of attendance ?? []) {
+    if (!a.teacher_id) continue
+    if (!byTeacher[a.teacher_id]) byTeacher[a.teacher_id] = { sessions: 0, salary: 0, rates: {} }
+    const st = a.students as any
+    const studentRate = Number(st?.price_per_session || 0)
+    const rate =
+      studentRate > 0
+        ? studentRate
+        : teacherDefaultRate[a.teacher_id] || DEFAULT_SESSION_RATE
+    byTeacher[a.teacher_id].sessions += 1
+    byTeacher[a.teacher_id].salary += rate
+    byTeacher[a.teacher_id].rates[rate] = (byTeacher[a.teacher_id].rates[rate] || 0) + 1
   }
 
   const { data: settlements } = await supabase.from('activity_log').select('details').eq('action', 'teacher_settlement')
-
   const settledByName: Record<string, number> = {}
   for (const s of settlements ?? []) {
     const d = s.details as any
@@ -72,19 +83,23 @@ export default async function PayrollPage({
 
   const rows = (teachers ?? [])
     .map((t) => {
-      const sessions = sessionsByTeacher[t.id] || 0
-      const sessionRate = sessionRateByTeacher[t.id] ?? DEFAULT_SESSION_RATE
-      const salary = sessions * sessionRate
+      const agg = byTeacher[t.id] || { sessions: 0, salary: 0, rates: {} }
+      const defaultRate = teacherDefaultRate[t.id] ?? DEFAULT_SESSION_RATE
       const settled = settledByName[t.name] || 0
-      const remaining = Math.max(0, salary - settled)
+      const remaining = Math.max(0, agg.salary - settled)
+      const rateParts = Object.entries(agg.rates)
+        .map(([rate, cnt]) => `${cnt}×${rate}`)
+        .join(' + ')
       return {
         id: t.id,
         code: t.code,
         name: t.name,
-        sessions,
-        sessionRate,
+        sessions: agg.sessions,
+        sessionRate: defaultRate,
+        rateParts: rateParts || `0×${defaultRate}`,
+        multiRate: Object.keys(agg.rates).length > 1,
         academyRate: Number(t.rate_percent || 50),
-        salary,
+        salary: agg.salary,
         settled,
         remaining,
       }
@@ -111,7 +126,7 @@ export default async function PayrollPage({
         <div>
           <h1 className="text-[16px] font-bold">الرواتب بعدد الحصص</h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            {label} · اضغط المعلم لعرض تفاصيل الحصص
+            {label} · السعر من ملف كل طالب (أو سعر المعلم الافتراضي)
           </p>
         </div>
       </header>
@@ -134,6 +149,16 @@ export default async function PayrollPage({
       </div>
 
       <main className="px-4">
+        <div className="card p-3 mb-3 text-[11px] leading-relaxed" style={{ color: '#3f4944' }}>
+          <b style={{ color: '#00513c' }}>أسعار مختلفة لنفس المعلم:</b>
+          <br />
+          1) عدّل <b>سعر الحصة</b> في ملف الطالب (تعديل بيانات طالب)
+          <br />
+          2) أو اضبط <b>سعر المعلم الافتراضي</b> من «ضبط السعر» تحت اسمه
+          <br />
+          الحساب = مجموع (كل حصة × سعر طالبها)
+        </div>
+
         <div className="card p-4 mb-4">
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
@@ -159,9 +184,6 @@ export default async function PayrollPage({
               <p className="text-[20px] font-bold">{totalSettled.toLocaleString('ar-EG')}</p>
             </div>
           </div>
-          <p className="text-[11px] mt-3 text-center" style={{ color: '#6f7974' }}>
-            سعر الحصة: {DEFAULT_SESSION_RATE} ج · حضور فقط
-          </p>
         </div>
 
         <div className="space-y-3">
@@ -177,7 +199,8 @@ export default async function PayrollPage({
                       </span>
                     </p>
                     <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                      {r.code} · اضغط لعرض كل الحصص
+                      {r.code}
+                      {r.multiRate ? ' · أسعار متعددة' : ''}
                     </p>
                   </div>
                   <div className="text-left">
@@ -189,18 +212,14 @@ export default async function PayrollPage({
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[12px] mb-3">
+                <div className="grid grid-cols-3 gap-2 text-[12px] mb-2">
                   <div className="rounded-lg p-2 text-center" style={{ background: '#e8f7f0' }}>
                     <p style={{ color: '#6f7974' }}>حصص</p>
                     <p className="font-bold">{r.sessions}</p>
                   </div>
-                  <div className="rounded-lg p-2 text-center" style={{ background: '#e8f7f0' }}>
-                    <p style={{ color: '#6f7974' }}>سعر الحصة</p>
-                    <p className="font-bold">{r.sessionRate}</p>
-                  </div>
-                  <div className="rounded-lg p-2 text-center" style={{ background: '#e8f7f0' }}>
-                    <p style={{ color: '#6f7974' }}>نسبة الأكاديمية</p>
-                    <p className="font-bold">{r.academyRate}%</p>
+                  <div className="rounded-lg p-2 text-center col-span-2" style={{ background: '#e8f7f0' }}>
+                    <p style={{ color: '#6f7974' }}>تفاصيل السعر</p>
+                    <p className="font-bold text-[11px]">{r.rateParts} ج</p>
                   </div>
                 </div>
               </Link>
