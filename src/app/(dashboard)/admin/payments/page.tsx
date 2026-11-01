@@ -6,10 +6,12 @@ import { recordPayment, updatePaymentMethod } from './actions'
 
 export const dynamic = 'force-dynamic'
 
+const PAGE_SIZE = 100
+
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>
+  searchParams: Promise<{ month?: string; page?: string }>
 }) {
   const sp = await searchParams
   const supabase = await createClient()
@@ -21,28 +23,52 @@ export default async function PaymentsPage({
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin' && profile?.role !== 'supervisor') redirect('/login')
 
-  const now = new Date()
-  const monthKey = sp.month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const [y, m] = monthKey.split('-').map(Number)
-  const start = `${monthKey}-01`
-  const end = `${monthKey}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  const monthKey = sp.month || 'all'
+  const page = Math.max(1, Number(sp.page || 1))
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
 
-  const [{ data: payments }, { data: students }] = await Promise.all([
-    supabase
-      .from('payments')
-      .select('id, amount, payment_date, method, notes, student_id, students(name, code)')
-      .gte('payment_date', start)
-      .lte('payment_date', end)
-      .order('payment_date', { ascending: false })
-      .limit(500),
-    supabase.from('students').select('id, code, name').eq('status', 'نشط').order('name').limit(300),
-  ])
+  // كل الدفعات (أو شهر محدد) — بدون حد أقصى وهمي
+  let query = supabase
+    .from('payments')
+    .select('id, amount, payment_date, method, notes, student_id, students(name, code)', { count: 'exact' })
+    .order('payment_date', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (monthKey !== 'all') {
+    const [y, m] = monthKey.split('-').map(Number)
+    const start = `${monthKey}-01`
+    const end = `${monthKey}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+    query = query.gte('payment_date', start).lte('payment_date', end)
+  }
+
+  const { data: payments, count: totalCount } = await query.range(from, to)
+
+  // عدّادات على كل الدفعات المطابقة للفلتر (نجيب methods+amount فقط)
+  let statsQ = supabase.from('payments').select('amount, method')
+  if (monthKey !== 'all') {
+    const [y, m] = monthKey.split('-').map(Number)
+    const start = `${monthKey}-01`
+    const end = `${monthKey}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+    statsQ = statsQ.gte('payment_date', start).lte('payment_date', end)
+  }
+  // supabase default max 1000 — نجيب دفعات على دفعات لو أكتر
+  const allForStats: { amount: number; method: string | null }[] = []
+  let offset = 0
+  const batch = 1000
+  while (true) {
+    const { data: chunk } = await statsQ.range(offset, offset + batch - 1)
+    if (!chunk?.length) break
+    allForStats.push(...chunk)
+    if (chunk.length < batch) break
+    offset += batch
+    if (offset > 100000) break // حماية
+  }
 
   const counts: Record<string, { count: number; total: number }> = {}
   for (const m of PAYMENT_METHODS) counts[m.id] = { count: 0, total: 0 }
-
   let grand = 0
-  for (const p of payments ?? []) {
+  for (const p of allForStats) {
     const id = normalizeMethod(p.method)
     if (!counts[id]) counts[id] = { count: 0, total: 0 }
     counts[id].count += 1
@@ -50,28 +76,50 @@ export default async function PaymentsPage({
     grand += Number(p.amount || 0)
   }
 
-  // آخر طريقة دفع لكل طالب (من كل المدفوعات)
-  const { data: allPays } = await supabase
-    .from('payments')
-    .select('student_id, method, payment_date, amount')
-    .order('payment_date', { ascending: false })
-    .limit(2000)
+  const { data: students } = await supabase
+    .from('students')
+    .select('id, code, name')
+    .in('status', ['نشط', 'نشيط', 'موقوف'])
+    .order('name')
+    .limit(500)
 
+  // آخر طريقة دفع لكل طالب
   const lastMethod: Record<string, { method: string; amount: number; date: string }> = {}
-  for (const p of allPays ?? []) {
-    if (!p.student_id || lastMethod[p.student_id]) continue
-    lastMethod[p.student_id] = {
-      method: methodLabel(p.method),
-      amount: Number(p.amount || 0),
-      date: String(p.payment_date).slice(0, 10),
+  let lo = 0
+  while (true) {
+    const { data: chunk } = await supabase
+      .from('payments')
+      .select('student_id, method, payment_date, amount')
+      .order('payment_date', { ascending: false })
+      .range(lo, lo + 999)
+    if (!chunk?.length) break
+    for (const p of chunk) {
+      if (!p.student_id || lastMethod[p.student_id]) continue
+      lastMethod[p.student_id] = {
+        method: methodLabel(p.method),
+        amount: Number(p.amount || 0),
+        date: String(p.payment_date).slice(0, 10),
+      }
     }
+    if (chunk.length < 1000) break
+    lo += 1000
+    if (lo > 100000) break
   }
 
-  const months: string[] = []
-  for (let i = 0; i < 8; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+  const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE))
+
+  const months: string[] = ['all']
+  const base = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1)
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
+
+  // إحصاء قاعدة البيانات الكامل
+  const { count: dbPayments } = await supabase.from('payments').select('*', { count: 'exact', head: true })
+  const { count: dbStudents } = await supabase.from('students').select('*', { count: 'exact', head: true })
+  const { count: dbAttendance } = await supabase.from('attendance').select('*', { count: 'exact', head: true })
+  const { count: dbTeachers } = await supabase.from('teachers').select('*', { count: 'exact', head: true })
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
@@ -84,16 +132,34 @@ export default async function PaymentsPage({
             المدفوعات وطرق الدفع
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            إنستا باي · فودافون كاش · تحويل بنكي
+            كل الدفعات · إنستا · فودافون · بنكي
           </p>
         </div>
       </header>
+
+      {/* تأكيد الاستيراد من الشيت */}
+      <section className="px-4 mb-3">
+        <div className="card p-3.5 text-[12px]" style={{ border: '1px solid #cde8dc' }}>
+          <p className="font-bold mb-1" style={{ color: '#00513c' }}>
+            بيانات قاعدة البيانات (من الشيت)
+          </p>
+          <div className="grid grid-cols-2 gap-1.5" style={{ color: '#3f4944' }}>
+            <span>الدفعات: <b>{dbPayments ?? 0}</b></span>
+            <span>الطلاب: <b>{dbStudents ?? 0}</b></span>
+            <span>الحضور: <b>{dbAttendance ?? 0}</b></span>
+            <span>المعلمون: <b>{dbTeachers ?? 0}</b></span>
+          </div>
+          <p className="mt-1.5 text-[10px]" style={{ color: '#6f7974' }}>
+            آخر استيراد معروف: 201 دفعة · 159 طالب · 693 حضور · من أغسطس إلى أكتوبر 2026
+          </p>
+        </div>
+      </section>
 
       <div className="px-4 mb-3 flex gap-2 overflow-x-auto pb-1">
         {months.map((mo) => (
           <Link
             key={mo}
-            href={`/admin/payments?month=${mo}`}
+            href={`/admin/payments?month=${mo}&page=1`}
             className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold"
             style={{
               background: mo === monthKey ? '#176b52' : '#fff',
@@ -101,12 +167,11 @@ export default async function PaymentsPage({
               border: '1px solid #cde8dc',
             }}
           >
-            {mo}
+            {mo === 'all' ? 'الكل' : mo}
           </Link>
         ))}
       </div>
 
-      {/* عدّادات */}
       <section className="px-4 mb-4 grid grid-cols-2 gap-2.5">
         {PAYMENT_METHODS.filter((m) => m.id !== 'اخرى').map((m) => (
           <div key={m.id} className="card p-3.5">
@@ -123,20 +188,14 @@ export default async function PaymentsPage({
         ))}
         <div className="card p-3.5 col-span-2">
           <p className="text-[12px]" style={{ color: '#6f7974' }}>
-            إجمالي الشهر · {payments?.length ?? 0} دفعة
+            الإجمالي المعروض · {totalCount ?? 0} دفعة
           </p>
           <p className="text-[22px] font-bold" style={{ color: '#176b52' }}>
             {grand.toLocaleString('ar-EG')} ج
           </p>
-          {(counts['اخرى']?.count ?? 0) > 0 && (
-            <p className="text-[11px] mt-1" style={{ color: '#6f7974' }}>
-              أخرى: {counts['اخرى'].count} · {counts['اخرى'].total.toLocaleString('ar-EG')} ج
-            </p>
-          )}
         </div>
       </section>
 
-      {/* تسجيل دفعة */}
       <section className="px-4 mb-4">
         <div className="card p-4">
           <h2 className="text-[14px] font-bold mb-3" style={{ color: '#00513c' }}>
@@ -208,11 +267,15 @@ export default async function PaymentsPage({
         </div>
       </section>
 
-      {/* قائمة الدفعات */}
       <section className="px-4 mb-4">
-        <h2 className="text-[13px] font-bold mb-2" style={{ color: '#3f4944' }}>
-          دفعات الشهر
-        </h2>
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-[13px] font-bold" style={{ color: '#3f4944' }}>
+            كل الدفعات
+          </h2>
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>
+            صفحة {page} / {totalPages} · {totalCount ?? 0} دفعة
+          </p>
+        </div>
         <div className="space-y-2">
           {(payments ?? []).map((p: any) => (
             <div key={p.id} className="card p-3">
@@ -263,25 +326,43 @@ export default async function PaymentsPage({
           ))}
           {(payments ?? []).length === 0 && (
             <p className="text-center text-[13px] py-6" style={{ color: '#6f7974' }}>
-              لا دفعات في هذا الشهر
+              لا دفعات
             </p>
           )}
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex justify-center gap-3 mt-4">
+            {page > 1 && (
+              <Link
+                href={`/admin/payments?month=${monthKey}&page=${page - 1}`}
+                className="px-4 py-2 rounded-full text-[13px] font-bold bg-white"
+                style={{ border: '1px solid #cde8dc', color: '#176b52' }}
+              >
+                السابق
+              </Link>
+            )}
+            {page < totalPages && (
+              <Link
+                href={`/admin/payments?month=${monthKey}&page=${page + 1}`}
+                className="px-4 py-2 rounded-full text-[13px] font-bold text-white"
+                style={{ background: '#176b52' }}
+              >
+                التالي
+              </Link>
+            )}
+          </div>
+        )}
       </section>
 
-      {/* آخر طريقة دفع لكل طالب نشط */}
       <section className="px-4 mb-6">
         <h2 className="text-[13px] font-bold mb-2" style={{ color: '#3f4944' }}>
           آخر طريقة دفع جنب كل طالب
         </h2>
         <div className="card divide-y" style={{ borderColor: '#e8f5ef' }}>
           {(students ?? [])
-            .map((s) => ({
-              ...s,
-              last: lastMethod[s.id],
-            }))
+            .map((s) => ({ ...s, last: lastMethod[s.id] }))
             .filter((s) => s.last)
-            .slice(0, 80)
             .map((s) => (
               <div key={s.id} className="px-3 py-2.5 flex justify-between items-center gap-2">
                 <div className="min-w-0">
