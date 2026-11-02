@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { supervisorEditStudent } from './actions'
+import { StudentPicker } from './StudentPicker'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +50,13 @@ export default async function SupervisorEditStudentPage({
   ])
 
   const selected = students?.find((s) => s.id === sp.id) || null
+  const pickerList = (students ?? []).map((s) => ({
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    last_session_num: s.last_session_num,
+    status: s.status,
+  }))
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
@@ -61,35 +69,12 @@ export default async function SupervisorEditStudentPage({
             تعديل بيانات طالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            اختر طالب ثم عدّل الحقول المحفوظة
+            ابحث عن الطالب ثم عدّل رقم الحصة وباقي البيانات
           </p>
         </div>
       </header>
 
-      <div className="px-4 mb-3">
-        <p className="text-[12px] font-bold mb-1.5" style={{ color: '#3f4944' }}>
-          قائمة الطلاب
-        </p>
-        <div className="card p-2 max-h-44 overflow-y-auto space-y-0.5">
-          {(students ?? []).map((s) => (
-            <Link
-              key={s.id}
-              href={`/supervisor/edit-student?id=${s.id}`}
-              className="block text-[13px] py-2 px-2.5 rounded-lg"
-              style={{
-                background: selected?.id === s.id ? '#e8f7f0' : 'transparent',
-                color: '#1a1c1b',
-                fontWeight: selected?.id === s.id ? 700 : 400,
-              }}
-            >
-              {s.name}{' '}
-              <span style={{ color: '#6f7974' }}>
-                ({s.code})
-              </span>
-            </Link>
-          ))}
-        </div>
-      </div>
+      <StudentPicker students={pickerList} selectedId={selected?.id} />
 
       {selected && (
         <div className="px-4">
@@ -180,6 +165,7 @@ export default async function SupervisorEditStudentPage({
                   name="price_per_session"
                   type="number"
                   min={0}
+                  step="0.5"
                   defaultValue={selected.price_per_session ?? 25}
                   className={inputCls}
                   style={inputStyle}
@@ -199,7 +185,7 @@ export default async function SupervisorEditStudentPage({
             </Field>
 
             <p className="text-[10px] leading-relaxed" style={{ color: '#6f7974' }}>
-              الأرقام الظاهرة هي البيانات المحفوظة حاليًا للطالب. غيّر اللي محتاجه واضغط حفظ.
+              غيّر رقم آخر حصة أو أي حقل واضغط حفظ.
             </p>
 
             <button
@@ -215,7 +201,7 @@ export default async function SupervisorEditStudentPage({
 
       {!selected && (
         <p className="text-center text-[13px] px-4" style={{ color: '#6f7974' }}>
-          اختر طالب من القائمة عشان تظهر بياناته
+          ابحث واختر طالب عشان تظهر بياناته ورقم الحصة
         </p>
       )}
     </div>
