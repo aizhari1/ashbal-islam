@@ -32,38 +32,6 @@ export function PayrollShare({
 }) {
   const [copied, setCopied] = useState(false)
 
-  const message = useMemo(() => {
-    const lines: string[] = []
-    lines.push(`🌿 *أكاديمية أشبال الإسلام*}`)
-    lines.push(`📋 *تفاصيل راتب المعلم*`)`
-    lines.push(``)
-    lines.push(`👤 المعلم: *${teacherName}*`)`
-    lines.push(`🆔 الكود: ${teacherCode}`)
-    lines.push(`📅 الفترة: ${monthLabel}`)
-    lines.push(`────────────────`)
-    lines.push(`✅ إجمالي الحصص: *${totalSessions}*`)
-    lines.push(`💰 المستحق: *${totalPay.toLocaleString('ar-EG')} ج*`)
-    lines.push(`────────────────`)
-
-    for (const g of groups) {
-      const sub = g.sessions.length * g.price
-      lines.push(``)
-      lines.push(`👦 ${g.name} (${g.code})`)
-      lines.push(`   ${g.sessions.length} حصة × ${g.price} ج = *${sub.toLocaleString('ar-EG')} ج*`)
-      const dates = g.sessions.map((s) => s.date).slice(0, 20)
-      if (dates.length) {
-        lines.push(`   📆 ${dates.join(' · ')}${g.sessions.length > 20 ? ' …' : ''}`)
-      }
-    }
-
-    lines.push(``)
-    lines.push(`────────────────`)
-    lines.push(`📌 الإجمالي النهائي: *${totalPay.toLocaleString('ar-EG')} جنيه*`)
-    lines.push(`جزاكم الله خيرًا 🌿`)
-    return lines.join('\n')
-  }, [teacherName, teacherCode, monthLabel, totalSessions, totalPay, groups])
-
-  // Fix template string - rebuild cleanly without syntax errors
   const text = useMemo(() => {
     const L: string[] = []
     L.push('🌿 *أكاديمية أشبال الإسلام*')
@@ -82,7 +50,9 @@ export function PayrollShare({
       L.push(`👦 ${g.name} (${g.code})`)
       L.push(`   ${g.sessions.length} حصة × ${g.price} ج = *${sub.toLocaleString('ar-EG')} ج*`)
       const dates = g.sessions.map((s) => s.date).slice(0, 15)
-      if (dates.length) L.push(`   📆 ${dates.join(' · ')}${g.sessions.length > 15 ? ' …' : ''}`)
+      if (dates.length) {
+        L.push(`   📆 ${dates.join(' · ')}${g.sessions.length > 15 ? ' …' : ''}`)
+      }
     }
     L.push('')
     L.push('────────────────')
