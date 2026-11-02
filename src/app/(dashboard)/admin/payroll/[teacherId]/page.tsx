@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import { PayrollShare } from '../PayrollShare'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,14 +78,15 @@ export default async function TeacherPayrollDetailPage({
     duration: number
     packageSize: number
     price: number
-    sessions: { id: string; date: string; num: number | null; rating: number | null }[]
+    sessions: { id: string; date: string; num: number | null; rating: number | null; price: number }[]
   }
   const byStudent: Record<string, Stu> = {}
 
   for (const a of present) {
     const sid = a.student_id || 'unknown'
     const st = a.students as any
-    const price = Number(st?.price_per_session || 0) > 0 ? Number(st.price_per_session) : teacherDefault
+    let price = Number(st?.price_per_session || 0) > 0 ? Number(st.price_per_session) : teacherDefault
+    if (price < DEFAULT_RATE) price = DEFAULT_RATE
     if (!byStudent[sid]) {
       byStudent[sid] = {
         id: sid,
@@ -101,6 +103,7 @@ export default async function TeacherPayrollDetailPage({
       date: String(a.session_date).slice(0, 10),
       num: a.session_num,
       rating: a.rating,
+      price,
     })
   }
 
@@ -108,10 +111,20 @@ export default async function TeacherPayrollDetailPage({
   const totalSessions = present.length
   const due = groups.reduce((s, g) => s + g.sessions.length * g.price, 0)
 
+  const shareGroups = groups.map((g) => ({
+    name: g.name,
+    code: g.code,
+    price: g.price,
+    sessions: g.sessions.map((s) => ({ date: s.date, num: s.num, price: g.price })),
+  }))
+
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
-      <header className="px-4 py-3 flex items-center gap-3">
-        <Link href={`/admin/payroll?month=${key}`} className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
+      <header className="px-4 py-3 flex items-center gap-3 print:block">
+        <Link
+          href={`/admin/payroll?month=${key}`}
+          className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm print:hidden"
+        >
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
         <div className="flex-1 min-w-0">
@@ -150,6 +163,15 @@ export default async function TeacherPayrollDetailPage({
           </p>
         </div>
       </section>
+
+      <PayrollShare
+        teacherName={teacher.name}
+        teacherCode={teacher.code || '—'}
+        monthLabel={label}
+        totalSessions={totalSessions}
+        totalPay={due}
+        groups={shareGroups}
+      />
 
       <div className="px-4 space-y-3">
         {groups.length === 0 && (
