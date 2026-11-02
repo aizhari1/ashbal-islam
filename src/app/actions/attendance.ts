@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { dueAfterPackageComplete, packageSize } from '@/lib/dues'
 
 export async function recordAttendance(data: {
   student_id: string
@@ -21,7 +22,9 @@ export async function recordAttendance(data: {
   score_far?: number | null
 }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -52,41 +55,26 @@ export async function recordAttendance(data: {
       .single()
     if (error) return { error: error.message }
 
-    await supabase.from('activity_log').insert({
-      actor_id: user.id,
-      action: 'session_report',
-      entity_type: 'student',
-      entity_id: data.student_id,
-      details: {
-        attendance_id: row.id,
-        status: data.status,
-        report: data.report_text || '',
-        score_new: data.score_new,
-        score_recent: data.score_recent,
-        score_far: data.score_far,
-        updated: true,
-        date: today,
-      },
-    })
-
     revalidatePath('/teacher')
     revalidatePath('/teacher/session')
-    revalidatePath('/teacher/attendance')
     return { success: true, data: row, message: 'اتحدّث تقرير اليوم' }
   }
 
   const { data: student } = await supabase
     .from('students')
-    .select('last_session_num, monthly_sessions, subscription_type')
+    .select('last_session_num, monthly_sessions, subscription_type, price_per_session, amount_due')
     .eq('id', data.student_id)
     .single()
 
-  let nextSession = (student?.last_session_num || 0) + 1
-  const quotaMatch = String(student?.subscription_type || student?.monthly_sessions || '').match(/(\d+)/)
-  const quota = quotaMatch ? parseInt(quotaMatch[1], 10) : Number(student?.monthly_sessions) || 0
+  const quota = packageSize(student || {})
+  const prevNum = student?.last_session_num || 0
+  let nextSession = prevNum + 1
+  // اكتمال الباقة لما نوصل لعدد حلقات الباقة
+  const completedPackage = quota > 0 && nextSession >= quota
   if (quota > 0 && nextSession > quota) nextSession = 1
 
-  const isPresent = data.status === 'حاضر' || data.status === 'متأخر' || data.status === 'تم الحضور'
+  const isPresent =
+    data.status === 'حاضر' || data.status === 'متأخر' || data.status === 'تم الحضور'
 
   const { data: row, error } = await supabase
     .from('attendance')
@@ -94,7 +82,12 @@ export async function recordAttendance(data: {
       student_id: data.student_id,
       teacher_id: data.teacher_id || null,
       session_date: today,
-      status: data.status === 'تم الحضور' ? 'حاضر' : data.status === 'لم يحضر' ? 'غائب' : data.status,
+      status:
+        data.status === 'تم الحضور'
+          ? 'حاضر'
+          : data.status === 'لم يحضر'
+            ? 'غائب'
+            : data.status,
       hifz_from: data.hifz_from || null,
       hifz_to: data.hifz_to || null,
       muraja_from: data.muraja_from || null,
@@ -109,11 +102,20 @@ export async function recordAttendance(data: {
 
   if (error) return { error: error.message }
 
+  let dueMsg = ''
   if (student && isPresent) {
-    await supabase.from('students').update({
+    const patch: Record<string, unknown> = {
       last_session_date: today,
       last_session_num: nextSession,
-    }).eq('id', data.student_id)
+    }
+    if (completedPackage) {
+      const due = dueAfterPackageComplete(student)
+      if (due > 0) {
+        patch.amount_due = due
+        dueMsg = ` · مستحق ${due} ج`
+      }
+    }
+    await supabase.from('students').update(patch).eq('id', data.student_id)
   }
 
   await supabase.from('activity_log').insert({
@@ -124,12 +126,9 @@ export async function recordAttendance(data: {
     details: {
       attendance_id: row.id,
       status: data.status,
-      report: data.report_text || '',
-      score_new: data.score_new,
-      score_recent: data.score_recent,
-      score_far: data.score_far,
       session_num: nextSession,
       date: today,
+      package_complete: completedPackage,
     },
   })
 
@@ -137,7 +136,15 @@ export async function recordAttendance(data: {
   revalidatePath('/teacher/session')
   revalidatePath('/teacher/attendance')
   revalidatePath('/admin/students')
-  return { success: true, data: row, message: isPresent ? `اتسجل حضور — حصة رقم ${nextSession}` : 'اتسجل الغياب مع التقرير' }
+  revalidatePath('/admin/finance')
+  revalidatePath('/supervisor')
+  return {
+    success: true,
+    data: row,
+    message: isPresent
+      ? `اتسجل حضور — حصة رقم ${nextSession}${dueMsg}`
+      : 'اتسجل الغياب مع التقرير',
+  }
 }
 
 export async function bulkAttendance(
