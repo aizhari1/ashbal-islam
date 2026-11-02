@@ -75,9 +75,9 @@ export default async function PayrollPage({
     if (!a.teacher_id) continue
     if (!byTeacher[a.teacher_id]) byTeacher[a.teacher_id] = { sessions: 0, salary: 0, rates: {} }
     const st = a.students as any
-    const studentRate = Number(st?.price_per_session || 0)
-    const rate =
-      studentRate > 0 ? studentRate : teacherDefaultRate[a.teacher_id] || DEFAULT_SESSION_RATE
+    let rate = Number(st?.price_per_session || 0)
+    if (rate <= 0) rate = teacherDefaultRate[a.teacher_id] || DEFAULT_SESSION_RATE
+    if (rate < DEFAULT_SESSION_RATE) rate = DEFAULT_SESSION_RATE
     byTeacher[a.teacher_id].sessions += 1
     byTeacher[a.teacher_id].salary += rate
     byTeacher[a.teacher_id].rates[rate] = (byTeacher[a.teacher_id].rates[rate] || 0) + 1
@@ -135,7 +135,7 @@ export default async function PayrollPage({
         <div>
           <h1 className="text-[16px] font-bold">الرواتب بعدد الحصص</h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            {label} · اضغط المعلم لعرض التفاصيل
+            {label} · ادخل على المعلم لواتساب وPDF
           </p>
         </div>
       </header>
@@ -222,6 +222,15 @@ export default async function PayrollPage({
                   </div>
                 </div>
               </Link>
+
+              <Link
+                href={`/admin/payroll/${r.id}?month=${key}`}
+                className="block w-full text-center py-2.5 rounded-xl text-white font-bold text-[13px] mb-2"
+                style={{ background: '#25D366' }}
+              >
+                واتساب · PDF · تفاصيل الحصص
+              </Link>
+
               <PayrollActions
                 teacherId={r.id}
                 teacherName={r.name}
