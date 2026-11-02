@@ -7,14 +7,16 @@ export const dynamic = 'force-dynamic'
 const DEFAULT_RATE = 25
 
 function monthBounds(key?: string) {
-  const now = new Date()
-  const y = key?.slice(0, 4) ? Number(key.slice(0, 4)) : now.getFullYear()
-  const m = key?.slice(5, 7) ? Number(key.slice(5, 7)) : now.getMonth() + 1
+  if (!key || key === 'all') {
+    return { start: '2020-01-01', end: '2099-12-31', label: 'كل الشهور', key: 'all' }
+  }
+  const y = Number(key.slice(0, 4))
+  const m = Number(key.slice(5, 7))
   const start = `${y}-${String(m).padStart(2, '0')}-01`
   const last = new Date(y, m, 0).getDate()
   const end = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
   const label = new Date(y, m - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })
-  return { start, end, label, key: `${y}-${String(m).padStart(2, '0')}` }
+  return { start, end, label, key }
 }
 
 export default async function SessionsDetailPage({
@@ -30,126 +32,103 @@ export default async function SessionsDetailPage({
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/login')
+  if (profile?.role !== 'admin' && profile?.role !== 'supervisor') redirect('/login')
 
-  const { start, end, label, key } = monthBounds(sp.month)
+  const { start, end, label, key } = monthBounds(sp.month || '2026-10')
 
-  const [{ data: teachers }, { data: students }, { data: attendance }] = await Promise.all([
+  const [{ data: teachers }, { data: students }] = await Promise.all([
     supabase.from('teachers').select('id, code, name, is_active').order('name'),
     supabase
       .from('students')
       .select('id, code, name, teacher_id, monthly_sessions, session_duration, price_per_session, status')
-      .order('name'),
-    supabase
+      .order('name')
+      .limit(500),
+  ])
+
+  // جلب كل الحضور في الفترة على دفعات
+  const attendance: any[] = []
+  let off = 0
+  while (true) {
+    const { data: chunk } = await supabase
       .from('attendance')
       .select('id, student_id, teacher_id, session_date, status, session_num, rating, notes')
       .gte('session_date', start)
       .lte('session_date', end)
-      .order('session_date', { ascending: false }),
-  ])
+      .order('session_date', { ascending: false })
+      .range(off, off + 999)
+    if (!chunk?.length) break
+    attendance.push(...chunk)
+    if (chunk.length < 1000) break
+    off += 1000
+    if (off > 50000) break
+  }
 
   const teacherMap = new Map((teachers ?? []).map((t) => [t.id, t]))
   const studentMap = new Map((students ?? []).map((s) => [s.id, s]))
 
-  // حاضر فقط للحساب
-  const present = (attendance ?? []).filter((a) => a.status === 'حاضر')
+  const present = attendance.filter((a) => a.status === 'حاضر')
+  const filterTeacher = sp.teacher || 'all'
 
-  type StudentBucket = {
-    studentId: string
-    code: string
-    name: string
-    packageSize: number
-    duration: number
-    price: number
-    sessions: number
-    dates: string[]
-  }
-
-  type TeacherBucket = {
+  type Group = {
     teacherId: string
-    code: string
-    name: string
-    totalSessions: number
-    rate: number
-    due: number
-    students: StudentBucket[]
+    teacherName: string
+    teacherCode: string
+    sessions: number
+    students: {
+      id: string
+      name: string
+      code: string
+      count: number
+      price: number
+      duration: number
+      packageSize: number
+      dates: string[]
+    }[]
   }
 
-  const byTeacher: Record<string, TeacherBucket> = {}
+  const byTeacher: Record<string, Group> = {}
 
   for (const a of present) {
-    const tid = a.teacher_id
-    if (!tid) continue
+    const tid = a.teacher_id || 'unknown'
+    if (filterTeacher !== 'all' && tid !== filterTeacher) continue
     const t = teacherMap.get(tid)
     if (!byTeacher[tid]) {
       byTeacher[tid] = {
         teacherId: tid,
-        code: t?.code || '—',
-        name: t?.name || 'معلم',
-        totalSessions: 0,
-        rate: DEFAULT_RATE,
-        due: 0,
+        teacherName: t?.name || 'بدون معلم',
+        teacherCode: t?.code || '—',
+        sessions: 0,
         students: [],
       }
     }
-    byTeacher[tid].totalSessions += 1
-
-    const sid = a.student_id || 'unknown'
-    let bucket = byTeacher[tid].students.find((s) => s.studentId === sid)
-    if (!bucket) {
-      const st = studentMap.get(sid)
-      bucket = {
-        studentId: sid,
-        code: st?.code || '—',
+    byTeacher[tid].sessions += 1
+    const st = studentMap.get(a.student_id)
+    let g = byTeacher[tid].students.find((s) => s.id === a.student_id)
+    if (!g) {
+      g = {
+        id: a.student_id || 'x',
         name: st?.name || 'طالب',
-        packageSize: Number(st?.monthly_sessions || 0),
-        duration: Number(st?.session_duration || 30),
+        code: st?.code || '—',
+        count: 0,
         price: Number(st?.price_per_session || DEFAULT_RATE),
-        sessions: 0,
+        duration: Number(st?.session_duration || 30),
+        packageSize: Number(st?.monthly_sessions || 0),
         dates: [],
       }
-      byTeacher[tid].students.push(bucket)
+      byTeacher[tid].students.push(g)
     }
-    bucket.sessions += 1
-    if (a.session_date) bucket.dates.push(a.session_date)
+    g.count += 1
+    g.dates.push(String(a.session_date).slice(0, 10))
   }
 
-  // طلاب مسجلين عند المعلم بدون حضور هذا الشهر (للمقارنة)
-  for (const st of students ?? []) {
-    if (!st.teacher_id || !byTeacher[st.teacher_id]) continue
-    const exists = byTeacher[st.teacher_id].students.find((s) => s.studentId === st.id)
-    if (!exists && (st.status === 'نشط' || st.status === 'نشيط')) {
-      byTeacher[st.teacher_id].students.push({
-        studentId: st.id,
-        code: st.code || '—',
-        name: st.name || 'طالب',
-        packageSize: Number(st.monthly_sessions || 0),
-        duration: Number(st.session_duration || 30),
-        price: Number(st.price_per_session || DEFAULT_RATE),
-        sessions: 0,
-        dates: [],
-      })
-    }
-  }
+  const groups = Object.values(byTeacher).sort((a, b) => b.sessions - a.sessions)
+  for (const g of groups) g.students.sort((a, b) => b.count - a.count)
 
-  for (const b of Object.values(byTeacher)) {
-    b.due = b.totalSessions * b.rate
-    b.students.sort((a, c) => c.sessions - a.sessions)
-  }
+  const presentCount = present.filter((a) => filterTeacher === 'all' || a.teacher_id === filterTeacher).length
+  const allCount = attendance.length
+  const otherCount = allCount - present.length
 
-  let rows = Object.values(byTeacher).sort((a, b) => b.totalSessions - a.totalSessions)
-  if (sp.teacher) {
-    rows = rows.filter((r) => r.teacherId === sp.teacher)
-  }
-
-  const grandSessions = rows.reduce((s, r) => s + r.totalSessions, 0)
-  const grandDue = rows.reduce((s, r) => s + r.due, 0)
-  const allCount = (attendance ?? []).length
-  const presentCount = present.length
-  const otherCount = allCount - presentCount
-
-  // أشهر للتنقل
-  const months: string[] = []
+  const months = ['all']
   const base = new Date()
   for (let i = 0; i < 8; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() - i, 1)
@@ -162,12 +141,12 @@ export default async function SessionsDetailPage({
         <Link href="/admin" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
-        <div className="flex-1">
+        <div>
           <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>
             تفاصيل الحصص
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            لكل معلم · مجموعات الطلاب · السعر والمدة
+            {label} · {presentCount} حضور من أصل {allCount}
           </p>
         </div>
       </header>
@@ -176,7 +155,7 @@ export default async function SessionsDetailPage({
         {months.map((m) => (
           <Link
             key={m}
-            href={`/admin/sessions-detail?month=${m}`}
+            href={`/admin/sessions-detail?month=${m}${filterTeacher !== 'all' ? `&teacher=${filterTeacher}` : ''}`}
             className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold"
             style={{
               background: m === key ? '#176b52' : '#fff',
@@ -184,133 +163,118 @@ export default async function SessionsDetailPage({
               border: '1px solid #cde8dc',
             }}
           >
-            {m}
+            {m === 'all' ? 'الكل' : m}
           </Link>
         ))}
       </div>
 
-      <p className="text-center text-[14px] font-bold mb-3" style={{ color: '#00513c' }}>
-        {label}
-      </p>
+      <div className="px-4 mb-3 flex gap-2 overflow-x-auto pb-1">
+        <Link
+          href={`/admin/sessions-detail?month=${key}`}
+          className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold"
+          style={{
+            background: filterTeacher === 'all' ? '#00513c' : '#fff',
+            color: filterTeacher === 'all' ? '#fff' : '#3f4944',
+            border: '1px solid #cde8dc',
+          }}
+        >
+          كل المعلمين
+        </Link>
+        {(teachers ?? [])
+          .filter((t) => t.is_active !== false)
+          .map((t) => (
+            <Link
+              key={t.id}
+              href={`/admin/sessions-detail?month=${key}&teacher=${t.id}`}
+              className="shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold"
+              style={{
+                background: filterTeacher === t.id ? '#00513c' : '#fff',
+                color: filterTeacher === t.id ? '#fff' : '#3f4944',
+                border: '1px solid #cde8dc',
+              }}
+            >
+              {t.name}
+            </Link>
+          ))}
+      </div>
 
-      <section className="px-4 mb-4 grid grid-cols-3 gap-2">
+      <section className="px-4 mb-3 grid grid-cols-3 gap-2">
         <div className="card p-3 text-center">
           <p className="text-[18px] font-bold" style={{ color: '#00513c' }}>
-            {grandSessions}
+            {presentCount}
           </p>
           <p className="text-[10px]" style={{ color: '#6f7974' }}>
             حضور
           </p>
         </div>
         <div className="card p-3 text-center">
-          <p className="text-[18px] font-bold" style={{ color: '#176b52' }}>
-            {grandDue.toLocaleString('ar-EG')}
-          </p>
-          <p className="text-[10px]" style={{ color: '#6f7974' }}>
-            مستحق (×{DEFAULT_RATE})
-          </p>
-        </div>
-        <div className="card p-3 text-center">
-          <p className="text-[18px] font-bold" style={{ color: otherCount ? '#b45309' : '#6f7974' }}>
+          <p className="text-[18px] font-bold" style={{ color: '#6f7974' }}>
             {otherCount}
           </p>
           <p className="text-[10px]" style={{ color: '#6f7974' }}>
             غير حاضر
           </p>
         </div>
+        <div className="card p-3 text-center">
+          <p className="text-[18px] font-bold" style={{ color: '#176b52' }}>
+            {groups.length}
+          </p>
+          <p className="text-[10px]" style={{ color: '#6f7974' }}>
+            معلمون
+          </p>
+        </div>
       </section>
 
-      <p className="px-4 text-[11px] mb-2" style={{ color: '#6f7974' }}>
-        الإجمالي المسجّل في الجدول: {allCount} · حاضر: {presentCount} · غير ذلك: {otherCount}
-        <br />
-        الحساب = عدد الحضور × {DEFAULT_RATE} ج للجلسة
-      </p>
-
       <div className="px-4 space-y-3">
-        {rows.length === 0 && (
+        {groups.length === 0 && (
           <div className="card p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
-            لا توجد حصص حضور في هذا الشهر
+            لا حصص حضور في هذه الفترة
           </div>
         )}
-
-        {rows.map((t) => (
-          <div key={t.teacherId} className="card overflow-hidden">
-            <div className="p-3.5 flex items-start justify-between gap-2" style={{ background: '#f0faf5' }}>
+        {groups.map((g) => (
+          <div key={g.teacherId} className="card overflow-hidden">
+            <Link
+              href={`/admin/payroll/${g.teacherId}?month=${key === 'all' ? '2026-10' : key}`}
+              className="block p-3.5 flex justify-between"
+              style={{ background: '#f0faf5' }}
+            >
               <div>
                 <p className="text-[14px] font-bold" style={{ color: '#00513c' }}>
-                  {t.name}
+                  {g.teacherName}
                 </p>
                 <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                  كود: {t.code} · طلاب بحضور: {t.students.filter((s) => s.sessions > 0).length}
+                  {g.teacherCode} · {g.students.length} طالب
                 </p>
               </div>
               <div className="text-left">
                 <p className="text-[16px] font-bold" style={{ color: '#176b52' }}>
-                  {t.totalSessions} حصة
-                </p>
-                <p className="text-[12px] font-semibold" style={{ color: '#00513c' }}>
-                  {t.due.toLocaleString('ar-EG')} ج
+                  {g.sessions} حصة
                 </p>
               </div>
-            </div>
-
+            </Link>
             <div className="divide-y" style={{ borderColor: '#e8f5ef' }}>
-              {t.students.map((s) => {
-                const expected = s.packageSize
-                const gap = expected > 0 ? s.sessions - expected : 0
-                return (
-                  <div key={s.studentId} className="p-3">
-                    <div className="flex justify-between gap-2">
-                      <div>
-                        <p className="text-[13px] font-semibold" style={{ color: '#1a1c1b' }}>
-                          {s.name}
-                        </p>
-                        <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                          {s.code} · باقة {s.packageSize || '—'} · مدة {s.duration} د · سعر{' '}
-                          {s.price} ج
-                        </p>
-                      </div>
-                      <div className="text-left shrink-0">
-                        <p
-                          className="text-[14px] font-bold"
-                          style={{ color: s.sessions === 0 ? '#9ca3af' : '#176b52' }}
-                        >
-                          {s.sessions} حصة
-                        </p>
-                        {expected > 0 && (
-                          <p
-                            className="text-[10px] font-semibold"
-                            style={{
-                              color: gap === 0 ? '#6f7974' : gap < 0 ? '#b45309' : '#176b52',
-                            }}
-                          >
-                            {gap === 0 ? 'مطابق للباقة' : gap < 0 ? `ناقص ${-gap}` : `زيادة ${gap}`}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {s.dates.length > 0 && (
-                      <p className="mt-1.5 text-[10px] leading-relaxed" style={{ color: '#6f7974' }}>
-                        التواريخ: {s.dates.slice(0, 12).join(' · ')}
-                        {s.dates.length > 12 ? ` · +${s.dates.length - 12}` : ''}
+              {g.students.map((s) => (
+                <div key={s.id} className="px-3.5 py-2.5">
+                  <div className="flex justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-semibold">{s.name}</p>
+                      <p className="text-[10px]" style={{ color: '#6f7974' }}>
+                        {s.code} · باقة {s.packageSize || '—'} · {s.duration}د · {s.price}ج
                       </p>
-                    )}
+                    </div>
+                    <p className="text-[13px] font-bold" style={{ color: '#176b52' }}>
+                      {s.count} حصة
+                    </p>
                   </div>
-                )
-              })}
+                  <p className="text-[10px] mt-1 leading-relaxed" style={{ color: '#6f7974' }}>
+                    {s.dates.slice(0, 12).join(' · ')}
+                    {s.dates.length > 12 ? ` · +${s.dates.length - 12}` : ''}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="px-4 mt-4">
-        <Link
-          href="/admin/payroll"
-          className="block text-center py-3 rounded-2xl text-[13px] font-bold text-white"
-          style={{ background: '#176b52' }}
-        >
-          مستحقات المعلمين
-        </Link>
       </div>
     </div>
   )
