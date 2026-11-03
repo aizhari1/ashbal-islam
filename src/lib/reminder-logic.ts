@@ -1,4 +1,4 @@
-/** نفس قاعدة الأصل: يظهر بعد اكتمال حصص الباقة بعد آخر دفعة؛ يختفي بعد تسجيل دفعة جديدة */
+/** نفس قاعدة الأصل: يظهر بعد اكتمال حصص الباقة بعد آخر دفعة؛ يختفي بعد تسجيل دفعة تغطّيه */
 
 export type ReminderStudent = {
   id: string
@@ -14,6 +14,8 @@ export type ReminderStudent = {
   price_per_session: number | null
   teacher_name: string
 }
+
+export type LastPay = { day: string; months: number; residual?: number }
 
 export type ReminderRow = ReminderStudent & {
   sessions_taken: number
@@ -46,7 +48,7 @@ const EXCLUDE = /منسحب|انسحاب|متوقف|موقوف|تجريبي/
 
 export function computeDueReminders(
   students: ReminderStudent[],
-  lastPay: Record<string, { day: string; months: number }>,
+  lastPay: Record<string, LastPay>,
   attDays: Record<string, string[]>
 ): ReminderRow[] {
   const out: ReminderRow[] = []
@@ -58,31 +60,47 @@ export function computeDueReminders(
     const pkg = packageSize(s)
     const days = attDays[s.id] || []
     const lp = lastPay[s.id]
+    const residual = Math.max(0, Number(lp?.residual || 0))
     let since = 0
     let dueDate = ''
     let reason = ''
+    let packageDue = false
 
     if (lp) {
-      if (pkg <= 0) continue
       const after = days.filter((d) => d > lp.day)
-      since = after.length > 0 ? after.length : Number(s.last_session_num) || 0
-      const need = pkg * (lp.months || 1)
-      if (since < need) continue
-      dueDate = after[need - 1] || after[after.length - 1] || s.last_session_date || ''
-      reason = `أكمل ${since} حصة بعد آخر دفعة (${lp.day})`
+      if (after.length > 0) {
+        since = after.length
+      } else if (days.length === 0 && (!s.last_session_date || String(s.last_session_date).slice(0, 10) > lp.day)) {
+        since = Number(s.last_session_num) || 0
+      } else {
+        since = 0
+      }
+      if (pkg > 0) {
+        const need = pkg * (lp.months || 1)
+        if (since >= need) {
+          packageDue = true
+          dueDate = after[need - 1] || after[after.length - 1] || s.last_session_date || ''
+          reason = `أكمل ${since} حصة بعد آخر دفعة (${lp.day})`
+        }
+      }
     } else {
       since = Math.max(days.length, Number(s.last_session_num) || 0)
-      if (pkg > 0) {
-        if (since < pkg) continue
+      if (pkg > 0 && since >= pkg) {
+        packageDue = true
         dueDate = days[pkg - 1] || s.last_session_date || ''
         reason = `أكمل ${since} حصة ولا توجد دفعة مسجّلة`
-      } else {
-        continue
       }
     }
 
-    const outstanding = packagePrice(s)
+    const price = packageDue ? packagePrice(s) : 0
+    const outstanding = price + residual
     if (outstanding <= 0) continue
+
+    if (residual > 0) {
+      const partial = `متبقٍّ ${residual} بعد دفعة جزئية (${lp?.day})`
+      reason = reason ? `${reason} · ${partial}` : partial
+      if (!dueDate) dueDate = lp?.day || ''
+    }
 
     out.push({
       ...s,
