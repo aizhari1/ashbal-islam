@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ensureMonthArchived } from '@/app/actions/month-archive'
 import { monthLabelAr } from '@/lib/dues'
 import { getDuesSummary } from '@/lib/dues-engine'
+import FeatureMenuGrid from '@/components/FeatureMenuGrid'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,14 +71,14 @@ export default async function AdminDashboard({
     { href: '/admin/teacher-eval', icon: 'star', title: 'تقييم المعلمين', desc: 'من الإدارة', color: '#755b1b' },
     { href: '/admin/supervisor-eval', icon: 'verified', title: 'تقييم الإشراف', desc: 'من الإدارة', color: '#755b1b' },
     { href: '/admin/subscriptions-log', icon: 'receipt_long', title: 'سجل الاشتراكات', desc: 'مدفوعات', color: '#3d665a' },
-    { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'المتوقفين مؤقتًا', desc: 'للتواصل السريع', color: '#b45309' },
-    { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف', color: '#6f7974' },
+    { href: '/admin/students?status=%D9%85%D9%88%D9%82%D9%88%D9%81', icon: 'pause_circle', title: 'المتوقفين مؤقتًا', desc: 'للتواصل السريع', color: '#b45309' },
+    { href: '/admin/students?status=%D9%85%D9%86%D8%B3%D8%AD%D8%A8', icon: 'person_off', title: 'المنسحبين', desc: 'أرشيف', color: '#6f7974' },
     { href: '/evaluate', icon: 'family_restroom', title: 'فورم أولياء الأمور', desc: 'بدون دخول', color: '#176b52' },
     { href: '/student', icon: 'school', title: 'بوابة الطالب', desc: 'مواعيد ومستحق بالكود', color: '#176b52' },
     { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أدوار', color: '#00513c' },
     { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف', color: '#3d665a' },
     { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حضور + تقييم الحصة', color: '#176b52' },
-    { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج', color: '#6f7974' },
+    { href: '/admin/more', icon: 'settings', title: 'المزيد', desc: 'خروج · المميزات', color: '#6f7974' },
   ]
 
   return (
@@ -153,20 +154,16 @@ export default async function AdminDashboard({
         </div>
       </div>
 
-      <div className="px-4 grid grid-cols-2 gap-2.5 mb-6">
-        {menu.map((m) => (
-          <Link key={m.href + m.title} href={m.href} className="card p-3.5 flex flex-col gap-1.5 active:scale-[0.98] transition">
-            <span className="material-symbols-outlined text-[22px]" style={{ color: m.color }}>
-              {m.icon}
-            </span>
-            <p className="text-[13px] font-bold" style={{ color: '#1a1c1b' }}>
-              {m.title}
-            </p>
-            <p className="text-[10px]" style={{ color: '#6f7974' }}>
-              {m.desc}
-            </p>
+      <div className="px-4 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[12px] font-semibold" style={{ color: '#3f4944' }}>
+            المميزات
+          </p>
+          <Link href="/admin/features" className="text-[11px] font-bold" style={{ color: '#176b52' }}>
+            اختيار الظاهر ←
           </Link>
-        ))}
+        </div>
+        <FeatureMenuGrid role="admin" items={menu} />
       </div>
 
       <nav
@@ -180,7 +177,7 @@ export default async function AdminDashboard({
           { href: '/admin/payments', icon: 'credit_card', label: 'دفع' },
           { href: '/admin/more', icon: 'more_horiz', label: 'المزيد' },
         ].map((i) => (
-          <Link key={i.href} href={i.href} className="flex flex-col items-center gap-0.5 px-2">
+          <Link key={i.href} href={i.href} prefetch className="flex flex-col items-center gap-0.5 px-2">
             <span className="material-symbols-outlined text-[22px]" style={{ color: '#176b52' }}>
               {i.icon}
             </span>
