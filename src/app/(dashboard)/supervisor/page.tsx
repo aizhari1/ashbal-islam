@@ -1,10 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { currentMonthKey, monthLabelAr } from '@/lib/dues'
+import { getDuesSummary } from '@/lib/dues-engine'
+import { MonthSwitcher } from '@/components/MonthSwitcher'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SupervisorDashboard() {
+export default async function SupervisorDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -15,35 +23,23 @@ export default async function SupervisorDashboard() {
 
   if (profile && !['supervisor', 'admin'].includes(profile.role || '')) redirect('/login')
 
-  const monthStart = '2026-10-01'
-  const monthEnd = '2026-10-31'
+  const [{ count: active }, { count: paused }, { count: trial }, { count: scheduleCount }, summary] =
+    await Promise.all([
+      supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'نشط'),
+      supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'موقوف'),
+      supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'تجريبي'),
+      supabase.from('schedule_entries').select('*', { count: 'exact', head: true }),
+      getDuesSummary(supabase, sp.month),
+    ])
 
-  const [
-    { count: active },
-    { count: paused },
-    { count: trial },
-    { data: duesList },
-    { data: payments },
-    { count: scheduleCount },
-  ] = await Promise.all([
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'نشط'),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'موقوف'),
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'تجريبي'),
-    supabase
-      .from('students')
-      .select('id, name, code, amount_due, phone')
-      .gt('amount_due', 0)
-      .order('amount_due', { ascending: false })
-      .limit(8),
-    supabase.from('payments').select('amount, payment_date').gte('payment_date', monthStart).lte('payment_date', monthEnd),
-    supabase.from('schedule_entries').select('*', { count: 'exact', head: true }),
-  ])
+  const monthKey = summary.monthKey
+  const monthLabel = monthLabelAr(monthKey)
+  const isCurrentMonth = monthKey === currentMonthKey()
+  const collected = summary.collected
+  const dueTotal = summary.dueTotal
+  const dueCount = summary.dueCount
+  const duesList = summary.topDues
 
-  const dueTotal = (duesList ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
-  const { count: dueCount } = await supabase.from('students').select('*', { count: 'exact', head: true }).gt('amount_due', 0)
-  const collected = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
-
-  // قائمة الإشراف مطابقة للتطبيق القديم (بدون نقل طالب)
   const menu = [
     { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'الاسم، الاشتراك، سعر الحصة', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
@@ -61,6 +57,7 @@ export default async function SupervisorDashboard() {
     { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك', desc: 'بيانات + مواعيد ثابتة', color: '#176b52' },
     { href: '/admin/teacher-absences', icon: 'event_busy', title: 'غيابات المعلمين', desc: 'تسجيل وعرض', color: '#b45309' },
     { href: '/admin/edit-session', icon: 'edit_note', title: 'تعديل رقم الحصة', desc: 'آخر حصة لأي طالب', color: '#176b52' },
+    { href: '/supervisor/edit-student', icon: 'pin', title: 'تعديل رقم الحصة (بحث)', desc: 'بحث + حفظ مع رسالة', color: '#176b52' },
     { href: '/admin/schedule', icon: 'event_available', title: 'الحضور والتحضير', desc: 'أرشيف الحصص', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'تقييمات أولياء الأمور', desc: 'عرض التقييمات', color: '#c5a45d' },
   ]
@@ -89,17 +86,18 @@ export default async function SupervisorDashboard() {
         <div className="card p-4" style={{ background: 'linear-gradient(135deg, #176b52, #00513c)', border: 'none' }}>
           <p className="text-white text-[12px] opacity-80">مرحباً</p>
           <h2 className="text-white text-[18px] font-bold">{profile?.full_name || 'مشرف'}</h2>
-          {profile?.code && (
-            <p className="text-white text-[11px] opacity-70 mt-0.5">كود: {profile.code}</p>
-          )}
+          {profile?.code && <p className="text-white text-[11px] opacity-70 mt-0.5">كود: {profile.code}</p>}
         </div>
       </div>
 
       <div className="px-4 mb-4">
         <div className="card p-4">
-          <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>
-            أكتوبر — نظرة سريعة
-          </p>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-[12px]" style={{ color: '#6f7974' }}>
+              {monthLabel} — نظرة سريعة{!isCurrentMonth ? ' (شهر سابق)' : ''}
+            </p>
+            <MonthSwitcher current={monthKey} basePath="/supervisor" />
+          </div>
           <div className="grid grid-cols-2 gap-2 text-[13px]">
             <div>
               <span style={{ color: '#6f7974' }}>محصّل: </span>
@@ -108,16 +106,16 @@ export default async function SupervisorDashboard() {
             <div>
               <span style={{ color: '#6f7974' }}>مستحق: </span>
               <b style={{ color: '#ba1a1a' }}>
-                {dueTotal.toLocaleString('ar-EG')} ج ({dueCount ?? 0})
+                {dueTotal.toLocaleString('ar-EG')} ج ({dueCount})
               </b>
             </div>
           </div>
-          {(duesList ?? []).length > 0 && (
+          {duesList.length > 0 && (
             <div className="mt-3 space-y-1.5">
               <p className="text-[11px] font-bold" style={{ color: '#3f4944' }}>
                 أعلى مستحقات
               </p>
-              {(duesList ?? []).map((s: any) => (
+              {duesList.map((s) => (
                 <Link
                   key={s.id}
                   href={`/supervisor/edit-student?id=${s.id}`}
