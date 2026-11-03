@@ -3,6 +3,7 @@
 import { useState, useTransition, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { saveSessionBackup, saveRoleBackup } from '@/lib/session-persist'
+import { saveLastRole, type AppRole } from '@/lib/app-prefs'
 import { BRAND_LOGO_SRC, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand-logo'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -81,6 +82,7 @@ function LoginForm() {
 
             saveSessionBackup(data.session)
             saveRoleBackup(role)
+            saveLastRole(role as AppRole)
 
             if (role === 'teacher') router.replace('/teacher')
             else if (role === 'supervisor') router.replace('/supervisor')
@@ -159,8 +161,8 @@ function LoginForm() {
 
       <div className="text-center mt-5 space-y-2">
         <div>
-          <Link href="/" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
-            ← الصفحة الرئيسية
+          <Link href="/app" className="text-[13px] font-medium" style={{ color: '#176b52' }}>
+            ← اختيار نوع الدخول
           </Link>
         </div>
         <div>
