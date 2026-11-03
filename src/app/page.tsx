@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { serviceClient } from '@/lib/supabase/service'
-import { getLandingContent } from '@/lib/courses'
+import { getLandingContent, getLiveStats } from '@/lib/courses'
 import { Reveal, Counter } from '@/components/landing/Reveal'
 import Header from '@/components/landing/Header'
 import Faq from '@/components/landing/Faq'
@@ -32,7 +32,8 @@ async function getCourses() {
 }
 
 export default async function HomePage() {
-  const [c, courses] = await Promise.all([getLandingContent(), getCourses()])
+  const [c0, courses] = await Promise.all([getLandingContent(), getCourses()])
+  const c = { ...c0, stats: c0.statsMode === 'manual' ? c0.stats : await getLiveStats() }
   const wa = c.whatsapp ? `https://wa.me/${c.whatsapp}?text=${encodeURIComponent('السلام عليكم، أريد الاستفسار عن ' + c.brand)}` : ''
 
   return (
@@ -77,7 +78,7 @@ export default async function HomePage() {
       {/* STATS */}
       {c.stats.length > 0 && (
         <section style={{ background: '#eefdf6', marginTop: -1 }}>
-          <div className="lp-wrap grid grid-cols-2 md:grid-cols-4 gap-4 py-10">
+          <div className="lp-wrap grid grid-cols-2 md:grid-cols-4 gap-4 py-10 justify-items-center">
             {c.stats.map((s, i) => (
               <Reveal key={i} delay={i * 100}>
                 <div className="text-center">

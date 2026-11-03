@@ -65,8 +65,15 @@ export default function LandingEditor({ initial }: { initial: LandingContent }) 
 
       <section className="card p-4 space-y-3">
         <h2 className="font-bold text-[14px]">الأرقام</h2>
-        <Rows title="" items={c.stats} onChange={(v) => set('stats', v)} blank={{ value: 0, suffix: '+', label: '' }}
-          fields={[{ key: 'value', ph: 'الرقم', num: true }, { key: 'suffix', ph: 'لاحقة (+ أو %)', ltr: true }, { key: 'label', ph: 'الوصف' }]} />
+        <div className="grid grid-cols-2 gap-2">
+          {([['auto', 'تلقائي من النظام'], ['manual', 'أكتبها بنفسي']] as const).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => set('statsMode', v)}
+              className={`rounded-lg py-2 text-[12px] font-bold ${c.statsMode === v ? 'bg-[#176b52] text-white' : 'bg-white border border-[#e5efe8]'}`}>{l}</button>
+          ))}
+        </div>
+        <p className="text-[11px]" style={{ color: '#6f7974' }}>التلقائي بيعرض عدد الطلاب النشطين والمعلمين والحصص المسجّلة الحقيقية.</p>
+        {c.statsMode === 'manual' && <Rows title="" items={c.stats} onChange={(v) => set('stats', v)} blank={{ value: 0, suffix: '+', label: '' }}
+          fields={[{ key: 'value', ph: 'الرقم', num: true }, { key: 'suffix', ph: 'لاحقة (+ أو %)', ltr: true }, { key: 'label', ph: 'الوصف' }]} />}
       </section>
 
       <section className="card p-4 space-y-3">

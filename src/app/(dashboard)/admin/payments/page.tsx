@@ -79,7 +79,7 @@ export default async function PaymentsPage({
   const { data: students } = await supabase
     .from('students')
     .select('id, code, name')
-    .in('status', ['نشط', 'نشيط', 'موقوف'])
+    .in('status', ['نشط', 'موقوف'])
     .order('name')
     .limit(500)
 

@@ -11,6 +11,7 @@ export type LandingContent = {
   ctaSecondary: string
   whatsapp: string
   heroImage: string
+  statsMode: 'auto' | 'manual'
   stats: { value: number; suffix: string; label: string }[]
   featuresTitle: string
   features: { icon: string; title: string; desc: string }[]
@@ -33,12 +34,8 @@ export const DEFAULT_LANDING: LandingContent = {
   ctaSecondary: 'شاهد الكورسات',
   whatsapp: '',
   heroImage: '',
-  stats: [
-    { value: 500, suffix: '+', label: 'طالب وطالبة' },
-    { value: 40, suffix: '+', label: 'معلم ومعلمة' },
-    { value: 15, suffix: '+', label: 'دولة' },
-    { value: 98, suffix: '%', label: 'رضا أولياء الأمور' },
-  ],
+  statsMode: 'auto',
+  stats: [],
   featuresTitle: 'لماذا أشبال الإسلام؟',
   features: [
     { icon: 'person', title: 'حلقات فردية', desc: 'معلم لكل طالب لمتابعة دقيقة ومناسبة لمستواه.' },
@@ -98,4 +95,21 @@ export function toEmbedUrl(url: string): string | null {
 export function slugify(s: string) {
   const base = s.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '')
   return base || 'course'
+}
+
+/** أرقام حقيقية من قاعدة البيانات (تظهر لما statsMode = auto) */
+export async function getLiveStats(): Promise<LandingContent['stats']> {
+  try {
+    const sb = serviceClient()
+    const [st, te, at] = await Promise.all([
+      sb.from('students').select('id', { count: 'exact', head: true }).eq('status', 'نشط'),
+      sb.from('teachers').select('id', { count: 'exact', head: true }).eq('is_active', true),
+      sb.from('attendance').select('id', { count: 'exact', head: true }),
+    ])
+    const out: LandingContent['stats'] = []
+    if (st.count) out.push({ value: st.count, suffix: '', label: 'طالب وطالبة' })
+    if (te.count) out.push({ value: te.count, suffix: '', label: 'معلم ومعلمة' })
+    if (at.count) out.push({ value: at.count, suffix: '', label: 'حصة مسجّلة' })
+    return out
+  } catch { return [] }
 }
