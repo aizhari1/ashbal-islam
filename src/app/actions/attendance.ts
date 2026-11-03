@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { dueAfterPackageComplete, packageSize } from '@/lib/dues'
+import { dueAfterPackageComplete, packageSize, todayKey } from '@/lib/dues'
 
 export async function recordAttendance(data: {
   student_id: string
@@ -27,7 +27,7 @@ export async function recordAttendance(data: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayKey()
 
   const { data: existing } = await supabase
     .from('attendance')
@@ -69,7 +69,6 @@ export async function recordAttendance(data: {
   const quota = packageSize(student || {})
   const prevNum = student?.last_session_num || 0
   let nextSession = prevNum + 1
-  // اكتمال الباقة لما نوصل لعدد حلقات الباقة
   const completedPackage = quota > 0 && nextSession >= quota
   if (quota > 0 && nextSession > quota) nextSession = 1
 
