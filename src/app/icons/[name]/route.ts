@@ -1,31 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ICON_192, ICON_512, ICON_180, LOGO_256 } from '@/lib/icons-data'
 
-const MAP: Record<string, string> = {
-  'icon-192.png': ICON_192,
-  'icon-512.png': ICON_512,
-  'apple-touch-icon.png': ICON_180,
-  'logo.png': LOGO_256,
-  'icon-48.png': ICON_192,
-  'icon-72.png': ICON_192,
-  'icon-96.png': ICON_192,
-  'icon-128.png': ICON_192,
-  'icon-144.png': ICON_192,
-  'icon-152.png': ICON_192,
-  'icon-180.png': ICON_180,
-  'icon-256.png': ICON_512,
-  'icon-384.png': ICON_512,
+/** الشعار الرسمي — مصدر واحد لكل أيقونات التطبيق */
+const LOGO_URL =
+  'https://bmemllsjduxlqmwnpfya.supabase.co/storage/v1/object/public/brand/logo.jpg'
+
+let cached: ArrayBuffer | null = null
+let cachedAt = 0
+const CACHE_MS = 1000 * 60 * 60 * 6 // 6 ساعات
+
+async function getLogoBytes(): Promise<ArrayBuffer> {
+  const now = Date.now()
+  if (cached && now - cachedAt < CACHE_MS) return cached
+  const res = await fetch(LOGO_URL, { next: { revalidate: 3600 } })
+  if (!res.ok) throw new Error('logo fetch failed')
+  const buf = await res.arrayBuffer()
+  cached = buf
+  cachedAt = now
+  return buf
 }
+
+const KNOWN = new Set([
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+  'logo.png',
+  'logo.jpg',
+  'icon-48.png',
+  'icon-72.png',
+  'icon-96.png',
+  'icon-128.png',
+  'icon-144.png',
+  'icon-152.png',
+  'icon-180.png',
+  'icon-256.png',
+  'icon-384.png',
+  'favicon.ico',
+])
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ name: string }> }) {
   const { name } = await ctx.params
-  const b64 = MAP[name]
-  if (!b64) return new NextResponse('Not found', { status: 404 })
-  const buf = Buffer.from(b64, 'base64')
-  return new NextResponse(buf, {
-    headers: {
-      'Content-Type': 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  })
+  if (!KNOWN.has(name)) {
+    return new NextResponse('Not found', { status: 404 })
+  }
+  try {
+    const buf = await getLogoBytes()
+    return new NextResponse(buf, {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+      },
+    })
+  } catch {
+    return new NextResponse('Logo unavailable', { status: 502 })
+  }
 }
