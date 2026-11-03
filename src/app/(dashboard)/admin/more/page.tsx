@@ -5,10 +5,13 @@ import { LogoutButton } from './LogoutButton'
 
 export default async function MorePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const items = [
+    { href: '/admin/features', icon: 'tune', label: 'المميزات الظاهرة' },
     { href: '/admin/courses', icon: 'school', label: 'الكورسات' },
     { href: '/admin/landing', icon: 'web', label: 'تعديل اللاندنج بيدج' },
     { href: '/admin/students/new', icon: 'person_add', label: 'إضافة طالب' },
@@ -31,7 +34,7 @@ export default async function MorePage() {
       </header>
       <main className="px-4 pb-24 space-y-2">
         {items.map((i) => (
-          <Link key={i.href} href={i.href} className="flex items-center gap-3 bg-white rounded-2xl p-4 shadow-sm">
+          <Link key={i.href} href={i.href} prefetch className="flex items-center gap-3 bg-white rounded-2xl p-4 shadow-sm">
             <span className="material-symbols-outlined text-[#176b52]">{i.icon}</span>
             <span className="font-semibold text-[14px]">{i.label}</span>
             <span className="material-symbols-outlined text-[#bec9c2] mr-auto text-[18px]">chevron_left</span>
