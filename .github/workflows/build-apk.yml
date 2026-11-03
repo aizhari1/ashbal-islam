@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build APK with official logo
+    name: Build signed installable APK
     runs-on: ubuntu-latest
 
     steps:
@@ -50,8 +50,6 @@ jobs:
           set -e
           LOGO_URL="https://bmemllsjduxlqmwnpfya.supabase.co/storage/v1/object/public/brand/logo.jpg"
           curl -fsSL -o /tmp/logo.jpg "$LOGO_URL"
-          identify /tmp/logo.jpg
-
           make_icon() {
             dens="$1"; sz="$2"
             dir="android/app/src/main/res/mipmap-${dens}"
@@ -60,19 +58,23 @@ jobs:
               -background white -gravity center -extent ${sz}x${sz} \
               "$dir/ic_launcher.png"
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
-            echo "icon $dens ${sz}px"
           }
-
           make_icon mdpi 48
           make_icon hdpi 72
           make_icon xhdpi 96
           make_icon xxhdpi 144
           make_icon xxxhdpi 192
-
-          # لا نستخدم adaptive-icon يشير لنفسه — PNG فقط
           rm -rf android/app/src/main/res/mipmap-anydpi-v26 || true
 
-          ls -la android/app/src/main/res/mipmap-xxxhdpi/
+      - name: Ensure debug keystore exists
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkey -v -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Ashbal, OU=Dev, O=Ashbal, L=Cairo, ST=Cairo, C=EG"
+          fi
 
       - name: Setup Gradle Wrapper
         working-directory: android
@@ -83,20 +85,26 @@ jobs:
           /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
           chmod +x gradlew
 
-      - name: Build Release APK
+      - name: Build signed Debug+Release APKs
         working-directory: android
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          # debug دائماً قابل للتثبيت
+          ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
 
       - name: Package APK
         run: |
-          APK=$(find android/app/build/outputs/apk -name '*.apk' | head -1)
-          echo "Found: $APK"
-          ls -la "$APK"
-          cp "$APK" ashbal-islam.apk
+          DEBUG=$(find android/app/build/outputs/apk/debug -name '*.apk' | head -1)
+          RELEASE=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          echo "Debug: $DEBUG"
+          echo "Release: $RELEASE"
+          # نوزّع نسخة debug الموقّعة — تشتغل على الموبايل مباشرة
+          cp "$DEBUG" ashbal-islam.apk
+          ls -la ashbal-islam.apk
+          # تحقق التوقيع
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose ashbal-islam.apk || true
 
       - uses: actions/upload-artifact@v4
         with:

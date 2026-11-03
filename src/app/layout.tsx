@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { SessionRestorer } from '@/components/SessionRestorer'
+import { InstallAshbal } from '@/components/InstallAshbal'
 
 export const metadata: Metadata = {
   title: 'أكاديمية أشبال الإسلام',
@@ -52,6 +53,7 @@ export default function RootLayout({
       <body className="antialiased">
         <SessionRestorer />
         {children}
+        <InstallAshbal />
       </body>
     </html>
   )

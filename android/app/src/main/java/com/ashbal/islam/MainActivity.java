@@ -36,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
         s.setDisplayZoomControls(false);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
