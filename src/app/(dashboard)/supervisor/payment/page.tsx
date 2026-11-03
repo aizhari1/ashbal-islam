@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { PAYMENT_METHODS } from '@/lib/payment-methods'
 import { supervisorRecordPayment } from './actions'
+import { todayKey } from '@/lib/dues'
+import { randomUUID } from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +40,7 @@ export default async function SupervisorPaymentPage() {
 
       <div className="px-4">
         <form action={supervisorRecordPayment} className="card p-4 space-y-3">
+          <input type="hidden" name="idempotency_key" value={randomUUID()} />
           <select
             name="student_id"
             required
@@ -67,7 +70,7 @@ export default async function SupervisorPaymentPage() {
             <input
               name="payment_date"
               type="date"
-              defaultValue={new Date().toISOString().slice(0, 10)}
+              defaultValue={todayKey()}
               className="rounded-xl border px-3 py-2.5 text-[13px]"
               style={{ borderColor: '#cde8dc' }}
             />
