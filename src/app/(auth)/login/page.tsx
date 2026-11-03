@@ -2,6 +2,7 @@
 
 import { useState, useTransition, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { saveSessionBackup, saveRoleBackup } from '@/lib/session-persist'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -85,12 +86,9 @@ function LoginForm() {
               /* ignore */
             }
 
-            try {
-              document.cookie =
-                'ashbal_role=' + role + '; path=/; max-age=' + 60 * 60 * 24 * 30 + '; SameSite=Lax'
-            } catch {
-              /* ignore */
-            }
+            // حفظ الجلسة محليًا + كوكي سنة — الخروج فقط بزر تسجيل خروج
+            saveSessionBackup(data.session)
+            saveRoleBackup(role)
 
             if (role === 'teacher') router.replace('/teacher')
             else if (role === 'supervisor') router.replace('/supervisor')
@@ -130,13 +128,19 @@ function LoginForm() {
             {roleIcon}
           </span>
         </div>
-        <h1 className="text-[22px] font-bold" style={{ color: '#00513c' }}>{roleTitle}</h1>
-        <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>أكاديمية أشبال الإسلام — بالكود فقط</p>
+        <h1 className="text-[22px] font-bold" style={{ color: '#00513c' }}>
+          {roleTitle}
+        </h1>
+        <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>
+          أكاديمية أشبال الإسلام — بالكود فقط
+        </p>
       </div>
 
       <form onSubmit={submit} className="card p-5 space-y-4">
         <div>
-          <label className="block text-[12px] font-semibold mb-1.5" style={{ color: '#3f4944' }}>كود الدخول</label>
+          <label className="block text-[12px] font-semibold mb-1.5" style={{ color: '#3f4944' }}>
+            كود الدخول
+          </label>
           <input
             className="input text-center text-[18px] tracking-widest"
             value={code}
@@ -148,7 +152,10 @@ function LoginForm() {
           />
         </div>
         {error && (
-          <p className="text-[12px] text-center rounded-lg py-2 px-2 break-words" style={{ background: '#ffdad6', color: '#93000a' }}>
+          <p
+            className="text-[12px] text-center rounded-lg py-2 px-2 break-words"
+            style={{ background: '#ffdad6', color: '#93000a' }}
+          >
             {error}
           </p>
         )}
