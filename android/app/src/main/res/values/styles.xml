@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Ashbal" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#176b52</item>
+        <item name="colorPrimaryVariant">#00513c</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#00513c</item>
+        <item name="android:navigationBarColor">#00513c</item>
+        <item name="android:windowBackground">#eefdf6</item>
+    </style>
+</resources>

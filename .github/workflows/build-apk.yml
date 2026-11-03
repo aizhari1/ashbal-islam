@@ -5,77 +5,102 @@ on:
   push:
     branches: [main]
     paths:
-      - 'assets/**'
       - 'android/**'
-      - 'app.json'
       - '.github/workflows/build-apk.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  app-icon:
-    name: Logo → App icon
+  build:
+    name: Build APK with official logo
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download official logo into repo
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install ImageMagick
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+
+      - name: Generate launcher icons from official logo
         run: |
           set -e
-          mkdir -p public assets/generated dist
-          # المصدر: الشعار الرسمي (تم رفعه من صورة المستخدم)
-          curl -fsSL -o public/logo.jpg \
-            "https://bmemllsjduxlqmwnpfya.supabase.co/storage/v1/object/public/brand/logo.jpg"
-          cp public/logo.jpg assets/generated/logo.jpg
-          cp public/logo.jpg dist/logo.jpg
-          ls -la public/logo.jpg
+          LOGO_URL="https://bmemllsjduxlqmwnpfya.supabase.co/storage/v1/object/public/brand/logo.jpg"
+          curl -fsSL -o /tmp/logo.jpg "$LOGO_URL"
+          identify /tmp/logo.jpg
 
-      - name: Generate PWA + Android launcher icons
+          # mipmap densities
+          declare -A SIZES=([mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192)
+          for dens in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            sz=${SIZES[$dens]}
+            dir="android/app/src/main/res/mipmap-${dens}"
+            mkdir -p "$dir"
+            # square launcher
+            convert /tmp/logo.jpg -trim +repage -resize ${sz}x${sz} \
+              -background white -gravity center -extent ${sz}x${sz} \
+              "$dir/ic_launcher.png"
+            # round (same image; Android masks it)
+            cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
+            echo "generated $dir ($sz px)"
+          done
+
+          # also adaptive icon foreground (API 26+)
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher"/>
+          </adaptive-icon>
+          XML
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml \
+             android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/colors.xml << 'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#FFFFFF</color>
+          </resources>
+          XML
+
+          ls -la android/app/src/main/res/mipmap-*/
+
+      - name: Setup Gradle Wrapper
+        working-directory: android
         run: |
-          set -e
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq imagemagick
-          convert public/logo.jpg -resize 512x512 public/icon-512.png
-          convert public/logo.jpg -resize 192x192 public/icon-192.png
-          convert public/logo.jpg -resize 512x512 assets/generated/icon-512.png
-          convert public/logo.jpg -resize 192x192 assets/generated/icon-192.png
-          cp assets/generated/icon-512.png dist/app-icon.png
-
-          if [ -d android/app/src/main/res ]; then
-            mkdir -p android/app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}
-            convert public/logo.jpg -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            convert public/logo.jpg -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            convert public/logo.jpg -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            convert public/logo.jpg -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            convert public/logo.jpg -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-              cp android/app/src/main/res/mipmap-$d/ic_launcher.png \
-                 android/app/src/main/res/mipmap-$d/ic_launcher_round.png
-            done
-            echo "Android ic_launcher updated"
-          else
-            echo "No android/ folder yet — icons ready in dist/ and public/"
+          gradle wrapper --gradle-version 8.9 || true
+          if [ ! -f gradlew ]; then
+            curl -fsSL -o gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+            unzip -q gradle.zip
+            ./gradle-8.9/bin/gradle wrapper --gradle-version 8.9
           fi
+          chmod +x gradlew
 
-      - name: Commit logo into GitHub repo (public/logo.jpg)
+      - name: Build Release APK
+        working-directory: android
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/logo.jpg public/icon-192.png public/icon-512.png assets/generated/ || true
-          if git diff --cached --quiet; then
-            echo "No logo changes to commit"
-          else
-            git commit -m "chore: app logo + icons from official brand image"
-            git push
-          fi
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find android/app/build/outputs/apk -name '*.apk' | head -1)
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+          ls -la "$APK"
+          cp "$APK" ashbal-islam.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ashbal-app-icons
-          path: |
-            public/logo.jpg
-            public/icon-192.png
-            public/icon-512.png
-            assets/generated/
-            dist/
+          name: ashbal-islam-apk
+          path: ashbal-islam.apk
+          if-no-files-found: error
