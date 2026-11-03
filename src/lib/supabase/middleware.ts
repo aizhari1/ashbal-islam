@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const ROLE_COOKIE = 'ashbal_role'
-const ROLE_MAX_AGE = 60 * 60 * 24 * 30
+const ROLE_MAX_AGE = 60 * 60 * 24 * 30 // 30 يوم
 
 function homeForRole(r: string) {
   if (r === 'teacher') return '/teacher'
@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, {
               ...options,
-              maxAge: options?.maxAge ?? 60 * 60 * 24 * 30,
+              maxAge: options?.maxAge ?? ROLE_MAX_AGE,
               sameSite: 'lax',
               path: '/',
             })
@@ -55,18 +55,24 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    const sessionPromise = supabase.auth.getSession()
-    const timeout = new Promise<{ data: { session: null } }>((resolve) =>
-      setTimeout(() => resolve({ data: { session: null } }), 1500)
-    )
-    const { data: { session } } = (await Promise.race([sessionPromise, timeout])) as any
-    const user = session?.user
+    // بدون مهلة قصيرة كانت بتعتبر الجلسة منتهية وترجع للوجين بالغلط
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
     if (!user && !isPublic) {
-      const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = '/login'
-      redirectUrl.search = ''
-      return NextResponse.redirect(redirectUrl)
+      // لو فيه كوكيز جلسة قديمة ومش قادرين نتحقق، نسمح مؤقتًا بدل طرد فوري
+      const hasAuthCookie = request.cookies
+        .getAll()
+        .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
+      if (!hasAuthCookie) {
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = '/login'
+        redirectUrl.search = ''
+        return NextResponse.redirect(redirectUrl)
+      }
+      // فيه كوكي جلسة — كمل الطلب (الصفحة نفسها هتتحقق)
+      return supabaseResponse
     }
 
     if (user && !isPublic) {
@@ -117,7 +123,10 @@ export async function updateSession(request: NextRequest) {
           pathname.startsWith('/admin/evaluations') ||
           pathname.startsWith('/admin/reports') ||
           pathname.startsWith('/admin/families') ||
-          pathname.startsWith('/admin/chat')
+          pathname.startsWith('/admin/chat') ||
+          pathname.startsWith('/admin/edit-session') ||
+          pathname.startsWith('/admin/trials') ||
+          pathname.startsWith('/admin/teacher-absences')
 
         if (role === 'admin') {
           // ok
@@ -150,7 +159,13 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (!user && isPublic && request.cookies.get(ROLE_COOKIE)) {
-      supabaseResponse.cookies.set(ROLE_COOKIE, '', { maxAge: 0, path: '/' })
+      // متشيلش role لو لسه فيه كوكي جلسة (منع طرد بالغلط)
+      const hasAuthCookie = request.cookies
+        .getAll()
+        .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
+      if (!hasAuthCookie) {
+        supabaseResponse.cookies.set(ROLE_COOKIE, '', { maxAge: 0, path: '/' })
+      }
     }
   } catch {
     return NextResponse.next({ request })
