@@ -1,5 +1,6 @@
 /**
  * مصدر واحد لحساب المستحقات (Backend فقط).
+ * لوحتا الإدارة والإشراف تستدعيان نفس الدوال هنا.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -8,6 +9,7 @@ import {
   type ReminderRow,
   type ReminderStudent,
 } from './reminder-logic'
+import { monthBounds, resolveMonthKey } from './dues'
 
 const PAGE = 1000
 const STUDENT_COLS =
@@ -123,37 +125,121 @@ export async function loadDuesInputs(supabase: SupabaseClient): Promise<DuesInpu
   }
 }
 
-export async function computeAndSyncDues(supabase: SupabaseClient): Promise<{
-  count: number
+export type DuesResult = {
+  dueList: ReminderRow[]
   total: number
+  count: number
   updated: number
-  rows: ReminderRow[]
-}> {
+  students: ReminderStudent[]
+}
+
+export async function computeAndSyncDues(
+  supabase: SupabaseClient,
+  opts: { write?: boolean } = {}
+): Promise<DuesResult> {
+  const write = opts.write !== false
   const { students, lastPay, attDays } = await loadDuesInputs(supabase)
   const dueList = computeDueReminders(students, lastPay, attDays)
+
   const dueById: Record<string, number> = {}
   for (const s of students) dueById[s.id] = 0
   for (const r of dueList) dueById[r.id] = r.outstanding
 
   let updated = 0
-  for (const [id, due] of Object.entries(dueById)) {
-    const prev = students.find((s) => s.id === id)?.amount_due ?? 0
-    if (Number(prev) === Number(due)) continue
-    const { error } = await supabase.from('students').update({ amount_due: due }).eq('id', id)
-    if (!error) updated++
+  if (write) {
+    const changes = students.filter((s) => Math.abs(Number(s.amount_due) - dueById[s.id]) >= 0.01)
+    for (let i = 0; i < changes.length; i += 20) {
+      const batch = changes.slice(i, i + 20)
+      const results = await Promise.all(
+        batch.map((s) => supabase.from('students').update({ amount_due: dueById[s.id] }).eq('id', s.id))
+      )
+      updated += results.filter((r) => !r.error).length
+    }
   }
 
-  const total = dueList.reduce((s, r) => s + r.outstanding, 0)
-  return { count: dueList.length, total, updated, rows: dueList }
+  return {
+    dueList,
+    total: dueList.reduce((sum, r) => sum + r.outstanding, 0),
+    count: dueList.length,
+    updated,
+    students,
+  }
 }
 
-export async function getDuesSummary(supabase: SupabaseClient): Promise<{
-  count: number
-  total: number
-  rows: ReminderRow[]
-}> {
-  const { students, lastPay, attDays } = await loadDuesInputs(supabase)
-  const dueList = computeDueReminders(students, lastPay, attDays)
-  const total = dueList.reduce((s, r) => s + r.outstanding, 0)
-  return { count: dueList.length, total, rows: dueList }
+export type DuesSummary = {
+  monthKey: string
+  collected: number
+  paymentsCount: number
+  dueTotal: number
+  dueCount: number
+  topDues: { id: string; name: string; code: string; amount_due: number; phone: string | null }[]
+}
+
+/** ملخص موحّد: المحصّل حسب الشهر · المستحق رصيد مفتوح الآن */
+export async function getDuesSummary(
+  supabase: SupabaseClient,
+  month?: string | null
+): Promise<DuesSummary> {
+  const monthKey = resolveMonthKey(month)
+  const { start, end } = monthBounds(monthKey)
+
+  const payments = await fetchAll<{ amount: number }>((from, to) =>
+    supabase
+      .from('payments')
+      .select('amount')
+      .gte('payment_date', start)
+      .lte('payment_date', end)
+      .order('payment_date')
+      .order('id')
+      .range(from, to)
+  )
+
+  const collected = payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+
+  try {
+    const dues = await computeAndSyncDues(supabase)
+    return {
+      monthKey,
+      collected,
+      paymentsCount: payments.length,
+      dueTotal: dues.total,
+      dueCount: dues.count,
+      topDues: [...dues.dueList]
+        .sort((a, b) => b.outstanding - a.outstanding)
+        .slice(0, 8)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          code: r.code,
+          amount_due: r.outstanding,
+          phone: r.phone,
+        })),
+    }
+  } catch {
+    const stored = await fetchAll<any>((from, to) =>
+      supabase
+        .from('students')
+        .select('id, name, code, amount_due, phone')
+        .gt('amount_due', 0)
+        .order('id')
+        .range(from, to)
+    )
+    return {
+      monthKey,
+      collected,
+      paymentsCount: payments.length,
+      dueTotal: stored.reduce((s, d) => s + Number(d.amount_due || 0), 0),
+      dueCount: stored.length,
+      topDues: [...stored]
+        .sort((a, b) => Number(b.amount_due) - Number(a.amount_due))
+        .slice(0, 8)
+        .map((d) => ({
+          id: d.id,
+          name: d.name,
+          code: d.code,
+          amount_due: Number(d.amount_due),
+          phone: d.phone,
+        })),
+    }
+  }
 }
