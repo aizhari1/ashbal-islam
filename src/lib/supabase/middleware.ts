@@ -24,7 +24,9 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/auth') ||
     pathname.startsWith('/evaluate') ||
     pathname.startsWith('/student') ||
-    pathname.startsWith('/api/student-portal')
+    pathname.startsWith('/api/student-portal') ||
+    pathname.startsWith('/api/student-courses') ||
+    pathname.startsWith('/api/course-subscribe')
 
   if (
     pathname.startsWith('/_next') ||

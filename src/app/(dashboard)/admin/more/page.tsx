@@ -9,6 +9,8 @@ export default async function MorePage() {
   if (!user) redirect('/login')
 
   const items = [
+    { href: '/admin/courses', icon: 'school', label: 'الكورسات' },
+    { href: '/admin/landing', icon: 'web', label: 'تعديل اللاندنج بيدج' },
     { href: '/admin/students/new', icon: 'person_add', label: 'إضافة طالب' },
     { href: '/admin/payroll', icon: 'account_balance_wallet', label: 'رواتب المعلمين' },
     { href: '/admin/packages', icon: 'inventory_2', label: 'الباقات' },

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import MyCourses from '@/components/MyCourses'
 
 const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
@@ -122,6 +123,8 @@ export default function StudentPortalPage() {
               </div>
             ))}
           </div>
+
+          <MyCourses code={s.code} />
         </div>
       )}
 
