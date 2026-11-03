@@ -3,6 +3,7 @@
 import { useState, useTransition, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { saveSessionBackup, saveRoleBackup } from '@/lib/session-persist'
+import { BRAND_LOGO_SRC, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand-logo'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -24,14 +25,6 @@ function LoginForm() {
         : roleHint === 'supervisor'
           ? 'دخول الإشراف'
           : 'تسجيل الدخول'
-  const roleIcon =
-    roleHint === 'teacher'
-      ? 'record_voice_over'
-      : roleHint === 'admin'
-        ? 'admin_panel_settings'
-        : roleHint === 'supervisor'
-          ? 'supervisor_account'
-          : 'menu_book'
 
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
@@ -86,7 +79,6 @@ function LoginForm() {
               /* ignore */
             }
 
-            // حفظ الجلسة محليًا + كوكي سنة — الخروج فقط بزر تسجيل خروج
             saveSessionBackup(data.session)
             saveRoleBackup(role)
 
@@ -119,20 +111,21 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-sm">
-      <div className="text-center mb-8">
-        <div
-          className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 shadow-lg"
-          style={{ background: 'linear-gradient(145deg, #176b52, #00513c)' }}
-        >
-          <span className="material-symbols-outlined text-4xl text-white" style={{ fontVariationSettings: "'FILL' 1" }}>
-            {roleIcon}
-          </span>
-        </div>
+      <div className="text-center mb-6">
+        <img
+          src={BRAND_LOGO_SRC}
+          alt={BRAND_NAME}
+          className="mx-auto mb-3 object-contain"
+          style={{ width: 160, height: 160 }}
+        />
         <h1 className="text-[22px] font-bold" style={{ color: '#00513c' }}>
           {roleTitle}
         </h1>
-        <p className="text-[13px] mt-1" style={{ color: '#6f7974' }}>
-          أكاديمية أشبال الإسلام — بالكود فقط
+        <p className="text-[13px] mt-1 font-semibold" style={{ color: '#176b52' }}>
+          {BRAND_NAME}
+        </p>
+        <p className="text-[12px] mt-0.5" style={{ color: '#6f7974' }}>
+          {BRAND_TAGLINE} — بالكود فقط
         </p>
       </div>
 
