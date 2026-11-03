@@ -25,11 +25,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android command-line tools
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wget unzip imagemagick
+          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdtools.zip
+          unzip -q cmdtools.zip -d "$HOME/android-sdk/cmdline-tools"
+          mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
-      - name: Install ImageMagick
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+      - name: Accept licenses & install SDK packages
+        run: |
+          set -e
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Generate launcher icons from official logo
         run: |
@@ -38,64 +52,49 @@ jobs:
           curl -fsSL -o /tmp/logo.jpg "$LOGO_URL"
           identify /tmp/logo.jpg
 
-          # mipmap densities
-          declare -A SIZES=([mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192)
-          for dens in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            sz=${SIZES[$dens]}
+          make_icon() {
+            dens="$1"; sz="$2"
             dir="android/app/src/main/res/mipmap-${dens}"
             mkdir -p "$dir"
-            # square launcher
             convert /tmp/logo.jpg -trim +repage -resize ${sz}x${sz} \
               -background white -gravity center -extent ${sz}x${sz} \
               "$dir/ic_launcher.png"
-            # round (same image; Android masks it)
             cp "$dir/ic_launcher.png" "$dir/ic_launcher_round.png"
-            echo "generated $dir ($sz px)"
-          done
+            echo "icon $dens ${sz}px"
+          }
 
-          # also adaptive icon foreground (API 26+)
-          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
-          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/ic_launcher_background"/>
-              <foreground android:drawable="@mipmap/ic_launcher"/>
-          </adaptive-icon>
-          XML
-          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml \
-             android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          make_icon mdpi 48
+          make_icon hdpi 72
+          make_icon xhdpi 96
+          make_icon xxhdpi 144
+          make_icon xxxhdpi 192
 
-          mkdir -p android/app/src/main/res/values
-          cat > android/app/src/main/res/values/colors.xml << 'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="ic_launcher_background">#FFFFFF</color>
-          </resources>
-          XML
+          # لا نستخدم adaptive-icon يشير لنفسه — PNG فقط
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26 || true
 
-          ls -la android/app/src/main/res/mipmap-*/
+          ls -la android/app/src/main/res/mipmap-xxxhdpi/
 
       - name: Setup Gradle Wrapper
         working-directory: android
         run: |
-          gradle wrapper --gradle-version 8.9 || true
-          if [ ! -f gradlew ]; then
-            curl -fsSL -o gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-            unzip -q gradle.zip
-            ./gradle-8.9/bin/gradle wrapper --gradle-version 8.9
-          fi
+          set -e
+          curl -fsSL -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
           chmod +x gradlew
 
       - name: Build Release APK
         working-directory: android
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
           ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Locate APK
-        id: apk
+      - name: Package APK
         run: |
           APK=$(find android/app/build/outputs/apk -name '*.apk' | head -1)
-          echo "apk=$APK" >> $GITHUB_OUTPUT
+          echo "Found: $APK"
           ls -la "$APK"
           cp "$APK" ashbal-islam.apk
 
