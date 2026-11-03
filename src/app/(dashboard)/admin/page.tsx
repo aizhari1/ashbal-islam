@@ -2,53 +2,46 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ensureMonthArchived } from '@/app/actions/month-archive'
-import { currentMonthKey } from '@/lib/dues'
+import { monthLabelAr } from '@/lib/dues'
+import { getDuesSummary } from '@/lib/dues-engine'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // أول دخول بعد بداية شهر جديد → يحفظ ملخص الشهر السابق
   await ensureMonthArchived()
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-
-  const monthKey = currentMonthKey()
-  const [y, m] = monthKey.split('-').map(Number)
-  const monthStart = `${monthKey}-01`
-  const lastDay = new Date(y, m, 0).getDate()
-  const monthEnd = `${monthKey}-${String(lastDay).padStart(2, '0')}`
-  const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })
 
   const [
     { count: active },
     { count: paused },
     { count: teachers },
     { count: withdrawn },
-    { data: payments },
-    { data: dues },
+    summary,
   ] = await Promise.all([
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'نشط'),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'موقوف'),
     supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'منسحب'),
-    supabase
-      .from('payments')
-      .select('amount, payment_date')
-      .gte('payment_date', monthStart)
-      .lte('payment_date', monthEnd)
-      .limit(1000),
-    supabase.from('students').select('amount_due').gt('amount_due', 0),
+    getDuesSummary(supabase, sp.month),
   ])
 
-  const collected = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
-  const dueTotal = (dues ?? []).reduce((s: number, d: any) => s + Number(d.amount_due || 0), 0)
-  const dueCount = dues?.length ?? 0
+  const monthKey = summary.monthKey
+  const monthLabel = monthLabelAr(monthKey)
+  const collected = summary.collected
+  const dueTotal = summary.dueTotal
+  const dueCount = summary.dueCount
 
   const menu = [
     { href: `/admin/monthly?month=${monthKey}`, icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },
@@ -132,7 +125,7 @@ export default async function AdminDashboard() {
       <div className="px-4 mb-4">
         <div className="card p-4">
           <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>
-            {monthLabel} — نظرة سريعة (الشهر الحالي)
+            {monthLabel} — نظرة سريعة (نفس مصدر الإشراف)
           </p>
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div>
