@@ -1,6 +1,7 @@
 import FeaturesPicker from '@/components/FeaturesPicker'
 
 const ADMIN_FEATURES = [
+  { href: '/admin/student-hub', icon: 'person_search', title: 'بحث طالب وإجراء', desc: 'بحث · اختيار · عملية' },
   { href: '/admin/courses', icon: 'school', title: 'الكورسات', desc: 'فيديوهات · اشتراكات' },
   { href: '/admin/landing', icon: 'web', title: 'اللاندنج بيدج', desc: 'الصفحة الرئيسية' },
   { href: '/admin/monthly', icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص' },
