@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { SessionRestorer } from '@/components/SessionRestorer'
 
 export const metadata: Metadata = {
   title: 'أكاديمية أشبال الإسلام',
@@ -32,7 +33,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <SessionRestorer />
+        {children}
+      </body>
     </html>
   )
 }
