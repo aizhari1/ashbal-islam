@@ -11,7 +11,8 @@ import android.webkit.WebViewClient;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String APP_URL = "https://ashbal-islam.vercel.app";
+    /** بوابة التطبيق: دخول محفوظ أو اختيار الدور مرة واحدة */
+    public static final String APP_URL = "https://ashbal-islam.vercel.app/app";
     private WebView webView;
 
     @SuppressLint("SetJavaScriptEnabled")
