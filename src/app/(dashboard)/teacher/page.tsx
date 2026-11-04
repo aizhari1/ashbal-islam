@@ -12,10 +12,12 @@ export default async function TeacherDashboard() {
 
   const { data: teacher } = await supabase.from('teachers').select('*').eq('profile_id', user.id).maybeSingle()
 
-  let active = 0, sessions = 0
+  let active = 0, sessions = 0, trials = 0
   if (teacher) {
     const { count: a } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('teacher_id', teacher.id).eq('status', 'نشط')
     const { count: s } = await supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('teacher_id', teacher.id).eq('status', 'حاضر')
+    const { count: tr } = await supabase.from('students').select('*', { count: 'exact', head: true }).eq('teacher_id', teacher.id).eq('status', 'تجريبي')
+    trials = tr ?? 0
     active = a ?? 0
     sessions = s ?? 0
   }
@@ -26,6 +28,7 @@ export default async function TeacherDashboard() {
     { href: '/teacher/schedule', icon: 'calendar_month', title: 'جدولي', desc: 'مواعيد الحصص' },
     { href: '/teacher/dues', icon: 'payments', title: 'مستحقاتي', desc: 'كشف الحصص والمبلغ' },
     { href: '/teacher/ratings', icon: 'star', title: 'تقييماتي', desc: 'أولياء الأمور والإدارة' },
+    { href: '/teacher/trials', icon: 'person_add', title: 'حصصي التجريبية', desc: 'تقرير التجربة والاشتراك' },
     { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: 'آخر الحصص المسجّلة' },
     { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
     { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },
@@ -43,7 +46,7 @@ export default async function TeacherDashboard() {
         </div>
         <div className="grid grid-cols-3 text-center text-white">
           <div>
-            <p className="text-[24px] font-bold">—</p>
+            <p className="text-[24px] font-bold">{trials}</p>
             <p className="text-[10px] opacity-80 mt-1">تجريبية</p>
           </div>
           <div className="border-x border-white/20">

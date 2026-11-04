@@ -34,6 +34,17 @@ export default async function TeacherRatingsPage() {
       parentEvals = data || []
     }
   }
+  let supEvals: any[] = []
+  if (teacher) {
+    const { data } = await serviceClient()
+      .from('activity_log')
+      .select('id, entity_id, details, created_at')
+      .eq('action', 'supervisor_eval')
+      .order('created_at', { ascending: false })
+      .limit(60)
+    supEvals = (data || []).filter((e: any) => e.entity_id === teacher.id || e.details?.teacher_name === teacher.name)
+  }
+  const supPoints = supEvals.reduce((a, e) => a + Number(e.details?.points || 0), 0)
   const SCORE: Record<string, number> = { 'ممتاز': 5, 'جيد جداً': 4, 'جيد': 3, 'مقبول': 2, 'ضعيف': 1 }
   const scored = parentEvals.map((e) => SCORE[e.details?.answers?.q2]).filter((n) => typeof n === 'number')
   const avgParent = scored.length ? scored.reduce((a, b) => a + b, 0) / scored.length : null
@@ -62,6 +73,22 @@ export default async function TeacherRatingsPage() {
           )
         })}
         {mine.length === 0 && <p className="card p-4 text-[13px] text-center" style={{ color: '#6f7974' }}>لا تقييمات إدارة بعد</p>}
+      </div>
+
+      <h2 className="text-[14px] font-bold mt-6 mb-2">تقييمات الإشراف</h2>
+      <div className="card p-3 text-center mb-2">
+        <p className="text-[20px] font-bold" style={{ color: '#176b52' }}>{supPoints}</p>
+        <p className="text-[11px]" style={{ color: '#6f7974' }}>مجموع نقاط الإشراف ({supEvals.length} تقييم)</p>
+      </div>
+      <div className="space-y-2">
+        {supEvals.map((e: any) => (
+          <div key={e.id} className="card p-3 text-[13px]">
+            <p className="font-bold" style={{ color: '#176b52' }}>النقاط: {Number(e.details?.points || 0)}</p>
+            {e.details?.notes && <p style={{ color: '#6f7974' }}>{e.details.notes}</p>}
+            <p className="text-[11px]" style={{ color: '#6f7974' }}>{e.details?.month || ''} · {e.created_at?.slice(0, 10)}</p>
+          </div>
+        ))}
+        {supEvals.length === 0 && <p className="card p-4 text-[13px] text-center" style={{ color: '#6f7974' }}>لا تقييمات إشراف بعد</p>}
       </div>
 
       <h2 className="text-[14px] font-bold mt-6 mb-2">تقييمات أولياء الأمور</h2>

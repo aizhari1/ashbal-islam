@@ -43,7 +43,7 @@ export async function addTrial(formData: FormData) {
   await supabase.from('activity_log').insert({
     action: 'trial_add',
     entity_id: data?.id,
-    user_id: user.id,
+    actor_id: user.id,
     details: { name, code, teacher_id: teacherId, trial_date: trialDate },
   })
 
