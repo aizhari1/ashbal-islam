@@ -68,7 +68,7 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
         p_payment_date: paymentDate,
         p_clear_due: clearDue,
         p_idempotency_key: idem,
-        p_recorded_by: auth.userId,
+        p_source: source,
       })
       if (!error && data) {
         const row = Array.isArray(data) ? data[0] : data
