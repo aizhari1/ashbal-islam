@@ -1,3 +1,4 @@
+import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -7,8 +8,9 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const monthStart = '2026-10-01'
-  const monthEnd = '2026-10-31'
+  const monthKey = currentMonthKey()
+  const { start: monthStart, end: monthEnd } = monthBounds(monthKey)
+  const monthName = monthLabelAr(monthKey)
 
   const [
     { count: active },
@@ -45,7 +47,7 @@ export default async function ReportsPage() {
         </Link>
         <div>
           <h1 className="text-[16px] font-bold">التقارير والإحصائيات</h1>
-          <p className="text-[11px]" style={{ color: '#6f7974' }}>أكتوبر 2026</p>
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>{monthName}</p>
         </div>
       </header>
 
@@ -61,7 +63,7 @@ export default async function ReportsPage() {
         </div>
 
         <div className="card p-4">
-          <h2 className="text-[13px] font-bold mb-3">المالية — أكتوبر</h2>
+          <h2 className="text-[13px] font-bold mb-3">المالية — {monthName}</h2>
           <div className="flex justify-between text-[14px] mb-1">
             <span style={{ color: '#6f7974' }}>المحصّل</span>
             <b style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')} ج.م</b>
@@ -77,7 +79,7 @@ export default async function ReportsPage() {
         </div>
 
         <div className="card p-4">
-          <h2 className="text-[13px] font-bold mb-3">الحضور — أكتوبر</h2>
+          <h2 className="text-[13px] font-bold mb-3">الحضور — {monthName}</h2>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div><p className="text-[18px] font-bold">{totalAtt}</p><p className="text-[11px]" style={{ color: '#6f7974' }}>إجمالي</p></div>
             <div><p className="text-[18px] font-bold" style={{ color: '#176b52' }}>{present}</p><p className="text-[11px]" style={{ color: '#6f7974' }}>حاضر</p></div>

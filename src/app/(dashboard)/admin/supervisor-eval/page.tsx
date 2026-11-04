@@ -1,5 +1,6 @@
 'use client'
 
+import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { addSupervisorEval } from '@/app/actions/schedule'
@@ -56,7 +57,7 @@ export default function SupervisorEvalPage() {
     <div className="min-h-dvh max-w-lg mx-auto p-4 pb-24" style={{ background: '#eefdf6' }}>
       <Link href="/admin" className="text-[13px]" style={{ color: '#176b52' }}>← رجوع</Link>
       <h1 className="text-[18px] font-bold mt-2">تقييم الإشراف</h1>
-      <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>نقاط شهرية للمعلمين — أكتوبر 2026</p>
+      <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>نقاط شهرية للمعلمين — {monthLabelAr(currentMonthKey())}</p>
 
       <div className="card p-4 mt-4 space-y-3">
         <select value={teacherId} onChange={(e) => setTeacherId(e.target.value)} className="input">

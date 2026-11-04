@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { serviceClient } from '@/lib/supabase/service'
 import { dueAfterPackageComplete, packageSize, todayKey } from '@/lib/dues'
 
 export async function recordAttendance(data: {
@@ -67,9 +68,13 @@ export async function recordAttendance(data: {
     sharii_note: txt(data.sharii_note),
   }
 
+  // رقم الحلقة في نص التقرير = الرقم الفعلي المسجّل (زي القديم)
+  const withNum = (t: string | null | undefined, n: number | null | undefined) =>
+    t && n ? t.replace(/(رقم الحلقة: )\d+/, `$1${n}`) : t || null
+
   const { data: existing } = await supabase
     .from('attendance')
-    .select('id')
+    .select('id, session_num')
     .eq('student_id', data.student_id)
     .eq('session_date', today)
     .limit(1)
@@ -85,7 +90,7 @@ export async function recordAttendance(data: {
         muraja_to: data.muraja_to || null,
         tajweed_notes: data.tajweed_notes || null,
         rating: data.rating || null,
-        notes: data.report_text || data.notes || null,
+        notes: withNum(data.report_text || data.notes, existing[0].session_num),
         teacher_id: teacherId,
         ...details,
       })
@@ -132,7 +137,7 @@ export async function recordAttendance(data: {
       muraja_to: data.muraja_to || null,
       tajweed_notes: data.tajweed_notes || null,
       rating: data.rating || null,
-      notes: data.report_text || data.notes || null,
+      notes: isPresent ? withNum(data.report_text || data.notes, nextSession) : data.report_text || data.notes || null,
       session_num: isPresent ? nextSession : data.session_num || null,
       ...details,
     })
@@ -194,4 +199,48 @@ export async function bulkAttendance(
     results.push(await recordAttendance(item))
   }
   return results
+}
+
+/** حذف حصة المعلم من سجل حصصه (زي القديم): بيتحذف التقرير معاها وبيرجع رقم الحصة خطوة */
+export async function deleteMySession(attendanceId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'غير مصرح' }
+  if (!/^[0-9a-f-]{36}$/i.test(attendanceId)) return { error: 'معرّف غير صالح' }
+
+  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+  if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
+
+  // الملكية اتأكدت فوق (الحصة بتاعت المعلم نفسه) — الكتابة بالسيرفر عشان ما تتعطلش بسياسات RLS
+  const sb = serviceClient()
+  const { data: row } = await sb
+    .from('attendance')
+    .select('id, student_id, teacher_id, status')
+    .eq('id', attendanceId)
+    .maybeSingle()
+  if (!row) return { error: 'الحصة غير موجودة' }
+  if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
+
+  const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
+  if (error) return { error: error.message }
+
+  if (row.status === 'حاضر' || row.status === 'متأخر') {
+    const { data: st } = await sb.from('students').select('last_session_num').eq('id', row.student_id).maybeSingle()
+    await sb
+      .from('students')
+      .update({ last_session_num: Math.max(0, (st?.last_session_num || 0) - 1) })
+      .eq('id', row.student_id)
+  }
+
+  await supabase.from('activity_log').insert({
+    actor_id: user.id,
+    action: 'teacher_delete_session',
+    entity_type: 'attendance',
+    entity_id: attendanceId,
+    details: { student_id: row.student_id, status: row.status },
+  })
+  revalidatePath('/teacher')
+  revalidatePath('/teacher/attendance')
+  revalidatePath('/teacher/session')
+  return { success: true }
 }

@@ -1,3 +1,4 @@
+import { currentMonthKey, previousMonthKey } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -56,7 +57,7 @@ export default async function TeacherDuesPage({
       </p>
 
       <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-        {['all', '2026-11', '2026-10'].map((m) => (
+        {['all', currentMonthKey(), previousMonthKey()].map((m) => (
           <Link
             key={m}
             href={`/teacher/dues?month=${m}`}

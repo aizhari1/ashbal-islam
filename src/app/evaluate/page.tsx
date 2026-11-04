@@ -1,9 +1,10 @@
 'use client'
 
+import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-const MONTH = 'تقييم شهر أكتوبر 2026'
+const MONTH = 'تقييم شهر ' + monthLabelAr(currentMonthKey())
 
 const Q_TEACHER = [
   { id: 'q1', label: '1) مدى تصحيح الأخطاء أو تنفيذ الاقتراحات من آخر استبيان', options: ['تم معالجة الأمر', 'لم يتم تنفيذ ما طلبته', 'لم أشارك في الاستبيان'] },
@@ -68,7 +69,7 @@ export default function PublicEvaluatePage() {
         <div className="w-full max-w-md bg-white rounded-2xl p-8 text-center shadow-sm">
           <div className="text-4xl mb-2">🎉</div>
           <h2 className="text-[18px] font-bold">شكراً لتقييمك!</h2>
-          <p className="text-[13px] text-[#6f7974] mt-2">تم استلام تقييمك لشهر أكتوبر 2026 بنجاح.</p>
+          <p className="text-[13px] text-[#6f7974] mt-2">تم استلام تقييمك ({MONTH}) بنجاح.</p>
           <button type="button" onClick={() => { setDone(false); setAnswers({}); setStudentId(null) }}
             className="mt-6 w-full bg-[#0d9b8a] text-white py-3 rounded-full font-bold">تقييم آخر</button>
         </div>

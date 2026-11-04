@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import DeleteSessionButton from './DeleteSessionButton'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 
 export default async function TeacherAttendancePage() {
@@ -16,7 +17,7 @@ export default async function TeacherAttendancePage() {
   if (teacher) {
     const { data } = await supabase
       .from('attendance')
-      .select('id, session_date, status, notes, session_duration, score_new, score_recent, score_far, students(name, code)')
+      .select('id, session_date, status, notes, session_num, session_duration, score_new, score_recent, score_far, students(name, code)')
       .eq('teacher_id', teacher.id)
       .gte('session_date', start)
       .lte('session_date', end)
@@ -39,13 +40,17 @@ export default async function TeacherAttendancePage() {
               <p className="font-bold">{r.students?.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
                 {r.session_date}
+                {r.session_num ? ` · حصة ${r.session_num}` : ''}
                 {r.session_duration ? ` · ${r.session_duration} د` : ''}
                 {r.score_new !== null && r.score_new !== undefined ? ` · حفظ ${r.score_new}/10` : ''}
                 {r.score_recent !== null && r.score_recent !== undefined ? ` · قريب ${r.score_recent}/10` : ''}
                 {r.score_far !== null && r.score_far !== undefined ? ` · بعيد ${r.score_far}/10` : ''}
               </p>
             </div>
-            <span className={r.status === 'حاضر' ? 'badge-ok' : 'badge-err'}>{r.status}</span>
+            <div className="flex flex-col items-end gap-1">
+              <span className={r.status === 'حاضر' ? 'badge-ok' : 'badge-err'}>{r.status}</span>
+              <DeleteSessionButton id={r.id} />
+            </div>
           </div>
         ))}
         {rows.length === 0 && <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا حصص مسجّلة</p>}

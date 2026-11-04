@@ -1,5 +1,6 @@
 'use server'
 
+import { currentMonthKey } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -126,7 +127,7 @@ export async function recordTeacherSettlement(formData: FormData) {
     actor_id: user?.id,
     action: 'teacher_settlement',
     entity_type: 'teacher',
-    details: { teacher_name: teacherName, amount, note, month: '2026-10' },
+    details: { teacher_name: teacherName, amount, note, month: currentMonthKey() },
   })
   await supabase.from('activity_log').insert({
     actor_id: user?.id,

@@ -1,5 +1,6 @@
 'use server'
 
+import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
@@ -60,7 +61,7 @@ export async function addSupervisorEval(formData: FormData) {
       teacher_name,
       points,
       notes,
-      month: 'أكتوبر 2026',
+      month: monthLabelAr(currentMonthKey()),
     },
   })
   if (error) return { error: error.message }

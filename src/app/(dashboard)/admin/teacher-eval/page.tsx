@@ -1,5 +1,6 @@
 'use client'
 
+import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -32,7 +33,7 @@ export default function AdminTeacherEvalPage() {
         action: 'admin_teacher_eval',
         entity_type: 'teacher',
         entity_id: teacherId,
-        details: { teacher_name: t?.name, score: avg, criteria, notes, month: 'أكتوبر 2026' },
+        details: { teacher_name: t?.name, score: avg, criteria, notes, month: monthLabelAr(currentMonthKey()) },
       })
       if (error) setMsg(error.message)
       else {

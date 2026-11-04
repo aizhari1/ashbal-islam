@@ -12,6 +12,7 @@ type Student = {
   phone: string | null
   last_session_num: number | null
   monthly_sessions: number | null
+  subscription_type?: string | null
   session_duration: number | null
 }
 
@@ -35,6 +36,7 @@ export default function TeacherSessionPage() {
   const [duration, setDuration] = useState('30')
   const [rating, setRating] = useState('5')
   const [teacherId, setTeacherId] = useState<string | null>(null)
+  const [teacherName, setTeacherName] = useState('')
   const [scoreNew, setScoreNew] = useState('10')
   const [scoreRecent, setScoreRecent] = useState('10')
   const [scoreFar, setScoreFar] = useState('10')
@@ -50,11 +52,12 @@ export default function TeacherSessionPage() {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) return
-      const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+      const { data: teacher } = await supabase.from('teachers').select('id, name').eq('profile_id', user.id).maybeSingle()
       if (teacher?.id) setTeacherId(teacher.id)
+      if (teacher?.name) setTeacherName(teacher.name)
       let q = supabase
         .from('students')
-        .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration')
+        .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
         .eq('status', 'نشط')
         .order('name')
       if (teacher?.id) q = q.eq('teacher_id', teacher.id)
@@ -87,35 +90,58 @@ export default function TeacherSessionPage() {
     setShowForm(true)
   }
 
+  const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+
+  // نفس قالب تقرير أشبال القديم بالظبط (اللي بيوصل لولي الأمر)
   function buildPreview() {
     if (!selected) return ''
-    const lines = [
-      `تقرير حلقة — ${selected.name}`,
-      `الكود: ${selected.code}`,
-      `الحضور: ${attend}`,
-      `المدة: ${duration} دقيقة`,
-      hifzFrom || hifzTo ? `الحفظ: من ${hifzFrom || '—'} إلى ${hifzTo || '—'}` : '',
-      murajaFrom || murajaTo ? `المراجعة: من ${murajaFrom || '—'} إلى ${murajaTo || '—'}` : '',
-      tajweed ? `التجويد: ${tajweed}` : '',
-      attend !== 'لم يحضر' ? `درجة الحفظ الجديد: ${scoreNew}/10` : '',
-      attend !== 'لم يحضر' ? `درجة الماضي القريب: ${scoreRecent}/10` : '',
-      attend !== 'لم يحضر' ? `درجة الماضي البعيد: ${scoreFar}/10` : '',
-      newMem ? `الحفظ الجديد (الواجب): ${newMem}` : '',
-      recentPast ? `الماضي القريب: ${recentPast}` : '',
-      farPast ? `الماضي البعيد: ${farPast}` : '',
-      arabicLang ? `لغة عربية: ${arabicLang}` : '',
-      tarbiya ? `البيان التربوي: ${tarbiya}` : '',
-      sharii ? `البيان الشرعي: ${sharii}` : '',
-      `التقييم: ${rating}/5`,
-    ].filter(Boolean)
-    const text = lines.join('\n')
+    const now = new Date()
+    const present = attend === 'تم الحضور' || attend === 'متأخر'
+    const m = String(selected.subscription_type || '').match(/(\d+)/)
+    const quota = m ? parseInt(m[1], 10) : selected.monthly_sessions || 0
+    let sessionNum = selected.last_session_num || 0
+    if (present) {
+      sessionNum += 1
+      if (quota > 0 && sessionNum > quota) sessionNum = 1
+    }
+    if (sessionNum < 1) sessionNum = 1
+    const sc = (v: string) => (v === '' ? '—' : `${v} / 10`)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const line = 'ـــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ'
+    const text = [
+      '*💦أشبال الإسلام💦*', '',
+      '🌺 المعلم : ' + (teacherName || ''), '',
+      '🌺 الطالب : ' + selected.name, '',
+      '*التقييم*',
+      '✅️ درجة الحفظ الجديد: ' + sc(scoreNew), '',
+      '✅️ درجة الماضي القريب: ' + sc(scoreRecent), '',
+      '✅️ درجة الماضي البعيد: ' + sc(scoreFar), '',
+      '📚 التربوي: ' + (tarbiya.trim() || '—'), '',
+      '📖 الشرعي: ' + (sharii.trim() || '—'),
+      line,
+      '*الواجب القادم*',
+      '🌱 الحفظ الجديد: ' + (newMem.trim() || '—'), '',
+      '🌱 الماضي القريب: ' + (recentPast.trim() || '—'), '',
+      '🌱 الماضي البعيد: ' + (farPast.trim() || '—'), '', '', '', '',
+      line,
+      '🗓 حلقة يوم: ' + DAYS[now.getDay()], '',
+      '📝 الموافق: ' + `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`, '',
+      '#️⃣ رقم الحلقة: ' + sessionNum, '',
+      '📋 الحضور: ' + attend, '',
+      '⏱️ مدة الحلقة: ' + (duration || '60'), '',
+      'وتزودوا فإن خير الزاد التقوى 🌹🌹🌹',
+    ].join('\n')
     setPreview(text)
     return text
   }
 
   function save() {
     if (!selected) return
-    const text = preview || buildPreview()
+    if (attend !== 'لم يحضر' && !newMem.trim()) {
+      setMsg('اكتب الحفظ الجديد (الواجب القادم).')
+      return
+    }
+    const text = buildPreview()
     const statusMap: Record<string, string> = {
       'تم الحضور': 'حاضر',
       'لم يحضر': 'غائب',
