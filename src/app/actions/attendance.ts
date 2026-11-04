@@ -20,6 +20,13 @@ export async function recordAttendance(data: {
   score_new?: number | null
   score_recent?: number | null
   score_far?: number | null
+  session_duration?: number | null
+  new_memorization?: string | null
+  recent_past?: string | null
+  far_past?: string | null
+  arabic_lang?: string | null
+  tarbiya_note?: string | null
+  sharii_note?: string | null
 }) {
   const supabase = await createClient()
   const {
@@ -28,6 +35,37 @@ export async function recordAttendance(data: {
   if (!user) return { error: 'غير مصرح' }
 
   const today = todayKey()
+
+  // المعلم: اللي سجّل الحصة (حسابه) ثم معلم الطالب — عشان الحصة ما تتسجلش من غير معلم وتضيع من الرواتب
+  let teacherId: string | null = data.teacher_id || null
+  if (!teacherId) {
+    const { data: t } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+    teacherId = t?.id || null
+  }
+  if (!teacherId) {
+    const { data: st0 } = await supabase.from('students').select('teacher_id').eq('id', data.student_id).maybeSingle()
+    teacherId = st0?.teacher_id || null
+  }
+
+  const score = (v: unknown) => {
+    if (v === null || v === undefined || v === '') return null
+    const n = Math.round(Number(v))
+    return Number.isFinite(n) ? Math.min(10, Math.max(0, n)) : null
+  }
+  const txt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 1000) : null)
+  const dur = Number(data.session_duration)
+  const details = {
+    session_duration: Number.isFinite(dur) && dur >= 5 && dur <= 300 ? Math.round(dur) : null,
+    score_new: score(data.score_new),
+    score_recent: score(data.score_recent),
+    score_far: score(data.score_far),
+    new_memorization: txt(data.new_memorization),
+    recent_past: txt(data.recent_past),
+    far_past: txt(data.far_past),
+    arabic_lang: txt(data.arabic_lang),
+    tarbiya_note: txt(data.tarbiya_note),
+    sharii_note: txt(data.sharii_note),
+  }
 
   const { data: existing } = await supabase
     .from('attendance')
@@ -48,7 +86,8 @@ export async function recordAttendance(data: {
         tajweed_notes: data.tajweed_notes || null,
         rating: data.rating || null,
         notes: data.report_text || data.notes || null,
-        teacher_id: data.teacher_id || null,
+        teacher_id: teacherId,
+        ...details,
       })
       .eq('id', existing[0].id)
       .select()
@@ -79,7 +118,7 @@ export async function recordAttendance(data: {
     .from('attendance')
     .insert({
       student_id: data.student_id,
-      teacher_id: data.teacher_id || null,
+      teacher_id: teacherId,
       session_date: today,
       status:
         data.status === 'تم الحضور'
@@ -95,6 +134,7 @@ export async function recordAttendance(data: {
       rating: data.rating || null,
       notes: data.report_text || data.notes || null,
       session_num: isPresent ? nextSession : data.session_num || null,
+      ...details,
     })
     .select()
     .single()

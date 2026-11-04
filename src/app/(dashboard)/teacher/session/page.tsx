@@ -34,6 +34,14 @@ export default function TeacherSessionPage() {
   const [attend, setAttend] = useState('تم الحضور')
   const [duration, setDuration] = useState('30')
   const [rating, setRating] = useState('5')
+  const [teacherId, setTeacherId] = useState<string | null>(null)
+  const [scoreNew, setScoreNew] = useState('10')
+  const [scoreRecent, setScoreRecent] = useState('10')
+  const [scoreFar, setScoreFar] = useState('10')
+  const [newMem, setNewMem] = useState('')
+  const [recentPast, setRecentPast] = useState('')
+  const [farPast, setFarPast] = useState('')
+  const [arabicLang, setArabicLang] = useState('')
 
   useEffect(() => {
     ;(async () => {
@@ -42,7 +50,8 @@ export default function TeacherSessionPage() {
         data: { user },
       } = await supabase.auth.getUser()
       if (!user) return
-      const { data: teacher } = await supabase.from('teachers').select('id').eq('user_id', user.id).maybeSingle()
+      const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+      if (teacher?.id) setTeacherId(teacher.id)
       let q = supabase
         .from('students')
         .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration')
@@ -66,6 +75,13 @@ export default function TeacherSessionPage() {
     setTarbiya('')
     setSharii('')
     setRating('5')
+    setScoreNew('10')
+    setScoreRecent('10')
+    setScoreFar('10')
+    setNewMem('')
+    setRecentPast('')
+    setFarPast('')
+    setArabicLang('')
     setPreview('')
     setMsg('')
     setShowForm(true)
@@ -81,6 +97,13 @@ export default function TeacherSessionPage() {
       hifzFrom || hifzTo ? `الحفظ: من ${hifzFrom || '—'} إلى ${hifzTo || '—'}` : '',
       murajaFrom || murajaTo ? `المراجعة: من ${murajaFrom || '—'} إلى ${murajaTo || '—'}` : '',
       tajweed ? `التجويد: ${tajweed}` : '',
+      attend !== 'لم يحضر' ? `درجة الحفظ الجديد: ${scoreNew}/10` : '',
+      attend !== 'لم يحضر' ? `درجة الماضي القريب: ${scoreRecent}/10` : '',
+      attend !== 'لم يحضر' ? `درجة الماضي البعيد: ${scoreFar}/10` : '',
+      newMem ? `الحفظ الجديد (الواجب): ${newMem}` : '',
+      recentPast ? `الماضي القريب: ${recentPast}` : '',
+      farPast ? `الماضي البعيد: ${farPast}` : '',
+      arabicLang ? `لغة عربية: ${arabicLang}` : '',
       tarbiya ? `البيان التربوي: ${tarbiya}` : '',
       sharii ? `البيان الشرعي: ${sharii}` : '',
       `التقييم: ${rating}/5`,
@@ -102,7 +125,17 @@ export default function TeacherSessionPage() {
       const res = await recordAttendance({
         student_id: selected.id,
         status: statusMap[attend] || 'حاضر',
-        session_date: new Date().toISOString().slice(0, 10),
+        teacher_id: teacherId,
+        session_duration: Number(duration) || null,
+        score_new: attend === 'لم يحضر' ? null : Number(scoreNew),
+        score_recent: attend === 'لم يحضر' ? null : Number(scoreRecent),
+        score_far: attend === 'لم يحضر' ? null : Number(scoreFar),
+        new_memorization: newMem || null,
+        recent_past: recentPast || null,
+        far_past: farPast || null,
+        arabic_lang: arabicLang || null,
+        tarbiya_note: tarbiya || null,
+        sharii_note: sharii || null,
         hifz_from: hifzFrom || null,
         hifz_to: hifzTo || null,
         muraja_from: murajaFrom || null,
@@ -180,6 +213,14 @@ export default function TeacherSessionPage() {
               >
                 ✓ حضور
               </button>
+              <button
+                type="button"
+                onClick={() => openReport(s, 'لم يحضر')}
+                className="px-3 py-1.5 rounded-full text-[12px] font-bold"
+                style={{ background: '#ffdad6', color: '#93000a' }}
+              >
+                ✗ غياب
+              </button>
             </div>
           </div>
         ))}
@@ -226,6 +267,31 @@ export default function TeacherSessionPage() {
             <label className="text-[12px] font-bold block">التجويد</label>
             <input className="input mb-2" value={tajweed} onChange={(e) => setTajweed(e.target.value)} />
 
+            {attend !== 'لم يحضر' && (
+              <>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {([
+                    ['درجة الحفظ الجديد', scoreNew, setScoreNew],
+                    ['درجة الماضي القريب', scoreRecent, setScoreRecent],
+                    ['درجة الماضي البعيد', scoreFar, setScoreFar],
+                  ] as const).map(([l, v, set]) => (
+                    <div key={l}>
+                      <label className="text-[11px] font-bold block">{l} (من 10)</label>
+                      <input className="input" type="number" min={0} max={10} value={v} onChange={(e) => set(e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                <label className="text-[12px] font-bold block">الحفظ الجديد (الواجب)</label>
+                <input className="input mb-2" value={newMem} onChange={(e) => setNewMem(e.target.value)} placeholder="سورة الدخان من 18 إلى 39" />
+                <label className="text-[12px] font-bold block">الماضي القريب</label>
+                <input className="input mb-2" value={recentPast} onChange={(e) => setRecentPast(e.target.value)} />
+                <label className="text-[12px] font-bold block">الماضي البعيد</label>
+                <input className="input mb-2" value={farPast} onChange={(e) => setFarPast(e.target.value)} />
+                <label className="text-[12px] font-bold block">لغة عربية</label>
+                <input className="input mb-2" value={arabicLang} onChange={(e) => setArabicLang(e.target.value)} />
+              </>
+            )}
+
             <label className="text-[12px] font-bold block">البيان التربوي</label>
             <input className="input mb-2" value={tarbiya} onChange={(e) => setTarbiya(e.target.value)} />
 
@@ -238,6 +304,7 @@ export default function TeacherSessionPage() {
                 <select className="input" value={attend} onChange={(e) => setAttend(e.target.value)}>
                   <option value="تم الحضور">تم الحضور</option>
                   <option value="متأخر">متأخر</option>
+                  <option value="لم يحضر">لم يحضر</option>
                 </select>
               </div>
               <div>
