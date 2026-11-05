@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordAttendance } from '@/app/actions/attendance'
 import Link from 'next/link'
+import { normalizePhone } from '@/lib/whatsapp'
 
 type Student = {
   id: string
@@ -201,15 +202,12 @@ export default function TeacherSessionPage() {
   }
 
   function waText(t: string, phone: string | null) {
-    if (!phone) {
+    const p = normalizePhone(phone)
+    if (!p) {
       copyText(t)
-      setMsg('لا يوجد هاتف — تم نسخ النص')
+      setMsg('رقم ولي الأمر غير موجود أو غير صالح — تم نسخ التقرير')
       return
     }
-    let p = phone.replace(/[^\d+]/g, '')
-    if (p.startsWith('00')) p = p.slice(2)
-    if (p.startsWith('+')) p = p.slice(1)
-    if (p.startsWith('0') && p.length >= 10) p = '20' + p.slice(1)
     window.open(`https://wa.me/${p}?text=${encodeURIComponent(t)}`, '_blank')
   }
 
