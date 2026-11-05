@@ -45,6 +45,8 @@ export default async function AdminDashboard({
   const dueCount = summary.dueCount
 
   const menu = [
+    { href: '/admin/today', icon: 'today', title: 'جدول اليوم', desc: 'حصص النهارده عند كل المعلمين', color: '#176b52' },
+    { href: '/admin/cumulative', icon: 'leaderboard', title: 'التقرير التراكمي', desc: 'ترتيب المعلمين بالدرجة المركبة', color: '#176b52' },
     { href: '/admin/courses', icon: 'school', title: 'الكورسات', desc: 'فيديوهات · صور · اشتراكات · تفعيل', color: '#755b1b' },
     { href: '/admin/landing', icon: 'web', title: 'اللاندنج بيدج', desc: 'تعديل الصفحة الرئيسية للموقع', color: '#755b1b' },
     { href: `/admin/monthly?month=${monthKey}`, icon: 'calendar_view_month', title: 'الملخص الشهري', desc: 'دخل · صرف · حصص · تقييمات', color: '#00513c' },

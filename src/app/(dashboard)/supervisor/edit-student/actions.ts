@@ -32,7 +32,7 @@ export async function supervisorEditStudent(formData: FormData) {
   await supabase.from('activity_log').insert({
     action: 'student_update',
     entity_id: studentId,
-    user_id: user.id,
+    actor_id: user.id,
     details: payload,
   })
 

@@ -21,7 +21,7 @@ export async function logTeacherAbsence(formData: FormData) {
   await supabase.from('activity_log').insert({
     action: 'teacher_absence',
     entity_id: teacherId,
-    user_id: user.id,
+    actor_id: user.id,
     details: {
       teacher_name: teacher?.name,
       absence_date: absenceDate,

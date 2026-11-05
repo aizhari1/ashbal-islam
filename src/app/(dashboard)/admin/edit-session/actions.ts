@@ -29,7 +29,7 @@ export async function updateSessionNum(formData: FormData) {
   await supabase.from('activity_log').insert({
     action: 'session_num',
     entity_id: studentId,
-    user_id: user.id,
+    actor_id: user.id,
     details: { last_session_num: lastSessionNum, last_session_date: lastSessionDate },
   })
 

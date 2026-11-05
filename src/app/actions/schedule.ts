@@ -215,10 +215,9 @@ export async function copyScheduleMonth(formData?: FormData) {
 }
 
 export async function addSupervisorEval(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await canManageSchedule()
+  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
+  const { data: { user } } = await supabase.auth.getUser()
   const teacher_id = String(formData.get('teacher_id') || '')
   const teacher_name = String(formData.get('teacher_name') || '')
   const points = Number(formData.get('points') || 0)

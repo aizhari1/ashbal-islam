@@ -1,6 +1,7 @@
 'use server'
 
 import { currentMonthKey } from '@/lib/dues'
+import { requireAdmin } from '@/lib/courses'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -12,6 +13,8 @@ function service() {
 }
 
 export async function addUser(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const code = String(formData.get('code') || '').trim().toUpperCase()
   const fullName = String(formData.get('full_name') || '').trim()
   const password = String(formData.get('password') || '').trim()
@@ -55,6 +58,8 @@ export async function addUser(formData: FormData) {
 }
 
 export async function setUserRole(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const id = String(formData.get('id') || '')
   const role = String(formData.get('role') || '')
   if (!id || !role) return { error: 'بيانات ناقصة' }
@@ -66,6 +71,8 @@ export async function setUserRole(formData: FormData) {
 }
 
 export async function deactivateUser(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const id = String(formData.get('id') || '')
   if (!id) return { error: 'معرّف ناقص' }
   const admin = service()
@@ -76,6 +83,8 @@ export async function deactivateUser(formData: FormData) {
 }
 
 export async function activateUser(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const id = String(formData.get('id') || '')
   if (!id) return { error: 'معرّف ناقص' }
   const admin = service()
@@ -86,6 +95,8 @@ export async function activateUser(formData: FormData) {
 }
 
 export async function setTeacherSessionRate(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const teacherId = String(formData.get('teacher_id') || '')
   const teacherName = String(formData.get('teacher_name') || '')
   const rate = Number(formData.get('session_rate') || 0)
@@ -106,6 +117,8 @@ export async function setTeacherSessionRate(formData: FormData) {
 }
 
 export async function setTeacherAcademyRate(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const teacherId = String(formData.get('teacher_id') || '')
   const rate = Number(formData.get('rate_percent') || 0)
   if (!teacherId) return { error: 'معرّف ناقص' }
@@ -117,6 +130,8 @@ export async function setTeacherAcademyRate(formData: FormData) {
 }
 
 export async function recordTeacherSettlement(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const teacherName = String(formData.get('teacher_name') || '')
   const amount = Number(formData.get('amount') || 0)
   const note = String(formData.get('note') || '')

@@ -22,7 +22,7 @@ export async function changeStudentStatus(formData: FormData) {
   await supabase.from('activity_log').insert({
     action: 'student_status',
     entity_id: studentId,
-    user_id: user.id,
+    actor_id: user.id,
     details: { status, note },
   })
 

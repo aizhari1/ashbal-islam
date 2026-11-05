@@ -11,6 +11,9 @@ export default async function MorePage() {
   if (!user) redirect('/login')
 
   const items = [
+    { href: '/admin/today', icon: 'today', label: 'جدول اليوم' },
+    { href: '/admin/attended', icon: 'fact_check', label: 'الحصص اللي حضروها' },
+    { href: '/admin/cumulative', icon: 'leaderboard', label: 'تقرير وتحليلات تراكمية' },
     { href: '/admin/student-hub', icon: 'person_search', label: 'بحث طالب وإجراء' },
     { href: '/admin/features', icon: 'tune', label: 'المميزات الظاهرة' },
     { href: '/admin/courses', icon: 'school', label: 'الكورسات' },
