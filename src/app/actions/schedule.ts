@@ -4,8 +4,17 @@ import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function addFixedSchedule(formData: FormData) {
+async function canManageSchedule() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  return ['admin', 'supervisor'].includes(String(p?.role)) ? supabase : null
+}
+
+export async function addFixedSchedule(formData: FormData) {
+  const supabase = await canManageSchedule()
+  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
   const student_id = String(formData.get('student_id') || '') || null
   const teacher_id = String(formData.get('teacher_id') || '') || null
   const day_of_week = Number(formData.get('day_of_week') || 0)
@@ -30,16 +39,42 @@ export async function addFixedSchedule(formData: FormData) {
   })
   if (error) return { error: error.message }
   revalidatePath('/admin/fixed-schedule')
+  revalidatePath('/teacher/schedule')
   return { success: true }
 }
 
 export async function deleteFixedSchedule(formData: FormData) {
   const id = String(formData.get('id') || '')
   if (!id) return { error: 'معرّف ناقص' }
-  const supabase = await createClient()
+  const supabase = await canManageSchedule()
+  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
   const { error } = await supabase.from('schedule_entries').delete().eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/admin/fixed-schedule')
+  return { success: true }
+}
+
+export async function updateFixedSchedule(formData: FormData) {
+  const supabase = await canManageSchedule()
+  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
+  const id = String(formData.get('id') || '')
+  if (!id) return { error: 'معرّف ناقص' }
+  const day_of_week = Number(formData.get('day_of_week'))
+  if (!(day_of_week >= 0 && day_of_week <= 6)) return { error: 'اختر يوم الأسبوع' }
+  const zoom = String(formData.get('zoom_link') || '').trim()
+  const notesBase = String(formData.get('notes') || '').trim()
+  const patch: Record<string, unknown> = {
+    day_of_week,
+    start_time: String(formData.get('start_time') || '') || null,
+    duration_minutes: Number(formData.get('duration_minutes') || 30) || 30,
+    notes: zoom ? `${notesBase}${notesBase ? ' | ' : ''}ZOOM=${zoom}` : notesBase || null,
+  }
+  const teacher_id = String(formData.get('teacher_id') || '')
+  if (teacher_id) patch.teacher_id = teacher_id
+  const { error } = await supabase.from('schedule_entries').update(patch).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/fixed-schedule')
+  revalidatePath('/teacher/schedule')
   return { success: true }
 }
 

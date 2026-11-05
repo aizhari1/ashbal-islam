@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FixedScheduleForm } from './FixedScheduleForm'
+import ScheduleRow from './ScheduleRow'
 
 const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
@@ -21,7 +22,7 @@ export default async function FixedSchedulePage() {
     .select('*, students(name, code), teachers(name)')
     .order('day_of_week')
     .order('start_time')
-    .limit(100)
+    .limit(1000)
 
   const { data: students } = await supabase
     .from('students')
@@ -56,24 +57,9 @@ export default async function FixedSchedulePage() {
 
         <h2 className="text-[13px] font-bold mb-2">الجدول ({entries?.length ?? 0})</h2>
         <div className="space-y-2">
-          {(entries ?? []).map((e: any) => {
-            const zoom = parseZoom(e.notes)
-            return (
-              <div key={e.id} className="card p-3.5 text-[13px]">
-                <div className="flex justify-between">
-                  <p className="font-bold">{DAYS[e.day_of_week] || e.day_of_week} · {e.start_time || '—'}</p>
-                  <span className="badge-ok">{e.status}</span>
-                </div>
-                <p className="mt-1">{e.students?.name || 'بدون طالب'} · {e.teachers?.name || 'بدون معلم'}</p>
-                <p className="text-[11px]" style={{ color: '#6f7974' }}>{e.duration_minutes || 30} دقيقة</p>
-                {zoom && (
-                  <a href={zoom} target="_blank" rel="noreferrer" className="text-[12px] font-semibold block mt-1" style={{ color: '#176b52' }} dir="ltr">
-                    رابط الحلقة ↗
-                  </a>
-                )}
-              </div>
-            )
-          })}
+          {(entries ?? []).map((e: any) => (
+            <ScheduleRow key={e.id} entry={e} teachers={teachers ?? []} />
+          ))}
           {(!entries || entries.length === 0) && (
             <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا مواعيد ثابتة بعد</p>
           )}

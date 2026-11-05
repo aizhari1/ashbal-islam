@@ -37,6 +37,8 @@ export default function TeacherSessionPage() {
   const [rating, setRating] = useState('5')
   const [teacherId, setTeacherId] = useState<string | null>(null)
   const [teacherName, setTeacherName] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [scoreNew, setScoreNew] = useState('10')
   const [scoreRecent, setScoreRecent] = useState('10')
   const [scoreFar, setScoreFar] = useState('10')
@@ -78,6 +80,8 @@ export default function TeacherSessionPage() {
     setTarbiya('')
     setSharii('')
     setRating('5')
+    setSaved(false)
+    setCopied(false)
     setScoreNew('10')
     setScoreRecent('10')
     setScoreFar('10')
@@ -175,7 +179,11 @@ export default function TeacherSessionPage() {
         setMsg('خطأ: ' + (res as any).error)
         return
       }
-      setMsg('تم الحفظ')
+      // التقرير النهائي (برقم الحلقة الفعلي) يفضل ظاهر عشان تنسخه أو تبعته واتساب بعد الحفظ
+      const finalText = (res as any)?.data?.notes || text
+      setPreview(finalText)
+      setSaved(true)
+      setMsg('✓ ' + ((res as any)?.message || 'تم الحفظ'))
       setStudents((prev) =>
         prev.map((s) =>
           s.id === selected.id
@@ -183,12 +191,13 @@ export default function TeacherSessionPage() {
             : s
         )
       )
-      setTimeout(() => setShowForm(false), 800)
     })
   }
 
   function copyText(t: string) {
     navigator.clipboard?.writeText(t)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1800)
   }
 
   function waText(t: string, phone: string | null) {
@@ -350,24 +359,32 @@ export default function TeacherSessionPage() {
 
             <label className="text-[12px] font-bold block">معاينة</label>
             <textarea className="input min-h-[140px] text-[12px] leading-relaxed mb-2" readOnly value={preview} dir="rtl" />
+            {saved && <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>اتحفظت الحصة. لو عايز تعدّل، ادخل سجل حصصي ← تعديل التقرير.</p>}
 
             <div className="flex flex-col gap-2">
-              <button type="button" className="btn-primary py-2.5" onClick={() => buildPreview()}>
-                تحديث المعاينة
-              </button>
-              <button type="button" className="btn-primary py-2.5" disabled={isPending} onClick={save}>
-                {isPending ? 'جاري الحفظ...' : 'حفظ الحضور'}
+              {!saved && (
+                <>
+                  <button type="button" className="btn-primary py-2.5" onClick={() => buildPreview()}>
+                    تحديث المعاينة
+                  </button>
+                  <button type="button" className="btn-primary py-2.5" disabled={isPending} onClick={save}>
+                    {isPending ? 'جاري الحفظ...' : 'حفظ الحضور'}
+                  </button>
+                </>
+              )}
+              <button type="button" className="btn-primary py-2.5" onClick={() => copyText(saved ? preview : buildPreview())}>
+                {copied ? '✓ تم النسخ' : 'نسخ التقرير'}
               </button>
               <button
                 type="button"
                 className="py-2.5 rounded-lg font-bold text-[13px] text-white"
                 style={{ background: '#25D366' }}
-                onClick={() => waText(preview || buildPreview(), selected.phone)}
+                onClick={() => waText(saved ? preview : buildPreview(), selected.phone)}
               >
-                إرسال واتساب
+                إرسال واتساب لولي الأمر
               </button>
               <button type="button" className="py-2 text-[13px]" onClick={() => setShowForm(false)}>
-                إلغاء
+                {saved ? 'تم — إغلاق' : 'إلغاء'}
               </button>
             </div>
             {msg && (

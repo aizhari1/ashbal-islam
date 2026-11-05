@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import DeleteSessionButton from './DeleteSessionButton'
+import SessionActions from './SessionActions'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 
 export default async function TeacherAttendancePage() {
@@ -17,7 +17,7 @@ export default async function TeacherAttendancePage() {
   if (teacher) {
     const { data } = await supabase
       .from('attendance')
-      .select('id, session_date, status, notes, session_num, session_duration, score_new, score_recent, score_far, students(name, code)')
+      .select('id, session_date, status, notes, session_num, session_duration, score_new, score_recent, score_far, students(name, code, phone)')
       .eq('teacher_id', teacher.id)
       .gte('session_date', start)
       .lte('session_date', end)
@@ -35,7 +35,8 @@ export default async function TeacherAttendancePage() {
       </div>
       <div className="space-y-2">
         {rows.map((r) => (
-          <div key={r.id} className="card p-3 flex justify-between text-[13px]">
+          <div key={r.id} className="card p-3 text-[13px]">
+            <div className="flex justify-between">
             <div>
               <p className="font-bold">{r.students?.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
@@ -49,8 +50,9 @@ export default async function TeacherAttendancePage() {
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className={r.status === 'حاضر' ? 'badge-ok' : 'badge-err'}>{r.status}</span>
-              <DeleteSessionButton id={r.id} />
             </div>
+            </div>
+            <SessionActions id={r.id} notes={r.notes || ''} phone={r.students?.phone || null} />
           </div>
         ))}
         {rows.length === 0 && <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا حصص مسجّلة</p>}
