@@ -1,18 +1,25 @@
 /**
  * مصدر واحد لمستحقات المعلم — نفس الحساب في الإدارة ومسير الرواتب وصفحة المعلم.
  * القاعدة: كل حصة حاضر × سعر حصة الطالب (حد أدنى 25 ج)
+ * الافتراضي: الشهر الحالي (توقيت القاهرة)
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { currentMonthKey } from '@/lib/dues'
 
 export const DEFAULT_SESSION_RATE = 25
 
 export function monthBounds(key?: string | null) {
-  if (!key || key === 'all') {
+  // بدون مفتاح → الشهر الحالي وليس «الكل»
+  if (key === 'all') {
     return { start: '2020-01-01', end: '2099-12-31', label: 'كل الشهور', key: 'all' }
   }
-  const y = Number(key.slice(0, 4))
-  const m = Number(key.slice(5, 7))
-  if (!y || !m) return monthBounds('all')
+  const resolved = key && /^\d{4}-\d{2}$/.test(key) ? key : currentMonthKey()
+  const y = Number(resolved.slice(0, 4))
+  const m = Number(resolved.slice(5, 7))
+  if (!y || !m) {
+    const cur = currentMonthKey()
+    return monthBounds(cur)
+  }
   const start = `${y}-${String(m).padStart(2, '0')}-01`
   const last = new Date(y, m, 0).getDate()
   const end = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
@@ -49,7 +56,7 @@ export async function computeTeacherPayroll(
   supabase: SupabaseClient,
   opts: { month?: string | null; teacherId?: string | null } = {}
 ): Promise<{ rows: TeacherPayRow[]; linesByTeacher: Record<string, SessionLine[]>; bounds: ReturnType<typeof monthBounds> }> {
-  const bounds = monthBounds(opts.month || 'all')
+  const bounds = monthBounds(opts.month == null || opts.month === '' ? currentMonthKey() : opts.month)
 
   const attendance: any[] = []
   let off = 0
@@ -120,7 +127,10 @@ export async function computeOneTeacherPay(
   teacherId: string,
   month?: string | null
 ): Promise<{ sessions: number; salary: number; rateParts: string; lines: SessionLine[]; bounds: ReturnType<typeof monthBounds> }> {
-  const { rows, linesByTeacher, bounds } = await computeTeacherPayroll(supabase, { month, teacherId })
+  const { rows, linesByTeacher, bounds } = await computeTeacherPayroll(supabase, {
+    month: month == null || month === '' ? currentMonthKey() : month,
+    teacherId,
+  })
   const row = rows.find((r) => r.teacherId === teacherId)
   return {
     sessions: row?.sessions || 0,

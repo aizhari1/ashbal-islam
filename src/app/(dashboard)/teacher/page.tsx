@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
+
+export const dynamic = 'force-dynamic'
 
 export default async function TeacherDashboard() {
   const supabase = await createClient()
@@ -14,6 +17,9 @@ export default async function TeacherDashboard() {
 
   const { data: teacher } = await supabase.from('teachers').select('*').eq('profile_id', user.id).maybeSingle()
 
+  const monthKey = currentMonthKey()
+  const { start, end } = monthBounds(monthKey)
+
   let active = 0,
     sessions = 0,
     trials = 0
@@ -23,11 +29,14 @@ export default async function TeacherDashboard() {
       .select('*', { count: 'exact', head: true })
       .eq('teacher_id', teacher.id)
       .eq('status', 'نشط')
+    // حصص الشهر الحالي فقط
     const { count: s } = await supabase
       .from('attendance')
       .select('*', { count: 'exact', head: true })
       .eq('teacher_id', teacher.id)
       .eq('status', 'حاضر')
+      .gte('session_date', start)
+      .lte('session_date', end)
     const { count: tr } = await supabase
       .from('students')
       .select('*', { count: 'exact', head: true })
@@ -42,10 +51,10 @@ export default async function TeacherDashboard() {
     { href: '/teacher/students', icon: 'groups', title: 'طلابي', desc: 'تسجيل حضور بعد كل حصة' },
     { href: '/teacher/session', icon: 'mic', title: 'غرفة التسميع', desc: 'حفظ ومراجعة وتجويد' },
     { href: '/teacher/schedule', icon: 'calendar_month', title: 'جدولي', desc: 'مواعيد الحصص' },
-    { href: '/teacher/dues', icon: 'payments', title: 'مستحقاتي', desc: 'كشف الحصص والمبلغ' },
+    { href: '/teacher/dues', icon: 'payments', title: 'مستحقاتي', desc: `كشف ${monthLabelAr(monthKey)}` },
     { href: '/teacher/ratings', icon: 'star', title: 'تقييماتي', desc: 'أولياء الأمور والإدارة' },
     { href: '/teacher/trials', icon: 'person_add', title: 'حصصي التجريبية', desc: 'تقرير التجربة والاشتراك' },
-    { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: 'آخر الحصص المسجّلة' },
+    { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: monthLabelAr(monthKey) },
     { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
     { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },
   ]
@@ -62,6 +71,7 @@ export default async function TeacherDashboard() {
             <p className="text-[12px] opacity-85 mt-0.5 text-white">
               أهلاً، {profile?.full_name || teacher?.name || 'معلم'}
             </p>
+            <p className="text-[11px] opacity-70 mt-0.5 text-white">{monthLabelAr(monthKey)}</p>
           </div>
         </div>
         <div className="grid grid-cols-3 text-center text-white">
@@ -71,7 +81,7 @@ export default async function TeacherDashboard() {
           </div>
           <div className="border-x border-white/20">
             <p className="text-[24px] font-bold text-white">{sessions}</p>
-            <p className="text-[10px] opacity-80 mt-1 text-white">حصة مسجّلة</p>
+            <p className="text-[10px] opacity-80 mt-1 text-white">حصة هذا الشهر</p>
           </div>
           <div>
             <p className="text-[24px] font-bold text-white">{active}</p>

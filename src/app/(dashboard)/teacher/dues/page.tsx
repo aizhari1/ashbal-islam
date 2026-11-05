@@ -1,4 +1,4 @@
-import { currentMonthKey, previousMonthKey } from '@/lib/dues'
+import { currentMonthKey, previousMonthKey, monthLabelAr } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -30,7 +30,8 @@ export default async function TeacherDuesPage({
     )
   }
 
-  const month = sp.month || 'all'
+  // افتراضي: الشهر الحالي (نوفمبر) وليس كل الشهور
+  const month = sp.month || currentMonthKey()
   const pay = await computeOneTeacherPay(supabase, teacher.id, month)
 
   const { data: settlements } = await supabase
@@ -41,10 +42,16 @@ export default async function TeacherDuesPage({
   let settled = 0
   for (const s of settlements ?? []) {
     const d = s.details as any
-    if (d?.teacher_name === teacher.name) settled += Number(d.amount || 0)
+    if (d?.teacher_name === teacher.name) {
+      // لو التسوية مربوطة بشهر محدد، نعدّها فقط لنفس الشهر
+      if (d?.month && d.month !== month && month !== 'all') continue
+      settled += Number(d.amount || 0)
+    }
   }
 
   const remaining = Math.max(0, pay.salary - settled)
+  const cur = currentMonthKey()
+  const prev = previousMonthKey()
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto p-4" style={{ background: '#eefdf6' }}>
@@ -57,17 +64,21 @@ export default async function TeacherDuesPage({
       </p>
 
       <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-        {['all', currentMonthKey(), previousMonthKey()].map((m) => (
+        {[
+          { key: cur, label: monthLabelAr(cur) },
+          { key: prev, label: monthLabelAr(prev) },
+          { key: 'all', label: 'الكل' },
+        ].map((m) => (
           <Link
-            key={m}
-            href={`/teacher/dues?month=${m}`}
+            key={m.key}
+            href={`/teacher/dues?month=${m.key}`}
             className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold"
             style={{
-              background: month === m ? '#176b52' : '#fff',
-              color: month === m ? '#fff' : '#176b52',
+              background: month === m.key ? '#176b52' : '#fff',
+              color: month === m.key ? '#fff' : '#176b52',
             }}
           >
-            {m === 'all' ? 'الكل' : m}
+            {m.label}
           </Link>
         ))}
       </div>
@@ -98,7 +109,7 @@ export default async function TeacherDuesPage({
 
       {pay.lines.length > 0 && (
         <div className="card p-4 mt-4">
-          <p className="text-[13px] font-bold mb-2">آخر الحصص</p>
+          <p className="text-[13px] font-bold mb-2">حصص {pay.bounds.label}</p>
           <div className="space-y-1.5 max-h-64 overflow-y-auto">
             {[...pay.lines]
               .sort((a, b) => b.session_date.localeCompare(a.session_date))
@@ -113,6 +124,12 @@ export default async function TeacherDuesPage({
               ))}
           </div>
         </div>
+      )}
+
+      {pay.lines.length === 0 && (
+        <p className="card p-6 text-center text-[13px] mt-4" style={{ color: '#6f7974' }}>
+          لا حصص مسجّلة في {pay.bounds.label}
+        </p>
       )}
     </div>
   )
