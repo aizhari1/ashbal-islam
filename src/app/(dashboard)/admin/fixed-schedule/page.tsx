@@ -3,18 +3,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FixedScheduleForm } from './FixedScheduleForm'
 import ScheduleRow from './ScheduleRow'
-
-const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
-
-function parseZoom(notes: string | null) {
-  if (!notes) return null
-  const m = notes.match(/ZOOM=(\S+)/)
-  return m ? m[1] : null
-}
+import { CopyMonthButton } from './CopyMonthButton'
 
 export default async function FixedSchedulePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: entries } = await supabase
@@ -45,11 +40,15 @@ export default async function FixedSchedulePage() {
         </Link>
         <div>
           <h1 className="text-[16px] font-bold">المواعيد الثابتة</h1>
-          <p className="text-[11px]" style={{ color: '#6f7974' }}>الجدول الأسبوعي + روابط الحلقات</p>
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>
+            الجدول الأسبوعي + روابط الحلقات
+          </p>
         </div>
       </header>
 
       <main className="px-4">
+        <CopyMonthButton />
+
         <div className="card p-4 mb-4">
           <h2 className="text-[13px] font-bold mb-3">إضافة موعد</h2>
           <FixedScheduleForm students={students ?? []} teachers={teachers ?? []} />
@@ -58,10 +57,12 @@ export default async function FixedSchedulePage() {
         <h2 className="text-[13px] font-bold mb-2">الجدول ({entries?.length ?? 0})</h2>
         <div className="space-y-2">
           {(entries ?? []).map((e: any) => (
-            <ScheduleRow key={e.id} entry={e} teachers={teachers ?? []} />
+            <ScheduleRow key={e.id} e={e} teachers={teachers ?? []} />
           ))}
           {(!entries || entries.length === 0) && (
-            <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>لا مواعيد ثابتة بعد</p>
+            <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>
+              لا مواعيد ثابتة بعد
+            </p>
           )}
         </div>
       </main>

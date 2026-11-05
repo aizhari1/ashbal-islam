@@ -110,3 +110,5 @@ export function ScheduleRow({
     </div>
   )
 }
+
+export default ScheduleRow
