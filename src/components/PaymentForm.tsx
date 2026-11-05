@@ -26,6 +26,7 @@ export function PaymentForm({
   const router = useRouter()
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
+  const [receiptName, setReceiptName] = useState('')
   const [pending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
@@ -63,13 +64,14 @@ export function PaymentForm({
         form.reset()
         setSelected(null)
         setQ('')
+        setReceiptName('')
         router.refresh()
       }
     })
   }
 
   return (
-    <form onSubmit={onSubmit} className="card p-4 space-y-3">
+    <form onSubmit={onSubmit} className="card p-4 space-y-3" encType="multipart/form-data">
       {msg && (
         <div
           className="rounded-xl px-3 py-2.5 text-[13px] font-bold text-center"
@@ -89,62 +91,48 @@ export function PaymentForm({
         <input
           type="search"
           value={q}
-          onChange={(e) => {
-            setQ(e.target.value)
-            setSelected(null)
-          }}
-          placeholder="اكتب الاسم أو الكود..."
-          className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
-          style={{ borderColor: selected ? '#176b52' : '#cde8dc', borderWidth: selected ? 2 : 1 }}
-          autoFocus
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="اسم أو كود..."
+          className="w-full rounded-xl border px-3 py-2.5 text-[13px]"
+          style={{ borderColor: '#cde8dc' }}
+          disabled={!!selected}
         />
-        {selected && (
-          <p className="text-[12px] mt-1.5 font-bold" style={{ color: '#176b52' }}>
-            ✓ {selected.name} ({selected.code})
-            {selected.amount_due != null && ` · مستحق ${Number(selected.amount_due)} ج`}
-          </p>
-        )}
         {!selected && (
-          <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border bg-white" style={{ borderColor: '#cde8dc' }}>
-            {filtered.length === 0 && (
-              <p className="text-center text-[12px] py-3" style={{ color: '#6f7974' }}>
-                مفيش نتيجة
-              </p>
-            )}
+          <div className="mt-1.5 max-h-40 overflow-y-auto rounded-xl border bg-white" style={{ borderColor: '#e5efe8' }}>
             {filtered.map((s) => (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => {
-                  setSelected(s)
-                  setQ(`${s.name} (${s.code})`)
-                }}
-                className="w-full text-right px-3 py-2.5 text-[13px] border-b last:border-0 hover:bg-[#e8f7f0]"
-                style={{ borderColor: '#e8f5ef' }}
+                onClick={() => setSelected(s)}
+                className="w-full text-right px-3 py-2 border-b last:border-0 text-[13px]"
+                style={{ borderColor: '#f0f5f2' }}
               >
-                <span className="font-semibold">{s.name}</span>{' '}
-                <span style={{ color: '#6f7974' }}>({s.code})</span>
-                {s.amount_due != null && Number(s.amount_due) > 0 && (
-                  <span className="mr-2 text-[11px] font-bold" style={{ color: '#ba1a1a' }}>
-                    مستحق {Number(s.amount_due)}
-                  </span>
-                )}
+                <span className="font-semibold">{s.name}</span>
+                <span className="text-[11px]" style={{ color: '#6f7974' }}>
+                  {' '}
+                  ({s.code})
+                </span>
               </button>
             ))}
           </div>
         )}
         {selected && (
-          <button
-            type="button"
-            className="text-[11px] mt-1 underline"
-            style={{ color: '#6f7974' }}
-            onClick={() => {
-              setSelected(null)
-              setQ('')
-            }}
-          >
-            تغيير الطالب
-          </button>
+          <div className="mt-2 flex justify-between items-center rounded-xl px-3 py-2" style={{ background: '#e8f7f0' }}>
+            <span className="text-[13px] font-bold" style={{ color: '#00513c' }}>
+              {selected.name} ({selected.code})
+            </span>
+            <button
+              type="button"
+              className="text-[11px] underline"
+              style={{ color: '#6f7974' }}
+              onClick={() => {
+                setSelected(null)
+                setQ('')
+              }}
+            >
+              تغيير
+            </button>
+          </div>
         )}
       </div>
 
@@ -195,6 +183,22 @@ export function PaymentForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label className="block text-[11px] font-bold mb-1" style={{ color: '#3f4944' }}>
+          سكرين شوت التحويل <span style={{ color: '#6f7974', fontWeight: 500 }}>(اختياري)</span>
+        </label>
+        <input
+          name="receipt"
+          type="file"
+          accept="image/*,.pdf"
+          className="w-full text-[12px]"
+          onChange={(e) => setReceiptName(e.target.files?.[0]?.name || '')}
+        />
+        <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
+          {receiptName ? `تم اختيار: ${receiptName}` : 'مش إجباري — لو حابب ترفق صورة الإيصال'}
+        </p>
       </div>
 
       <div>
