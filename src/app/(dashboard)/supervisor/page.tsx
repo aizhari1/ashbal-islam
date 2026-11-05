@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { currentMonthKey, monthLabelAr } from '@/lib/dues'
 import { getDuesSummary } from '@/lib/dues-engine'
 import { MonthSwitcher } from '@/components/MonthSwitcher'
+import { LogoutButton } from '@/components/LogoutButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,6 +81,7 @@ export default async function SupervisorDashboard({
             </h1>
           </div>
         </div>
+        <LogoutButton compact label="خروج" />
       </header>
 
       <div className="px-4 mt-2 mb-4">
@@ -168,6 +170,10 @@ export default async function SupervisorDashboard({
             </Link>
           ))}
         </div>
+      </div>
+
+      <div className="px-4 mt-4 mb-6">
+        <LogoutButton />
       </div>
 
       <nav className="bottom-nav">
