@@ -29,7 +29,6 @@ export default async function TeacherDashboard() {
     { href: '/teacher/dues', icon: 'payments', title: 'مستحقاتي', desc: 'كشف الحصص والمبلغ' },
     { href: '/teacher/ratings', icon: 'star', title: 'تقييماتي', desc: 'أولياء الأمور والإدارة' },
     { href: '/teacher/trials', icon: 'person_add', title: 'حصصي التجريبية', desc: 'تقرير التجربة والاشتراك' },
-    { href: '/teacher/session-number', icon: 'pin', title: 'تعديل رقم الحصة', desc: '+1 / −1 / رقم مباشر' },
     { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: 'آخر الحصص المسجّلة' },
     { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
     { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },

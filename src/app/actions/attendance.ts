@@ -266,30 +266,3 @@ export async function updateSessionReport(attendanceId: string, text: string) {
   revalidatePath('/teacher/attendance')
   return { success: true }
 }
-
-/** تعديل رقم آخر حصة لطالب من طلاب المعلم (+1 / −1 / رقم مباشر) — زي شاشة "تعديل رقم الحصة" في القديم */
-export async function setStudentSessionNumber(studentId: string, num: number) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'غير مصرح' }
-  if (!/^[0-9a-f-]{36}$/i.test(studentId)) return { error: 'معرّف غير صالح' }
-  const n = Math.round(Number(num))
-  if (!Number.isFinite(n) || n < 0 || n > 200) return { error: 'رقم غير صالح' }
-
-  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
-  if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
-  const sb = serviceClient()
-  const { data: st } = await sb.from('students').select('id, teacher_id, last_session_num').eq('id', studentId).maybeSingle()
-  if (!st) return { error: 'الطالب غير موجود' }
-  if (st.teacher_id !== teacher.id) return { error: 'الطالب ده مش من طلابك' }
-
-  const { error } = await sb.from('students').update({ last_session_num: n }).eq('id', studentId)
-  if (error) return { error: error.message }
-  await sb.from('activity_log').insert({
-    actor_id: user.id, action: 'teacher_edit_session_num', entity_type: 'student', entity_id: studentId,
-    details: { from: st.last_session_num || 0, to: n },
-  })
-  revalidatePath('/teacher/session')
-  revalidatePath('/teacher/students')
-  return { success: true, num: n }
-}
