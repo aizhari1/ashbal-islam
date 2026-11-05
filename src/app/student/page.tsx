@@ -1,5 +1,6 @@
 'use client'
 
+import { formatTime12 } from '@/lib/time-format'
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import MyCourses from '@/components/MyCourses'
@@ -145,10 +146,6 @@ export default function StudentPortalPage() {
                 </p>
               </div>
             </div>
-            <p className="text-[11px] mt-2" style={{ color: '#6f7974' }}>
-              الباقة: {s.subscription_type || '—'} · {s.monthly_sessions || '—'} حصة/شهر
-              {s.last_session_date ? ` · آخر حصة ${s.last_session_date}` : ''}
-            </p>
           </div>
 
           <div className="card p-4">
@@ -166,7 +163,7 @@ export default function StudentPortalPage() {
               >
                 <span>{DAYS[row.day_of_week] ?? row.day_of_week}</span>
                 <span className="font-bold" dir="ltr">
-                  {String(row.start_time || '').slice(0, 5)}
+                  {formatTime12(row.start_time)}
                 </span>
               </div>
             ))}
