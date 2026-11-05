@@ -1,3 +1,4 @@
+import { currentMonthKey } from '@/lib/dues'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -8,9 +9,10 @@ export const dynamic = 'force-dynamic'
 const DEFAULT_SESSION_RATE = 25
 
 function monthBounds(key?: string) {
-  if (!key || key === 'all') {
+  if (key === 'all') {
     return { start: '2020-01-01', end: '2099-12-31', label: 'كل الشهور', key: 'all' }
   }
+  if (!key) key = currentMonthKey()
   const y = Number(key.slice(0, 4))
   const m = Number(key.slice(5, 7))
   const start = `${y}-${String(m).padStart(2, '0')}-01`
@@ -26,7 +28,7 @@ export default async function PayrollPage({
   searchParams: Promise<{ month?: string }>
 }) {
   const sp = await searchParams
-  const { start: monthStart, end: monthEnd, label, key } = monthBounds(sp.month || 'all')
+  const { start: monthStart, end: monthEnd, label, key } = monthBounds(sp.month || currentMonthKey())
 
   const supabase = await createClient()
   const {
@@ -87,7 +89,10 @@ export default async function PayrollPage({
   const settledByName: Record<string, number> = {}
   for (const s of settlements ?? []) {
     const d = s.details as any
-    if (d?.teacher_name) settledByName[d.teacher_name] = (settledByName[d.teacher_name] || 0) + Number(d.amount || 0)
+    if (d?.teacher_name) {
+      if (d?.month && key !== 'all' && d.month !== key) continue
+      settledByName[d.teacher_name] = (settledByName[d.teacher_name] || 0) + Number(d.amount || 0)
+    }
   }
 
   const rows = (teachers ?? [])
@@ -119,12 +124,13 @@ export default async function PayrollPage({
   const totalSessions = rows.reduce((s, r) => s + r.sessions, 0)
   const totalSettled = rows.reduce((s, r) => s + r.settled, 0)
 
-  const months: string[] = ['all']
+  const months: string[] = [currentMonthKey()]
   const base = new Date()
-  for (let i = 0; i < 8; i++) {
+  for (let i = 1; i < 8; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() - i, 1)
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
+  months.push('all')
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-28" style={{ background: '#eefdf6' }}>
