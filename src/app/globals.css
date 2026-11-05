@@ -24,24 +24,24 @@
 
 html.dark {
   --background: #0b1612;
-  --foreground: #e8f2ed;
+  --foreground: #eef5f1;
   --surface: #0b1612;
   --surface-low: #14241c;
-  --card: #152a22;
-  --primary: #8fd4b0;
+  --card: #1a2e26;
+  --primary: #a3e4c4;
   --primary-container: #1a7a5c;
   --on-primary: #ffffff;
-  --gold: #e0c27a;
+  --gold: #e8d09a;
   --error: #ffb4ab;
-  --outline: #9aaba3;
-  --muted: #b4c2bb;
-  --border-soft: rgba(232, 242, 237, 0.12);
-  --nav-bg: #101e19;
-  --input-bg: #1a2e26;
-  --input-border: #2d433a;
-  --text-strong: #8fd4b0;
-  --text-body: #e8f2ed;
-  --text-muted: #9aaba3;
+  --outline: #b0c0b8;
+  --muted: #c2d0c9;
+  --border-soft: rgba(238, 245, 241, 0.14);
+  --nav-bg: #122019;
+  --input-bg: #1e332b;
+  --input-border: #334f44;
+  --text-strong: #a3e4c4;
+  --text-body: #eef5f1;
+  --text-muted: #b0c0b8;
 }
 
 @theme inline {
@@ -81,7 +81,7 @@ html, body {
 
 .btn-primary {
   background: #176b52;
-  color: #fff;
+  color: #fff !important;
   border-radius: 8px;
   font-weight: 700;
   border: none;
@@ -89,12 +89,12 @@ html, body {
 }
 .btn-primary:hover { background: #123d32; }
 .btn-primary:active { transform: translateY(1px); }
-html.dark .btn-primary { background: #1a7a5c; }
+html.dark .btn-primary { background: #1a7a5c; color: #fff !important; }
 html.dark .btn-primary:hover { background: #156b50; }
 
 .btn-gold {
   background: #c5a45d;
-  color: #fff;
+  color: #fff !important;
   border-radius: 8px;
   font-weight: 700;
 }
@@ -140,9 +140,9 @@ html.dark .btn-primary:hover { background: #156b50; }
   font-size: 11px;
   font-weight: 600;
 }
-html.dark .badge-ok { background: rgba(143, 212, 176, 0.18); color: #8fd4b0; }
-html.dark .badge-warn { background: rgba(224, 194, 122, 0.18); color: #e0c27a; }
-html.dark .badge-err { background: rgba(255, 180, 171, 0.18); color: #ffb4ab; }
+html.dark .badge-ok { background: rgba(163, 228, 196, 0.2); color: #a3e4c4; }
+html.dark .badge-warn { background: rgba(232, 208, 154, 0.2); color: #e8d09a; }
+html.dark .badge-err { background: rgba(255, 180, 171, 0.2); color: #ffb4ab; }
 
 .bottom-nav {
   position: fixed;
@@ -173,36 +173,31 @@ html.dark .badge-err { background: rgba(255, 180, 171, 0.18); color: #ffb4ab; }
   color: var(--primary-container);
   font-weight: 700;
 }
-html.dark .bottom-nav a.active { color: #8fd4b0; }
+html.dark .bottom-nav a.active { color: #a3e4c4; }
 
-/* —— Dark mode: خلفيات وصفحات —— */
+/* ========== Dark mode: خلفيات ========== */
 html.dark body {
   background: var(--background) !important;
   color: var(--foreground) !important;
 }
 
-/* صفحات بخلفية فاتحة hardcoded */
 html.dark .min-h-dvh,
-html.dark main.min-h-dvh,
-html.dark div.min-h-dvh {
+html.dark main,
+html.dark main.min-h-dvh {
   background-color: var(--background) !important;
+  color: var(--foreground);
 }
 
 html.dark .bg-white,
 html.dark [class~="bg-white"] {
   background-color: var(--card) !important;
+  color: var(--foreground);
 }
 
-html.dark .bg-\[\#eefdf6\] {
-  background-color: var(--background) !important;
-}
-
-/* كروت بيضاء بدون class card */
-html.dark .rounded-2xl.bg-white,
-html.dark .rounded-xl.bg-white,
-html.dark .shadow-sm.bg-white {
-  background-color: var(--card) !important;
-  border-color: var(--border-soft);
+html.dark .card {
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border-soft) !important;
 }
 
 html.dark input:not([type="checkbox"]):not([type="radio"]),
@@ -217,17 +212,131 @@ html.dark nav.fixed.bottom-0,
 html.dark .fixed.bottom-0.left-0.right-0 {
   background-color: var(--nav-bg) !important;
   border-color: var(--border-soft) !important;
+  color: var(--foreground);
 }
 
-html.dark .shadow-sm {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+/* ========== Dark mode: كتابة واضحة (تتجاوز inline styles الداكنة) ========== */
+
+/* نص أسود / رمادي غامق → فاتح */
+html.dark [style*="color: '#1a1c1b'"],
+html.dark [style*="color:#1a1c1b"],
+html.dark [style*="color: #1a1c1b"],
+html.dark [style*="color: rgb(26, 28, 27)"],
+html.dark [style*="color:#111e1a"],
+html.dark [style*="color: #111e1a"],
+html.dark [style*="color: '#111e1a'"] {
+  color: #eef5f1 !important;
 }
 
-/* نصوص شائعة — بدون لمس الخلفيات الخضراء */
+html.dark [style*="color: '#3f4944'"],
+html.dark [style*="color:#3f4944"],
+html.dark [style*="color: #3f4944"] {
+  color: #c2d0c9 !important;
+}
+
+html.dark [style*="color: '#6f7974'"],
+html.dark [style*="color:#6f7974"],
+html.dark [style*="color: #6f7974"] {
+  color: #b0c0b8 !important;
+}
+
+/* عناوين خضراء غامقة → أخضر فاتح مقروء */
+html.dark [style*="color: '#00513c'"],
+html.dark [style*="color:#00513c"],
+html.dark [style*="color: #00513c"] {
+  color: #a3e4c4 !important;
+}
+
+html.dark [style*="color: '#176b52'"],
+html.dark [style*="color:#176b52"],
+html.dark [style*="color: #176b52"] {
+  color: #8fd4b0 !important;
+}
+
+/* بني/ذهبي غامق */
+html.dark [style*="color: '#755b1b'"],
+html.dark [style*="color:#755b1b"],
+html.dark [style*="color: #755b1b"] {
+  color: #e8d09a !important;
+}
+
+html.dark [style*="color: '#3d665a'"],
+html.dark [style*="color:#3d665a"],
+html.dark [style*="color: #3d665a"] {
+  color: #9fd4c0 !important;
+}
+
+html.dark [style*="color: '#b45309'"],
+html.dark [style*="color:#b45309"],
+html.dark [style*="color: #b45309"] {
+  color: #f0b27a !important;
+}
+
+/* أيقونات material على خلفية غامقة */
+html.dark .material-symbols-outlined {
+  color: inherit;
+}
+
+/* عناصر نصية عامة داخل الصفحة */
+html.dark p,
+html.dark span,
+html.dark label,
+html.dark li,
+html.dark td,
+html.dark th,
+html.dark a:not(.btn-primary):not(.btn-gold) {
+  /* لا نفرض لون لو فيه style inline — الـ selectors فوق بتتكفل */
+}
+
 html.dark h1,
 html.dark h2,
-html.dark h3 {
+html.dark h3,
+html.dark h4 {
   color: var(--text-strong);
+}
+
+/* روابط الشريط السفلي */
+html.dark nav a span {
+  color: inherit;
+}
+
+/* خلفيات فاتحة شائعة → غامقة مع نص فاتح */
+html.dark [style*="background: '#eefdf6'"],
+html.dark [style*="background:#eefdf6"],
+html.dark [style*="background: #eefdf6"],
+html.dark [style*="background: rgb(238, 253, 246)"] {
+  background: var(--background) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+html.dark [style*="background: '#e8f7f0'"],
+html.dark [style*="background:#e8f7f0"],
+html.dark [style*="background: #e8f7f0"] {
+  background: var(--surface-low) !important;
+  background-color: var(--surface-low) !important;
+  color: var(--foreground) !important;
+}
+
+html.dark [style*="background: '#fff'"],
+html.dark [style*="background:#fff"],
+html.dark [style*="background: #fff"],
+html.dark [style*="background: white"],
+html.dark [style*="background:#ffffff"],
+html.dark [style*="background: #ffffff"] {
+  background: var(--card) !important;
+  background-color: var(--card) !important;
+  color: var(--foreground) !important;
+}
+
+/* كروت متدرجة خضراء — النص أبيض يفضل */
+html.dark [style*="linear-gradient"][style*="#176b52"],
+html.dark [style*="linear-gradient"][style*="#00513c"] {
+  color: #fff !important;
+}
+html.dark [style*="linear-gradient"][style*="#176b52"] *,
+html.dark [style*="linear-gradient"][style*="#00513c"] * {
+  color: inherit;
 }
 
 /* بانر التثبيت */
@@ -242,12 +351,12 @@ html.dark h3 {
   cursor: pointer;
 }
 html.dark .install-banner-inner {
-  background: #152a22;
-  border: 1px solid rgba(143, 212, 176, 0.25);
-  color: #e8f2ed;
+  background: #1a2e26;
+  border: 1px solid rgba(163, 228, 196, 0.3);
+  color: #eef5f1;
 }
 html.dark .install-banner-btn {
-  background: #e0c27a;
+  background: #e8d09a;
   color: #0b1612;
 }
 
@@ -270,9 +379,9 @@ html.dark .install-banner-btn {
   cursor: pointer;
 }
 html.dark .theme-toggle-btn {
-  color: #e0c27a;
+  color: #e8d09a;
   background: var(--card);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* ================= Landing page motion ================= */
@@ -307,9 +416,9 @@ html.dark .theme-toggle-btn {
 .lp-header { position: fixed; inset: 0 0 auto 0; z-index: 60; transition: background .3s, box-shadow .3s, padding .3s; padding: 14px 0; }
 .lp-header.solid { background: rgba(255,255,255,.88); backdrop-filter: blur(14px); box-shadow: 0 2px 20px rgba(0,60,45,.08); padding: 8px 0; }
 .lp-header.solid .lp-nav a, .lp-header.solid .lp-brand { color: var(--g1); }
-html.dark .lp-header.solid { background: rgba(16,30,25,.92); }
+html.dark .lp-header.solid { background: rgba(18, 32, 25, 0.94); }
 html.dark .lp-header.solid .lp-nav a,
-html.dark .lp-header.solid .lp-brand { color: #8fd4b0; }
+html.dark .lp-header.solid .lp-brand { color: #a3e4c4 !important; }
 
 .lp-nav a { color: rgba(255,255,255,.9); text-decoration: none; font-size: 14px; font-weight: 600; transition: color .2s; }
 .lp-progress { position: fixed; top: 0; right: 0; height: 3px; background: linear-gradient(90deg, #c5a45d, #2fb58a); z-index: 70; transform-origin: right; }
@@ -318,7 +427,7 @@ html.dark .lp-header.solid .lp-brand { color: #8fd4b0; }
 .lp-reveal.in { opacity: 1; transform: none; }
 
 .lp-card { background: #fff; border-radius: 22px; border: 1px solid rgba(0,81,60,.08); box-shadow: 0 6px 24px rgba(0,60,45,.06); transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
-html.dark .lp-card { background: var(--card); border-color: var(--border-soft); }
+html.dark .lp-card { background: var(--card) !important; border-color: var(--border-soft); color: var(--foreground); }
 .lp-card:hover { transform: translateY(-8px); box-shadow: 0 22px 50px rgba(0,60,45,.16); }
 .lp-card .lp-ico { transition: transform .4s; }
 .lp-card:hover .lp-ico { transform: rotate(-8deg) scale(1.12); }
@@ -328,7 +437,7 @@ html.dark .lp-card { background: var(--card); border-color: var(--border-soft); 
 .lp-section { padding: 84px 0; }
 html.dark .lp-section { background: var(--background); color: var(--foreground); }
 .lp-title { font-size: clamp(26px, 4.4vw, 40px); font-weight: 800; color: var(--g1); text-align: center; line-height: 1.3; }
-html.dark .lp-title { color: #8fd4b0; }
+html.dark .lp-title { color: #a3e4c4 !important; }
 .lp-title::after { content: ''; display: block; width: 64px; height: 4px; border-radius: 4px; margin: 14px auto 0; background: linear-gradient(90deg, var(--gold), var(--g2)); }
 
 .lp-modal-bg { position: fixed; inset: 0; background: rgba(5,25,18,.6); backdrop-filter: blur(6px); z-index: 80; display: flex; align-items: flex-end; justify-content: center; animation: lp-fade .25s ease; }
