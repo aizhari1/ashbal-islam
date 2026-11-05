@@ -37,6 +37,7 @@ export type ApplyPaymentInput = {
   payment_date?: string | null
   clear_due?: boolean
   idempotency_key?: string | null
+  receipt_url?: string | null
   source: PaymentSource
 }
 
@@ -44,6 +45,7 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
   const auth = await requireFinanceRole(supabase)
   if (!auth.ok) return { success: false, error: auth.error }
   const source: PaymentSource = auth.role === 'supervisor' ? 'supervisor' : input.source
+  const actorId = auth.userId
 
   const amount = Number(input.amount)
   if (!UUID.test(input.student_id || '') || !Number.isFinite(amount) || amount <= 0) {
@@ -51,12 +53,15 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
   }
   const currency = input.currency || 'EGP'
   const method = normalizeMethod(input.method || '')
-  const notes = input.notes || null
+  let notes = input.notes || null
+  const receiptUrl = (input.receipt_url || '').trim() || null
+  if (receiptUrl) {
+    notes = notes ? `${notes}\nإيصال: ${receiptUrl}` : `إيصال: ${receiptUrl}`
+  }
   const paymentDate = (input.payment_date || todayKey()).slice(0, 10)
   const clearDue = !!input.clear_due
   const idem = (input.idempotency_key || '').trim() || null
 
-  // محاولة RPC الذرّي إن وُجدت migration 004
   if (idem) {
     try {
       const { data, error } = await supabase.rpc('record_payment', {
@@ -72,35 +77,30 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
       })
       if (!error && data) {
         const row = Array.isArray(data) ? data[0] : data
+        const paymentId = String(row.payment_id || row.id || '')
+        if (receiptUrl && paymentId) {
+          await supabase.from('payments').update({ receipt_url: receiptUrl }).eq('id', paymentId)
+        }
         return {
           success: true,
-          payment_id: String(row.payment_id || row.id || ''),
+          payment_id: paymentId,
           prev_due: Number(row.prev_due ?? row.due_before ?? 0),
           new_due: Number(row.new_due ?? row.due_after ?? 0),
           duplicate: !!row.duplicate,
         }
       }
     } catch {
-      /* fallback legacy */
+      /* fallback */
     }
   }
 
-  return legacyApply(supabase, { ...input, source }, { amount, currency, method, notes, paymentDate, clearDue }, auth.userId)
-}
-
-async function legacyApply(
-  supabase: SupabaseClient,
-  input: ApplyPaymentInput,
-  v: { amount: number; currency: string; method: string; notes: string | null; paymentDate: string; clearDue: boolean },
-  actorId: string
-): Promise<PaymentResult> {
   const since = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString()
   const { data: recent } = await supabase
     .from('payments')
     .select('id')
     .eq('student_id', input.student_id)
-    .eq('amount', v.amount)
-    .eq('payment_date', v.paymentDate)
+    .eq('amount', amount)
+    .eq('payment_date', paymentDate)
     .gte('created_at', since)
     .limit(1)
   if (recent && recent.length > 0) {
@@ -116,40 +116,71 @@ async function legacyApply(
     .maybeSingle()
   if (stErr || !before) return { success: false, error: 'الطالب غير موجود' }
   const prev = Number(before.amount_due || 0)
-  const next = v.clearDue ? 0 : dueAfterPayment(prev, v.amount)
+  const next = clearDue ? 0 : dueAfterPayment(prev, amount)
 
-  const { data: pay, error } = await supabase
-    .from('payments')
-    .insert({
-      student_id: input.student_id,
-      amount: v.amount,
-      currency: v.currency,
-      status: 'مدفوع',
-      payment_date: v.paymentDate,
-      method: v.method,
-      notes: v.notes,
-    })
-    .select('id')
-    .single()
-  if (error || !pay) return { success: false, error: error?.message || 'تعذّر تسجيل الدفعة' }
+  const insertRow: Record<string, unknown> = {
+    student_id: input.student_id,
+    amount,
+    currency,
+    status: 'مدفوع',
+    payment_date: paymentDate,
+    method,
+    notes,
+  }
+  if (receiptUrl) insertRow.receipt_url = receiptUrl
+  if (idem) insertRow.idempotency_key = idem
+  insertRow.due_before = prev
+  insertRow.due_after = next
+  insertRow.recorded_by = actorId
+
+  const { data: pay, error } = await supabase.from('payments').insert(insertRow).select('id').single()
+  if (error || !pay) {
+    // إعادة بدون أعمدة اختيارية لو فشلت (receipt_url غير موجود)
+    if (error && receiptUrl) {
+      delete insertRow.receipt_url
+      const { data: pay2, error: err2 } = await supabase.from('payments').insert(insertRow).select('id').single()
+      if (err2 || !pay2) return { success: false, error: err2?.message || error.message || 'تعذّر تسجيل الدفعة' }
+      await finalize(supabase, actorId, source, pay2.id, input.student_id, amount, method, paymentDate, prev, next, receiptUrl)
+      await supabase.from('students').update({ amount_due: next }).eq('id', input.student_id)
+      return { success: true, payment_id: pay2.id, prev_due: prev, new_due: next, duplicate: false }
+    }
+    return { success: false, error: error?.message || 'تعذّر تسجيل الدفعة' }
+  }
 
   const { error: upErr } = await supabase.from('students').update({ amount_due: next }).eq('id', input.student_id)
   if (upErr) return { success: false, error: `سُجّلت الدفعة لكن تعذّر تحديث الرصيد: ${upErr.message}` }
 
-  await supabase.from('activity_log').insert({
-    actor_id: actorId,
-    action: input.source === 'supervisor' ? 'supervisor_payment' : 'record_payment',
-    entity_type: 'payment',
-    entity_id: pay.id,
-    details: {
-      student_id: input.student_id,
-      amount: v.amount,
-      method: v.method,
-      payment_date: v.paymentDate,
-      prev_due: prev,
-      new_due: next,
-    },
-  })
+  await finalize(supabase, actorId, source, pay.id, input.student_id, amount, method, paymentDate, prev, next, receiptUrl)
 
   return { success: true, payment_id: pay.id, prev_due: prev, new_due: next, duplicate: false }
+}
+
+async function finalize(
+  supabase: SupabaseClient,
+  actorId: string,
+  source: PaymentSource,
+  paymentId: string,
+  studentId: string,
+  amount: number,
+  method: string,
+  paymentDate: string,
+  prev: number,
+  next: number,
+  receiptUrl: string | null
+) {
+  await supabase.from('activity_log').insert({
+    actor_id: actorId,
+    action: source === 'supervisor' ? 'supervisor_payment' : 'record_payment',
+    entity_type: 'payment',
+    entity_id: paymentId,
+    details: {
+      student_id: studentId,
+      amount,
+      method,
+      payment_date: paymentDate,
+      prev_due: prev,
+      new_due: next,
+      receipt_url: receiptUrl,
+    },
+  })
 }
