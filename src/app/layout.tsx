@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { SessionRestorer } from '@/components/SessionRestorer'
 import { InstallAshbal } from '@/components/InstallAshbal'
+import { ThemeToggle, THEME_INIT_SCRIPT } from '@/components/ThemeToggle'
 
 export const metadata: Metadata = {
   title: 'أكاديمية أشبال الإسلام',
@@ -26,7 +27,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  themeColor: '#176b52',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#176b52' },
+    { media: '(prefers-color-scheme: dark)', color: '#0d1a15' },
+  ],
 }
 
 export default function RootLayout({
@@ -35,8 +39,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="preconnect" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
         <link rel="dns-prefetch" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
         <link rel="icon" href="/icons/icon-192.png" type="image/jpeg" />
@@ -52,6 +57,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <SessionRestorer />
+        <ThemeToggle />
         {children}
         <InstallAshbal />
       </body>
