@@ -7,16 +7,35 @@ type BIPEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+const INSTALLED_KEY = 'ashbal_pwa_installed'
+const DISMISSED_KEY = 'ashbal_install_dismissed'
+
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    // @ts-expect-error iOS Safari
+    window.navigator.standalone === true
+  )
+}
+
+function markInstalled() {
+  try {
+    localStorage.setItem(INSTALLED_KEY, '1')
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * تثبيت أشبال الإسلام:
- * - بانر أول مرة
- * - زر عائم دائم لو مش متثبت
+ * زر التثبيت يظهر مرة واحدة فقط.
+ * بعد التثبيت (أو فتح التطبيق كتطبيق) يختفي نهائيًا.
  */
 export function InstallAshbal() {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null)
-  const [banner, setBanner] = useState(false)
-  const [fab, setFab] = useState(false)
-  const [installed, setInstalled] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const [gone, setGone] = useState(true) // ابدأ مخفي لحد ما نتحقق
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -25,40 +44,49 @@ export function InstallAshbal() {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
     }
 
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      // @ts-expect-error iOS Safari
-      window.navigator.standalone === true
-
-    if (isStandalone) {
-      setInstalled(true)
+    // متثبت بالفعل أو مفتوح كتطبيق → اختفاء دائم
+    if (isStandalone() || localStorage.getItem(INSTALLED_KEY) === '1') {
+      markInstalled()
+      setGone(true)
+      setVisible(false)
       return
     }
 
-    const dismissed = localStorage.getItem('ashbal_install_dismissed') === '1'
+    if (localStorage.getItem(DISMISSED_KEY) === '1') {
+      setGone(true)
+      return
+    }
+
+    setGone(false)
 
     const onBIP = (e: Event) => {
       e.preventDefault()
       setDeferred(e as BIPEvent)
-      setFab(true)
-      if (!dismissed) setBanner(true)
+      setVisible(true)
     }
+
+    const onInstalled = () => {
+      markInstalled()
+      setGone(true)
+      setVisible(false)
+      setDeferred(null)
+    }
+
     window.addEventListener('beforeinstallprompt', onBIP)
+    window.addEventListener('appinstalled', onInstalled)
 
-    // أظهر الزر العائم على الموبايل حتى بدون BIP (تعليمات يدوية)
+    // موبايل: أظهر البانر حتى لو المتصفح أخّر beforeinstallprompt
     const mobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent)
+    let t: ReturnType<typeof setTimeout> | undefined
     if (mobile) {
-      setFab(true)
-      if (!dismissed) {
-        const t = setTimeout(() => setBanner(true), 800)
-        return () => {
-          window.removeEventListener('beforeinstallprompt', onBIP)
-          clearTimeout(t)
-        }
-      }
+      t = setTimeout(() => setVisible(true), 600)
     }
 
-    return () => window.removeEventListener('beforeinstallprompt', onBIP)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBIP)
+      window.removeEventListener('appinstalled', onInstalled)
+      if (t) clearTimeout(t)
+    }
   }, [])
 
   async function install() {
@@ -67,9 +95,19 @@ export function InstallAshbal() {
         await deferred.prompt()
         const choice = await deferred.userChoice
         if (choice.outcome === 'accepted') {
-          setInstalled(true)
-          setBanner(false)
-          setFab(false)
+          markInstalled()
+          setGone(true)
+          setVisible(false)
+        }
+        // لو رفض: نخفي كمان عشان ميتضايقش — مرة واحدة فقط
+        else {
+          try {
+            localStorage.setItem(DISMISSED_KEY, '1')
+          } catch {
+            /* ignore */
+          }
+          setGone(true)
+          setVisible(false)
         }
       } catch {
         /* ignore */
@@ -81,70 +119,64 @@ export function InstallAshbal() {
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
     if (isIOS) {
       alert('للتثبيت على آيفون:\n1) زر المشاركة ⎙\n2) «إضافة إلى الشاشة الرئيسية»\n3) إضافة')
+      // بعد ما يوري التعليمات نعتبره شاف الزر مرة
+      try {
+        localStorage.setItem(DISMISSED_KEY, '1')
+      } catch {
+        /* ignore */
+      }
+      setVisible(false)
+      setGone(true)
       return
     }
-    alert(
-      'للتثبيت:\nمن قائمة المتصفح ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».'
-    )
+
+    alert('للتثبيت:\nمن قائمة المتصفح ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».')
+    try {
+      localStorage.setItem(DISMISSED_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    setVisible(false)
+    setGone(true)
   }
 
-  function dismissBanner() {
-    setBanner(false)
+  function dismiss() {
+    setVisible(false)
+    setGone(true)
     try {
-      localStorage.setItem('ashbal_install_dismissed', '1')
+      localStorage.setItem(DISMISSED_KEY, '1')
     } catch {
       /* ignore */
     }
   }
 
-  if (installed) return null
+  if (gone || !visible) return null
 
   return (
-    <>
-      {banner && (
-        <div
-          className="fixed bottom-0 inset-x-0 z-[9999] p-3"
-          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-        >
-          <div
-            className="mx-auto max-w-md rounded-2xl shadow-2xl flex items-center gap-3 p-3"
-            style={{ background: '#00513c', color: '#fff' }}
-          >
-            <img
-              src="/icons/icon-192.png"
-              alt="أشبال الإسلام"
-              width={48}
-              height={48}
-              className="rounded-xl bg-white object-contain flex-shrink-0"
-              style={{ width: 48, height: 48 }}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-[14px] leading-tight">تثبيت أشبال الإسلام</p>
-              <p className="text-[11px] opacity-90 leading-snug mt-0.5">وصول سريع بدون متصفح</p>
-            </div>
-            <button
-              type="button"
-              onClick={install}
-              className="flex-shrink-0 rounded-xl px-3 py-2 text-[13px] font-bold"
-              style={{ background: '#e0c27a', color: '#00513c' }}
-            >
-              تثبيت
-            </button>
-            <button type="button" onClick={dismissBanner} className="flex-shrink-0 text-[18px] opacity-70 px-1" aria-label="إغلاق">
-              ×
-            </button>
-          </div>
+    <div
+      className="fixed bottom-0 inset-x-0 z-[9999] p-3 install-banner"
+      style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+    >
+      <div className="install-banner-inner mx-auto max-w-md rounded-2xl shadow-2xl flex items-center gap-3 p-3">
+        <img
+          src="/icons/icon-192.png"
+          alt="أشبال الإسلام"
+          width={48}
+          height={48}
+          className="rounded-xl bg-white object-contain flex-shrink-0"
+          style={{ width: 48, height: 48 }}
+        />
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-[14px] leading-tight">تثبيت أشبال الإسلام</p>
+          <p className="text-[11px] opacity-90 leading-snug mt-0.5">مرة واحدة — للوصول السريع كتطبيق</p>
         </div>
-      )}
-
-      {fab && !banner && (
-        <button type="button" onClick={install} className="install-fab" aria-label="تثبيت التطبيق">
-          <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-            install_mobile
-          </span>
-          <span className="text-[11px] font-bold">تثبيت</span>
+        <button type="button" onClick={install} className="install-banner-btn flex-shrink-0 rounded-xl px-3 py-2 text-[13px] font-bold">
+          تثبيت
         </button>
-      )}
-    </>
+        <button type="button" onClick={dismiss} className="flex-shrink-0 text-[18px] opacity-70 px-1" aria-label="إغلاق">
+          ×
+        </button>
+      </div>
+    </div>
   )
 }

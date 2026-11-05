@@ -8,9 +8,11 @@ function applyTheme(mode: 'light' | 'dark') {
   const root = document.documentElement
   if (mode === 'dark') {
     root.classList.add('dark')
+    root.setAttribute('data-theme', 'dark')
     root.style.colorScheme = 'dark'
   } else {
     root.classList.remove('dark')
+    root.setAttribute('data-theme', 'light')
     root.style.colorScheme = 'light'
   }
   try {
@@ -18,9 +20,12 @@ function applyTheme(mode: 'light' | 'dark') {
   } catch {
     /* ignore */
   }
+  // حدّث لون شريط المتصفح
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', mode === 'dark' ? '#0d1a15' : '#176b52')
 }
 
-/** زر الوضع الليلي / النهاري — ثابت أعلى اليسار */
+/** زر الوضع الليلي / النهاري */
 export function ThemeToggle() {
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const [ready, setReady] = useState(false)
@@ -62,7 +67,6 @@ export function ThemeToggle() {
   )
 }
 
-/** سكربت مبكر يمنع وميض الثيم قبل React */
 export const THEME_INIT_SCRIPT = `
-(function(){try{var t=localStorage.getItem('ashbal_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.style.colorScheme='light'}}catch(e){}})();
+(function(){try{var t=localStorage.getItem('ashbal_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.colorScheme='dark'}else{document.documentElement.setAttribute('data-theme','light');document.documentElement.style.colorScheme='light'}}catch(e){}})();
 `
