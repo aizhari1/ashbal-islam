@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { StudentActions } from './StudentActions'
+import { tenureLabel } from '@/lib/student-tenure'
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -15,6 +16,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { data: teachers } = await supabase.from('teachers').select('id, name').eq('is_active', true).order('name')
   const { data: payments } = await supabase.from('payments').select('*').eq('student_id', id).order('payment_date', { ascending: false }).limit(10)
   const { data: attendance } = await supabase.from('attendance').select('*').eq('student_id', id).order('session_date', { ascending: false }).limit(10)
+
+  const { joinAr, tenure } = tenureLabel(student)
 
   return (
     <div className="min-h-dvh bg-[#f5f0e8] max-w-lg mx-auto">
@@ -32,6 +35,22 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       </header>
 
       <main className="px-4 pb-28">
+        <div className="bg-[#e8f7f0] rounded-2xl p-3.5 mb-3 border border-[#cde8dc]">
+          <p className="text-[11px] font-bold mb-1" style={{ color: '#176b52' }}>
+            مدة الاشتراك (تلقائي)
+          </p>
+          <div className="flex justify-between items-end gap-2">
+            <div>
+              <p className="text-[12px]" style={{ color: '#6f7974' }}>تاريخ الانضمام</p>
+              <p className="text-[14px] font-bold" style={{ color: '#00513c' }}>{joinAr}</p>
+            </div>
+            <div className="text-left">
+              <p className="text-[12px]" style={{ color: '#6f7974' }}>بقاله</p>
+              <p className="text-[16px] font-bold" style={{ color: '#176b52' }}>{tenure}</p>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl p-4 shadow-sm mb-3 grid grid-cols-2 gap-2 text-[13px]">
           <div><span className="text-[#6f7974]">الحالة</span><p className="font-bold">{student.status}</p></div>
           <div><span className="text-[#6f7974]">المعلم</span><p className="font-bold">{student.teachers?.name || '—'}</p></div>
@@ -68,5 +87,3 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     </div>
   )
 }
-
-// fix: StudentActions import was already there
