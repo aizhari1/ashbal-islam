@@ -22,7 +22,7 @@ export default async function SupervisorEditStudentPage({
     supabase
       .from('students')
       .select(
-        'id, code, name, phone, monthly_sessions, session_duration, last_session_num, amount_due, price_per_session, teacher_id, status'
+        'id, code, name, phone, monthly_sessions, session_duration, last_session_num, amount_due, price_per_session, teacher_id, status, join_date, created_at'
       )
       .order('name')
       .limit(400),
