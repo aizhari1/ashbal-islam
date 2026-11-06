@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateSessionNum } from './actions'
 
@@ -32,7 +32,7 @@ export function SessionEditor({ students }: { students: StudentRow[] }) {
     })
   }, [q, students])
 
-  function onSave(e: React.FormEvent<HTMLFormElement>, studentId: string) {
+  function onSave(e: FormEvent<HTMLFormElement>, studentId: string) {
     e.preventDefault()
     const form = e.currentTarget
     const fd = new FormData(form)
@@ -47,7 +47,7 @@ export function SessionEditor({ students }: { students: StudentRow[] }) {
         setMsg({
           id: studentId,
           type: 'ok',
-          text: (r as any)?.message || 'تم الحفظ ✓',
+          text: (r as { message?: string })?.message || 'تم الحفظ ✓',
         })
         router.refresh()
       }
@@ -56,7 +56,7 @@ export function SessionEditor({ students }: { students: StudentRow[] }) {
 
   return (
     <div className="px-4 space-y-3">
-      <div>
+      <div className="sticky top-0 z-10 pt-1 pb-2" style={{ background: '#eefdf6' }}>
         <p className="text-[12px] font-bold mb-1.5" style={{ color: '#3f4944' }}>
           ابحث عن طالب
         </p>
@@ -64,9 +64,9 @@ export function SessionEditor({ students }: { students: StudentRow[] }) {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="اسم · كود · معلم..."
-          className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
-          style={{ borderColor: '#cde8dc' }}
+          placeholder="اكتب الاسم أو الكود أو اسم المعلم..."
+          className="w-full rounded-xl border px-3 py-3 text-[14px] bg-white shadow-sm"
+          style={{ borderColor: '#176b52' }}
           autoFocus
         />
         <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
