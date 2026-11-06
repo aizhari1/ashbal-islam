@@ -55,7 +55,12 @@ export function EditStudentForm({
       if (r?.error) {
         setMsg({ type: 'err', text: `فشل الحفظ: ${r.error}` })
       } else {
-        setMsg({ type: 'ok', text: 'تم حفظ التعديلات بنجاح ✓' })
+        const text =
+          (r as any)?.message ||
+          ((r as any)?.addedSessions > 0
+            ? `تم الحفظ · أُضيفت ${(r as any).addedSessions} حصة لسجل المعلم ✓`
+            : 'تم حفظ التعديلات بنجاح ✓')
+        setMsg({ type: 'ok', text })
         router.refresh()
       }
     })
@@ -158,7 +163,7 @@ export function EditStudentForm({
           style={{ ...inputStyle, borderColor: '#176b52', borderWidth: 2 }}
         />
         <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-          عدّل رقم الحصة هنا ثم اضغط حفظ
+          لو زوّدت الرقم → الحصص الزيادة تتسجل تلقائي عند المعلم (سجل + إجمالي + راتب) وتقدر تعدّلها من تفاصيل الحصص
         </p>
       </Field>
 
