@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 function todayKey() {
-  // تاريخ القاهرة YYYY-MM-DD
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 }
 
@@ -18,7 +17,6 @@ export async function supervisorEditStudent(formData: FormData) {
   const studentId = String(formData.get('student_id') || '')
   if (!studentId) return { error: 'اختر طالب' }
 
-  // قراءة الحالة القديمة قبل التعديل
   const { data: before, error: beforeErr } = await supabase
     .from('students')
     .select('id, name, code, last_session_num, teacher_id, session_duration, price_per_session')
@@ -30,8 +28,9 @@ export async function supervisorEditStudent(formData: FormData) {
   const newLastSessionNum = Number(formData.get('last_session_num') || 0)
   const oldLastSessionNum = Number(before.last_session_num || 0)
   const newTeacherId = String(formData.get('teacher_id') || '') || null
-  // المعلم اللي هتتنسب له الحصص المضافة: المعلم الجديد لو اتغير، وإلا القديم
   const effectiveTeacherId = newTeacherId || before.teacher_id || null
+
+  const joinRaw = String(formData.get('join_date') || '').trim()
 
   const payload: Record<string, unknown> = {
     name: String(formData.get('name') || '').trim() || undefined,
@@ -43,11 +42,10 @@ export async function supervisorEditStudent(formData: FormData) {
     price_per_session: Number(formData.get('price_per_session') || 25),
     teacher_id: newTeacherId,
   }
+  if (joinRaw) payload.join_date = joinRaw.slice(0, 10)
 
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
 
-  // لو رقم الحصة زاد: نسجّل حصص حضور ناقصة في جدول attendance
-  // عشان تظهر فوراً عند المعلم (سجل الحصص + الإجمالي + التقرير + الراتب)
   const addedSessions: number[] = []
   if (newLastSessionNum > oldLastSessionNum && effectiveTeacherId) {
     const today = todayKey()
