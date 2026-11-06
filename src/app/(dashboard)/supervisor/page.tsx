@@ -42,7 +42,8 @@ export default async function SupervisorDashboard({
   const duesList = summary.topDues
 
   const menu = [
-    { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'الاسم، الاشتراك، سعر الحصة', color: '#176b52' },
+    { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'بحث + اسم واشتراك وسعر', color: '#176b52' },
+    { href: '/supervisor/edit-session', icon: 'pin', title: 'تعديل رقم الحصة', desc: 'بحث فوري · حفظ مع المزامنة', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
     { href: '/supervisor/payment', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'إنستا · فودافون · بنكي', color: '#c5a45d' },
     { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: `${scheduleCount ?? 0} موعد ثابت`, color: '#3d665a' },
@@ -57,8 +58,6 @@ export default async function SupervisorDashboard({
     { href: '/admin/students/new?trial=1', icon: 'person_add', title: 'إضافة طالب تجريبي', desc: 'حصة تجريبية مستقلة', color: '#3d665a' },
     { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك', desc: 'بيانات + مواعيد ثابتة', color: '#176b52' },
     { href: '/admin/teacher-absences', icon: 'event_busy', title: 'غيابات المعلمين', desc: 'تسجيل وعرض', color: '#b45309' },
-    { href: '/admin/edit-session', icon: 'edit_note', title: 'تعديل رقم الحصة', desc: 'آخر حصة لأي طالب', color: '#176b52' },
-    { href: '/supervisor/edit-student', icon: 'pin', title: 'تعديل رقم الحصة (بحث)', desc: 'بحث + حفظ مع رسالة', color: '#176b52' },
     { href: '/admin/schedule', icon: 'event_available', title: 'الحضور والتحضير', desc: 'أرشيف الحصص', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'تقييمات أولياء الأمور', desc: 'عرض التقييمات', color: '#c5a45d' },
   ]
