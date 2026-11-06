@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { cairoToday } from '@/lib/student-tenure'
 
 export async function addStudent(formData: FormData) {
   const supabase = await createClient()
@@ -19,6 +20,10 @@ export async function addStudent(formData: FormData) {
   }
   const code = `ST-${String(nextNum).padStart(4, '0')}`
 
+  // تاريخ الانضمام: من النموذج أو اليوم تلقائياً — مش محتاج تدخل كل شهر
+  const joinRaw = String(formData.get('join_date') || '').trim()
+  const join_date = joinRaw || cairoToday()
+
   const { data, error } = await supabase.from('students').insert({
     code,
     name,
@@ -33,12 +38,13 @@ export async function addStudent(formData: FormData) {
     currency: formData.get('currency') || 'EGP',
     status: formData.get('status') || 'نشط',
     monthly_sessions: formData.get('monthly_sessions') ? Number(formData.get('monthly_sessions')) : 4,
+    join_date,
   }).select().single()
 
   if (error) return { error: error.message }
 
   await supabase.from('activity_log').insert({
-    actor_id: user.id, action: 'add_student', entity_type: 'student', entity_id: data.id, details: { name, code },
+    actor_id: user.id, action: 'add_student', entity_type: 'student', entity_id: data.id, details: { name, code, join_date },
   })
 
   revalidatePath('/admin/students')
@@ -94,6 +100,10 @@ export async function updateStudent(studentId: string, formData: FormData) {
     if (v !== null && String(v) !== '') patch[key] = Number(v)
   }
   if (formData.get('teacher_id')) patch.teacher_id = formData.get('teacher_id')
+  const joinDate = formData.get('join_date')
+  if (joinDate !== null && String(joinDate).trim() !== '') {
+    patch.join_date = String(joinDate).slice(0, 10)
+  }
 
   const { error } = await supabase.from('students').update(patch).eq('id', studentId)
   if (error) return { error: error.message }
