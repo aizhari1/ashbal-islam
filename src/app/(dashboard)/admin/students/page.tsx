@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { tenureLabel } from '@/lib/student-tenure'
 
 export default async function StudentsPage({
   searchParams,
@@ -14,7 +15,7 @@ export default async function StudentsPage({
   const params = await searchParams
   let query = supabase
     .from('students')
-    .select('id, code, name, status, amount_due, currency, teachers(name)')
+    .select('id, code, name, status, amount_due, currency, join_date, created_at, teachers(name)')
     .order('code')
 
   if (params.q) query = query.or(`name.ilike.%${params.q}%,code.ilike.%${params.q}%`)
@@ -83,26 +84,32 @@ export default async function StudentsPage({
         </p>
 
         <div className="space-y-2">
-          {(students ?? []).map((s: any) => (
-            <Link key={s.id} href={`/admin/students/${s.id}`} className="card flex items-center gap-3 p-3.5">
-              <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-[15px]"
-                style={{ background: '#e8f7f0', color: '#176b52' }}>
-                {s.name?.charAt(0) || '?'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-bold truncate">{s.name}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: '#6f7974' }}>
-                  {s.code} · {s.teachers?.name || 'بدون معلم'}
-                </p>
-              </div>
-              <div className="text-left flex flex-col items-end gap-1">
-                <span className={statusBadge(s.status)}>{s.status}</span>
-                {Number(s.amount_due) > 0 && (
-                  <span className="text-[11px] font-bold" style={{ color: '#ba1a1a' }}>{s.amount_due}</span>
-                )}
-              </div>
-            </Link>
-          ))}
+          {(students ?? []).map((s: any) => {
+            const { tenure } = tenureLabel(s)
+            return (
+              <Link key={s.id} href={`/admin/students/${s.id}`} className="card flex items-center gap-3 p-3.5">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-[15px]"
+                  style={{ background: '#e8f7f0', color: '#176b52' }}>
+                  {s.name?.charAt(0) || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold truncate">{s.name}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#6f7974' }}>
+                    {s.code} · {s.teachers?.name || 'بدون معلم'}
+                  </p>
+                  <p className="text-[11px] mt-0.5 font-medium" style={{ color: '#176b52' }}>
+                    منذ {tenure}
+                  </p>
+                </div>
+                <div className="text-left flex flex-col items-end gap-1">
+                  <span className={statusBadge(s.status)}>{s.status}</span>
+                  {Number(s.amount_due) > 0 && (
+                    <span className="text-[11px] font-bold" style={{ color: '#ba1a1a' }}>{s.amount_due}</span>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
           {(!students || students.length === 0) && (
             <div className="card p-8 text-center" style={{ color: '#6f7974' }}>لا يوجد طلاب</div>
           )}
