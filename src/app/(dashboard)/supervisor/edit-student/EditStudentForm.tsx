@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { supervisorEditStudent } from './actions'
+import { tenureLabel } from '@/lib/student-tenure'
 
 type Teacher = { id: string; name: string }
 
@@ -18,6 +19,8 @@ type Student = {
   price_per_session: number | null
   teacher_id: string | null
   status: string | null
+  join_date?: string | null
+  created_at?: string | null
 }
 
 const inputCls = 'w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white'
@@ -44,6 +47,7 @@ export function EditStudentForm({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const { joinAr, tenure, joinDate } = tenureLabel(student)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -82,6 +86,19 @@ export function EditStudentForm({
         </span>
       </div>
 
+      <div
+        className="rounded-xl px-3 py-2.5 text-[12px]"
+        style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}
+      >
+        <p style={{ color: '#6f7974' }}>مدة الاشتراك (تلقائي · مش محتاج تحسبها كل شهر)</p>
+        <p className="font-bold mt-0.5" style={{ color: '#00513c' }}>
+          انضم: {joinAr}
+        </p>
+        <p className="font-bold text-[14px]" style={{ color: '#176b52' }}>
+          بقاله: {tenure}
+        </p>
+      </div>
+
       {msg && (
         <div
           className="rounded-xl px-3 py-2.5 text-[13px] font-bold text-center"
@@ -112,6 +129,19 @@ export function EditStudentForm({
           style={inputStyle}
           dir="ltr"
         />
+      </Field>
+
+      <Field label="تاريخ الانضمام">
+        <input
+          name="join_date"
+          type="date"
+          defaultValue={joinDate || ''}
+          className={inputCls}
+          style={inputStyle}
+        />
+        <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
+          المدة فوق بتتحدّث لوحدها من التاريخ ده
+        </p>
       </Field>
 
       <Field label="المعلم">
