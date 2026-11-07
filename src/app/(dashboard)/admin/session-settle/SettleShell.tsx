@@ -23,6 +23,13 @@ type Session = {
   teacher_name?: string
 }
 
+/** آخر يوم صحيح في الشهر YYYY-MM → YYYY-MM-DD */
+function monthEnd(key: string): string {
+  const [y, m] = key.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate() // يوم 0 من الشهر التالي = آخر يوم في الشهر الحالي
+  return `${key}-${String(last).padStart(2, '0')}`
+}
+
 export function SettleShell() {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,7 +97,7 @@ export function SettleShell() {
     try {
       const supabase = createClient()
       const startDate = `${month}-01`
-      const endDate = `${month}-31`
+      const endDate = monthEnd(month)
       const { data, error } = await supabase
         .from('attendance')
         .select('id, session_date, session_num, status, notes, session_duration, teachers(name)')
