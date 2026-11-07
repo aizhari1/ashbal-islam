@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import '@/lib/force-latin-digits'
 import { SessionRestorer } from '@/components/SessionRestorer'
 import { InstallAshbal } from '@/components/InstallAshbal'
 import { ThemeToggle, THEME_INIT_SCRIPT } from '@/components/ThemeToggle'
@@ -41,25 +42,41 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        <link rel="preconnect" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
-        <link rel="dns-prefetch" href="https://bmemllsjduxlqmwnpfya.supabase.co" />
-        <link rel="icon" href="/icons/icon-192.png" type="image/jpeg" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
           rel="stylesheet"
+        />
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function(){
+  try {
+    var o = Number.prototype.toLocaleString;
+    Number.prototype.toLocaleString = function(locales, options) {
+      var loc = Array.isArray(locales) ? locales[0] : locales;
+      if (!loc || String(loc).toLowerCase().indexOf('ar') === 0) {
+        return o.call(this, 'en-US', options);
+      }
+      return o.call(this, locales, options);
+    };
+  } catch (e) {}
+})();
+`,
+          }}
         />
       </head>
       <body className="antialiased">
         <SessionRestorer />
-        <ThemeToggle />
         {children}
         <InstallAshbal />
+        <ThemeToggle />
       </body>
     </html>
   )
