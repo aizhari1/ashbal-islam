@@ -139,7 +139,6 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       }
     }
     if (n < old) {
-      // كل الحصص اللي رقمها أكبر من الرقم الجديد (مع تقاريرها) تتشال من عند المعلم
       const { data: extra } = await sb
         .from('attendance')
         .select('id, session_num, notes, session_date')
@@ -162,6 +161,25 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
         const { error: delErr } = await sb.from('attendance').delete().eq('id', row.id)
         if (!delErr) removed++
       }
+    }
+
+    if (removed > 0 || added > 0) {
+      const { data: lastAtt } = await sb
+        .from('attendance')
+        .select('session_date')
+        .eq('student_id', studentId)
+        .in('status', ['حاضر', 'متأخر'])
+        .order('session_date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      await sb
+        .from('students')
+        .update({
+          last_session_date: lastAtt?.session_date
+            ? String(lastAtt.session_date).slice(0, 10)
+            : null,
+        })
+        .eq('id', studentId)
     }
 
     revalidateTeacherPaths()
