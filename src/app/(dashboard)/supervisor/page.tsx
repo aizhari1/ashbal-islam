@@ -42,6 +42,7 @@ export default async function SupervisorDashboard({
   const duesList = summary.topDues
 
   const menu = [
+    { href: '/admin/session-settle', icon: 'rule', title: 'تسوية حصص المعلم', desc: 'حذف حصص غلط · مزامنة الرقم', color: '#ba1a1a' },
     { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'بحث + اسم واشتراك وسعر', color: '#176b52' },
     { href: '/supervisor/edit-session', icon: 'pin', title: 'تعديل رقم الحصة', desc: 'بحث فوري · حفظ مع المزامنة', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
@@ -147,6 +148,16 @@ export default async function SupervisorDashboard({
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="px-4 mb-3">
+        <Link
+          href="/admin/session-settle"
+          className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
+          style={{ background: '#ba1a1a' }}
+        >
+          تسوية حصص المعلم
+        </Link>
       </div>
 
       <div className="px-4">
