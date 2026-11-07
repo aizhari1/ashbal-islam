@@ -5,6 +5,7 @@ import { ensureMonthArchived } from '@/app/actions/month-archive'
 import { monthLabelAr } from '@/lib/dues'
 import { getDuesSummary } from '@/lib/dues-engine'
 import FeatureMenuGrid from '@/components/FeatureMenuGrid'
+import { OpenSettleButtons } from './OpenSettleButtons'
 
 export const dynamic = 'force-dynamic'
 
@@ -157,22 +158,7 @@ export default async function AdminDashboard({
         </div>
       </div>
 
-      <div className="px-4 mb-3 space-y-2">
-        <a
-          href="/admin/session-settle"
-          className="block rounded-2xl px-4 py-3.5 text-center font-bold text-[14px] text-white"
-          style={{ background: '#ba1a1a' }}
-        >
-          تسوية حصص المعلم (بحث طالب · حذف · مزامنة)
-        </a>
-        <a
-          href="/admin/payroll"
-          className="block rounded-2xl px-4 py-3.5 text-center font-bold text-[14px] text-white"
-          style={{ background: '#755b1b' }}
-        >
-          مسير الرواتب · تسوية / صرف المعلمين
-        </a>
-      </div>
+      <OpenSettleButtons />
 
       <div className="px-4 mb-6">
         <div className="flex items-center justify-between mb-2">
