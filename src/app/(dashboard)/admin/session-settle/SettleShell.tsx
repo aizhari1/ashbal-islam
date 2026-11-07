@@ -134,13 +134,21 @@ export function SettleShell() {
 
   function del(id: string) {
     if (!selected) return
-    if (!confirm('حذف الحصة دي؟')) return
+    if (!confirm('حذف الحصة دي نهائيًا من عند الإدارة والمعلم؟')) return
     start(async () => {
       const r = await deleteAttendanceRow(id, selected.id)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg('اتحذفت ✓')
+        setMsg(r?.message || 'اتحذفت من عند الجميع ✓')
         setSessions((prev) => prev.filter((x) => x.id !== id))
+        if (typeof r?.last_session_num === 'number') {
+          const n = r.last_session_num
+          setLastNum(String(n))
+          setSelected({ ...selected, last_session_num: n })
+          setStudents((prev) =>
+            prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: n } : s))
+          )
+        }
       }
     })
   }
