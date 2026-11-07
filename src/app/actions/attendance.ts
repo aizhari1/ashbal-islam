@@ -6,7 +6,10 @@ import { serviceClient } from '@/lib/supabase/service'
 import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey } from '@/lib/dues'
 
 /** بعد حذف/تعديل: رقم آخر حصة للطالب = آخر حضور فعلي متبقي */
-async function syncStudentLastSession(sb: ReturnType<typeof serviceClient>, studentId: string) {
+async function syncStudentLastSession(
+  sb: ReturnType<typeof serviceClient>,
+  studentId: string
+): Promise<number> {
   const { data } = await sb
     .from('attendance')
     .select('session_num, session_date')
@@ -17,24 +20,36 @@ async function syncStudentLastSession(sb: ReturnType<typeof serviceClient>, stud
     .limit(5)
 
   const last = (data || [])[0]
+  const lastNum = last?.session_num != null ? Number(last.session_num) : 0
   await sb
     .from('students')
     .update({
-      last_session_num: last?.session_num != null ? Number(last.session_num) : 0,
+      last_session_num: lastNum,
       last_session_date: last?.session_date || null,
     })
     .eq('id', studentId)
+  return lastNum
 }
 
 function revalidateTeacherPaths() {
-  revalidatePath('/teacher')
-  revalidatePath('/teacher/session')
-  revalidatePath('/teacher/attendance')
-  revalidatePath('/teacher/dues')
-  revalidatePath('/admin/attended')
-  revalidatePath('/admin/sessions-detail')
-  revalidatePath('/admin/payroll')
-  revalidatePath('/admin/students')
+  const paths = [
+    '/teacher',
+    '/teacher/session',
+    '/teacher/attendance',
+    '/teacher/dues',
+    '/teacher/students',
+    '/admin',
+    '/admin/attended',
+    '/admin/sessions-detail',
+    '/admin/payroll',
+    '/admin/students',
+    '/admin/edit-session',
+    '/admin/session-settle',
+    '/supervisor',
+    '/supervisor/edit-student',
+    '/supervisor/edit-session',
+  ]
+  for (const path of paths) revalidatePath(path)
 }
 
 export async function recordAttendance(data: {
@@ -229,7 +244,7 @@ export async function bulkAttendance(
   return results
 }
 
-/** حذف حصة المعلم — دايمًا بيمسح الصف، ويظبط عدّاد الطالب من آخر حضور متبقي */
+/** حذف حصة المعلم — بيمسح الصف من القاعدة ويظبط العدّاد عند الجميع */
 export async function deleteMySession(attendanceId: string) {
   try {
     const supabase = await createClient()
@@ -252,7 +267,6 @@ export async function deleteMySession(attendanceId: string) {
     if (!row) return { error: 'الحصة غير موجودة أو اتحذفت قبل كده' }
     if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
 
-    // نسخة من التقرير قبل الحذف
     await sb.from('activity_log').insert({
       actor_id: user.id,
       action: 'teacher_delete_session',
@@ -270,12 +284,18 @@ export async function deleteMySession(attendanceId: string) {
     const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
     if (error) return { error: `فشل الحذف: ${error.message}` }
 
+    let lastSessionNum: number | null = null
     if (row.student_id) {
-      await syncStudentLastSession(sb, row.student_id)
+      lastSessionNum = await syncStudentLastSession(sb, row.student_id)
     }
 
     revalidateTeacherPaths()
-    return { success: true, message: 'اتحذفت الحصة واتظبط عدّاد الطالب' }
+    return {
+      success: true,
+      message: 'اتحذفت الحصة من عند الجميع واتظبط عدّاد الطالب',
+      last_session_num: lastSessionNum,
+      deleted_id: attendanceId,
+    }
   } catch (e: any) {
     return { error: e?.message || 'خطأ غير متوقع أثناء الحذف' }
   }
@@ -334,8 +354,9 @@ export async function updateMySession(
     const { error } = await sb.from('attendance').update(update).eq('id', attendanceId)
     if (error) return { error: error.message }
 
+    let lastSessionNum: number | null = null
     if (row.student_id) {
-      await syncStudentLastSession(sb, row.student_id)
+      lastSessionNum = await syncStudentLastSession(sb, row.student_id)
     }
 
     await supabase.from('activity_log').insert({
@@ -347,7 +368,7 @@ export async function updateMySession(
     })
 
     revalidateTeacherPaths()
-    return { success: true, message: 'تم حفظ تعديل الحصة' }
+    return { success: true, message: 'تم تعديل الحصة عند الجميع', last_session_num: lastSessionNum }
   } catch (e: any) {
     return { error: e?.message || 'خطأ غير متوقع' }
   }
