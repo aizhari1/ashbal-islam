@@ -66,7 +66,6 @@ export async function updateSessionNum(formData: FormData) {
   const removedSessions: number[] = []
   const removedReports: { session_num: number | null; session_date: string | null; notes: string | null }[] = []
 
-  // زيادة رقم الحصة → تسجيل حضور عند المعلم
   if (lastSessionNum > oldLast && teacherId) {
     const today = lastSessionDate || todayKey()
     const duration = Number(before.session_duration) || 30
@@ -82,7 +81,6 @@ export async function updateSessionNum(formData: FormData) {
       })
       if (!attErr) addedSessions.push(n)
       else {
-        // لو موجود، نحدّث الرقم فقط
         await sb
           .from('attendance')
           .update({ status: 'حاضر', session_num: n, teacher_id: teacherId })
@@ -93,7 +91,6 @@ export async function updateSessionNum(formData: FormData) {
     }
   }
 
-  // تقليل رقم الحصة → شيل الحصص الزائدة مع التقارير من عند المعلم
   if (lastSessionNum < oldLast) {
     const { data: extra } = await sb
       .from('attendance')
@@ -103,7 +100,6 @@ export async function updateSessionNum(formData: FormData) {
       .limit(500)
 
     for (const row of extra ?? []) {
-      // احفظ التقرير في السجل قبل المسح
       removedReports.push({
         session_num: row.session_num,
         session_date: row.session_date,
@@ -116,12 +112,25 @@ export async function updateSessionNum(formData: FormData) {
     }
   }
 
+  let resolvedDate = lastSessionDate
+  if (!resolvedDate && removedSessions.length > 0) {
+    const { data: lastAtt } = await sb
+      .from('attendance')
+      .select('session_date')
+      .eq('student_id', studentId)
+      .in('status', ['حاضر', 'متأخر'])
+      .order('session_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    resolvedDate = lastAtt?.session_date ? String(lastAtt.session_date).slice(0, 10) : null
+  }
+  if (!resolvedDate && addedSessions.length > 0) resolvedDate = todayKey()
+
   const { error } = await sb
     .from('students')
     .update({
       last_session_num: lastSessionNum,
-      last_session_date:
-        lastSessionDate || (addedSessions.length > 0 ? todayKey() : lastSessionDate),
+      last_session_date: resolvedDate || undefined,
     })
     .eq('id', studentId)
 
