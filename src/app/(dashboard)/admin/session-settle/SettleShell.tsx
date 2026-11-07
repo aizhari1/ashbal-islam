@@ -9,6 +9,7 @@ type Student = {
   code: string
   name: string
   last_session_num: number | null
+  monthly_sessions: number | null
   teacher_id: string | null
   teacher_name?: string
 }
@@ -23,11 +24,15 @@ type Session = {
   teacher_name?: string
 }
 
-/** آخر يوم صحيح في الشهر YYYY-MM → YYYY-MM-DD */
 function monthEnd(key: string): string {
   const [y, m] = key.split('-').map(Number)
-  const last = new Date(y, m, 0).getDate() // يوم 0 من الشهر التالي = آخر يوم في الشهر الحالي
+  const last = new Date(y, m, 0).getDate()
   return `${key}-${String(last).padStart(2, '0')}`
+}
+
+function packageLabel(n: number | null | undefined): string {
+  const q = Number(n) || 0
+  return q > 0 ? `باقة ${q}` : 'باقة غير محددة'
 }
 
 export function SettleShell() {
@@ -52,7 +57,7 @@ export function SettleShell() {
         const supabase = createClient()
         const { data, error } = await supabase
           .from('students')
-          .select('id, code, name, last_session_num, teacher_id, teachers(name)')
+          .select('id, code, name, last_session_num, monthly_sessions, teacher_id, teachers(name)')
           .in('status', ['نشط', 'موقوف', 'تجريبي'])
           .order('name')
           .limit(800)
@@ -65,6 +70,7 @@ export function SettleShell() {
             code: s.code,
             name: s.name,
             last_session_num: s.last_session_num,
+            monthly_sessions: s.monthly_sessions != null ? Number(s.monthly_sessions) : null,
             teacher_id: s.teacher_id,
             teacher_name: t?.name || '—',
           }
@@ -141,23 +147,37 @@ export function SettleShell() {
 
   function saveLast() {
     if (!selected) return
+    const n = Number(lastNum) || 0
+    const pkg = Number(selected.monthly_sessions) || 0
+    if (pkg > 0 && n > pkg) {
+      setMsg(`لا يمكن حفظ رقم ${n} — الباقة ${pkg} حصص فقط`)
+      return
+    }
     start(async () => {
-      const r = await setStudentLastSession(selected.id, Number(lastNum) || 0)
+      const r = await setStudentLastSession(selected.id, n)
       if (r?.error) setMsg(r.error)
       else {
         setMsg(r?.message || 'تم ✓')
-        setSelected({ ...selected, last_session_num: Number(lastNum) || 0 })
+        setSelected({ ...selected, last_session_num: n })
         setStudents((prev) =>
-          prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: Number(lastNum) || 0 } : s))
+          prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: n } : s))
         )
       }
     })
   }
 
+  const selectedPkg = Number(selected?.monthly_sessions) || 0
+
   return (
     <div className="px-4 space-y-3">
       {msg && (
-        <p className="text-[13px] font-bold text-center rounded-xl py-2" style={{ background: '#e8f7f0', color: '#176b52' }}>
+        <p
+          className="text-[13px] font-bold text-center rounded-xl py-2"
+          style={{
+            background: msg.includes('لا يمكن') || msg.includes('فشل') ? '#ffdad6' : '#e8f7f0',
+            color: msg.includes('لا يمكن') || msg.includes('فشل') ? '#93000a' : '#176b52',
+          }}
+        >
           {msg}
         </p>
       )}
@@ -195,7 +215,9 @@ export function SettleShell() {
                 >
                   <span className="font-bold block">{s.name}</span>
                   <span className="text-[11px]" style={{ color: '#6f7974' }}>
-                    {s.code} · حصة {s.last_session_num ?? 0} · {s.teacher_name}
+                    {s.code} · حصة {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} ·{' '}
+                    <span style={{ color: '#176b52', fontWeight: 700 }}>{packageLabel(s.monthly_sessions)}</span>
+                    {' · '}{s.teacher_name}
                   </span>
                 </button>
               ))}
@@ -216,7 +238,13 @@ export function SettleShell() {
               <div>
                 <p className="font-bold text-[15px]">{selected.name}</p>
                 <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                  {selected.code} · المعلم: {selected.teacher_name} · رقم الحصة: {selected.last_session_num ?? 0}
+                  {selected.code} · المعلم: {selected.teacher_name}
+                </p>
+                <p className="text-[12px] font-bold mt-1" style={{ color: '#176b52' }}>
+                  {packageLabel(selected.monthly_sessions)}
+                  {' · '}
+                  الحصة الحالية: {selected.last_session_num ?? 0}
+                  {selectedPkg > 0 ? ` / ${selectedPkg}` : ''}
                 </p>
               </div>
               <button
@@ -234,10 +262,13 @@ export function SettleShell() {
             </div>
             <div className="flex gap-2 mt-3 items-end">
               <div className="flex-1">
-                <label className="text-[11px] font-bold">رقم آخر حصة</label>
+                <label className="text-[11px] font-bold">
+                  رقم آخر حصة{selectedPkg > 0 ? ` (حد أقصى ${selectedPkg})` : ''}
+                </label>
                 <input
                   type="number"
                   min={0}
+                  max={selectedPkg > 0 ? selectedPkg : undefined}
                   value={lastNum}
                   onChange={(e) => setLastNum(e.target.value)}
                   className="w-full rounded-xl border px-3 py-2 text-[13px]"
@@ -259,6 +290,7 @@ export function SettleShell() {
                     <p className="font-bold">
                       {s.session_date}
                       {s.session_num != null ? ` · حصة ${s.session_num}` : ''}
+                      {selectedPkg > 0 && s.session_num != null ? ` / ${selectedPkg}` : ''}
                     </p>
                     <p style={{ color: '#6f7974' }}>
                       {s.status} · {s.teacher_name} · {s.session_duration || 30} د
