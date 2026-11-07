@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { recordAttendance } from '@/app/actions/attendance'
 import Link from 'next/link'
 import { normalizePhone } from '@/lib/whatsapp'
+import { displaySessionInPackage, nextPackageSessionNum, packageSize } from '@/lib/dues'
 
 type Student = {
   id: string
@@ -97,19 +98,17 @@ export default function TeacherSessionPage() {
 
   const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
 
-  // نفس قالب تقرير أشبال القديم بالظبط (اللي بيوصل لولي الأمر)
   function buildPreview() {
     if (!selected) return ''
     const now = new Date()
     const present = attend === 'تم الحضور' || attend === 'متأخر'
-    const m = String(selected.subscription_type || '').match(/(\d+)/)
-    const quota = m ? parseInt(m[1], 10) : selected.monthly_sessions || 0
+    const quota = packageSize(selected)
     let sessionNum = selected.last_session_num || 0
     if (present) {
-      sessionNum += 1
-      if (quota > 0 && sessionNum > quota) sessionNum = 1
+      sessionNum = nextPackageSessionNum(sessionNum, quota).next
+    } else if (sessionNum < 1) {
+      sessionNum = 1
     }
-    if (sessionNum < 1) sessionNum = 1
     const sc = (v: string) => (v === '' ? '—' : `${v} / 10`)
     const pad = (n: number) => String(n).padStart(2, '0')
     const line = 'ـــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ'
@@ -180,18 +179,17 @@ export default function TeacherSessionPage() {
         setMsg('خطأ: ' + (res as any).error)
         return
       }
-      // التقرير النهائي (برقم الحلقة الفعلي) يفضل ظاهر عشان تنسخه أو تبعته واتساب بعد الحفظ
       const finalText = (res as any)?.data?.notes || text
       setPreview(finalText)
       setSaved(true)
       setMsg('✓ ' + ((res as any)?.message || 'تم الحفظ'))
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === selected.id
-            ? { ...s, last_session_num: (s.last_session_num || 0) + (attend === 'تم الحضور' || attend === 'متأخر' ? 1 : 0) }
-            : s
+      const nextNum = (res as any)?.next_session_num
+      if (typeof nextNum === 'number') {
+        setStudents((prev) =>
+          prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: nextNum } : s))
         )
-      )
+        setSelected((s) => (s ? { ...s, last_session_num: nextNum } : s))
+      }
     })
   }
 
@@ -233,8 +231,8 @@ export default function TeacherSessionPage() {
             <div className="mb-2">
               <p className="font-bold text-[14px]">{s.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                {s.code} · حصة {s.last_session_num ?? 0}
-                {s.monthly_sessions ? ` / ${s.monthly_sessions}` : ''}
+                {s.code} · حصة {displaySessionInPackage(s.last_session_num ?? 0, packageSize(s))}
+                {packageSize(s) ? ` / ${packageSize(s)}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
