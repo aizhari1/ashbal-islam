@@ -33,10 +33,16 @@ export default async function SupervisorPaymentPage() {
             تسجيل اشتراك (دفعة)
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            ابحث بالاسم أو الكود ثم سجّل الدفعة
+            بحث · دفعة عادية أو دفع مقدم بعدة شهور
           </p>
         </div>
       </header>
+
+      <div className="px-4 mb-3">
+        <div className="rounded-2xl px-3 py-2.5 text-[12px] font-bold" style={{ background: '#fff8e6', color: '#5c4500', border: '1px solid #e8b84a' }}>
+          فوق في الفورم: مربع أصفر «دفع مقدم» — علّمه واختار عدد الشهور
+        </div>
+      </div>
 
       <div className="px-4">
         <PaymentForm
