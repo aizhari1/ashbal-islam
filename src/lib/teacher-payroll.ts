@@ -1,6 +1,6 @@
 /**
  * مصدر واحد لمستحقات المعلم — نفس الحساب في الإدارة ومسير الرواتب وصفحة المعلم.
- * القاعدة: كل حصة حاضر × سعر حصة الطالب (حد أدنى 25 ج)
+ * القاعدة: كل حصة حاضر أو متأخر × سعر حصة الطالب (حد أدنى 25 ج)
  * الافتراضي: الشهر الحالي (توقيت القاهرة)
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -9,7 +9,6 @@ import { currentMonthKey } from '@/lib/dues'
 export const DEFAULT_SESSION_RATE = 25
 
 export function monthBounds(key?: string | null) {
-  // بدون مفتاح → الشهر الحالي وليس «الكل»
   if (key === 'all') {
     return { start: '2020-01-01', end: '2099-12-31', label: 'كل الشهور', key: 'all' }
   }
@@ -51,7 +50,7 @@ export type SessionLine = {
   rate: number
 }
 
-/** يجلب حضور حاضر في المدى ويحسب الراتب لكل معلم */
+/** يجلب حضور حاضر/متأخر في المدى ويحسب الراتب لكل معلم */
 export async function computeTeacherPayroll(
   supabase: SupabaseClient,
   opts: { month?: string | null; teacherId?: string | null } = {}
@@ -64,7 +63,7 @@ export async function computeTeacherPayroll(
     let q = supabase
       .from('attendance')
       .select('teacher_id, student_id, session_date, status, students(name, price_per_session)')
-      .eq('status', 'حاضر')
+      .in('status', ['حاضر', 'متأخر'])
       .gte('session_date', bounds.start)
       .lte('session_date', bounds.end)
       .range(off, off + 999)
