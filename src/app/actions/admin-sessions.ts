@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
 import { requireAdmin } from '@/lib/courses'
 
-async function syncStudentLastSession(sb: ReturnType<typeof serviceClient>, studentId: string) {
+async function syncStudentLastSession(
+  sb: ReturnType<typeof serviceClient>,
+  studentId: string
+): Promise<number> {
   const { data } = await sb
     .from('attendance')
     .select('session_num, session_date')
@@ -15,13 +18,15 @@ async function syncStudentLastSession(sb: ReturnType<typeof serviceClient>, stud
     .limit(5)
 
   const last = (data || [])[0]
+  const lastNum = last?.session_num != null ? Number(last.session_num) : 0
   await sb
     .from('students')
     .update({
-      last_session_num: last?.session_num != null ? Number(last.session_num) : 0,
+      last_session_num: lastNum,
       last_session_date: last?.session_date || null,
     })
     .eq('id', studentId)
+  return lastNum
 }
 
 /** حذف حصة من الإدارة — بيمسح الصف دايمًا ويظبط عدّاد الطالب */
@@ -58,16 +63,30 @@ export async function adminDeleteSession(attendanceId: string) {
     const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
     if (error) return { error: `فشل الحذف: ${error.message}` }
 
+    let lastSessionNum: number | null = null
     if (row.student_id) {
-      await syncStudentLastSession(sb, row.student_id)
+      lastSessionNum = await syncStudentLastSession(sb, row.student_id)
     }
 
-    revalidatePath('/admin/attended')
-    revalidatePath('/admin/sessions-detail')
-    revalidatePath('/admin/payroll')
-    revalidatePath('/teacher/attendance')
-    revalidatePath('/teacher')
-    return { success: true, message: 'اتحذفت الحصة واتظبط العدّاد' }
+    for (const path of [
+      '/admin/attended',
+      '/admin/sessions-detail',
+      '/admin/payroll',
+      '/admin/session-settle',
+      '/admin/edit-session',
+      '/teacher/attendance',
+      '/teacher',
+      '/teacher/dues',
+      '/supervisor/edit-student',
+    ]) {
+      revalidatePath(path)
+    }
+    return {
+      success: true,
+      message: 'اتحذفت الحصة من عند الجميع واتظبط العدّاد',
+      last_session_num: lastSessionNum,
+      deleted_id: attendanceId,
+    }
   } catch (e: any) {
     return { error: e?.message || 'خطأ غير متوقع أثناء الحذف' }
   }
