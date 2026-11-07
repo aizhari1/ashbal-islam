@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 
 function todayKey() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
@@ -29,6 +30,7 @@ function revalidateAll() {
  * تعديل طالب + مزامنة رقم الحصة مع سجل المعلم:
  * - زيادة الرقم → إضافة حصص حاضر في attendance للمعلم
  * - تقليل الرقم → حذف الحصص الزائدة (session_num أكبر من الرقم الجديد)
+ * - رقم الحصة لا يتجاوز حجم الباقة
  */
 export async function supervisorEditStudent(formData: FormData) {
   const supabase = await createClient()
@@ -42,13 +44,18 @@ export async function supervisorEditStudent(formData: FormData) {
 
   const { data: before, error: beforeErr } = await supabase
     .from('students')
-    .select('id, name, code, last_session_num, teacher_id, session_duration, price_per_session')
+    .select('id, name, code, last_session_num, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type')
     .eq('id', studentId)
     .maybeSingle()
   if (beforeErr) return { error: beforeErr.message }
   if (!before) return { error: 'الطالب غير موجود' }
 
   const newLastSessionNum = Math.max(0, Number(formData.get('last_session_num') || 0))
+  const formQuota = Number(formData.get('monthly_sessions') || 0)
+  const quota = formQuota > 0 ? formQuota : packageSize(before)
+  const check = validateSessionWithinPackage(newLastSessionNum, quota)
+  if (!check.ok) return { error: check.error }
+
   const oldLastSessionNum = Number(before.last_session_num || 0)
   const newTeacherId = String(formData.get('teacher_id') || '') || null
   const effectiveTeacherId = newTeacherId || before.teacher_id || null
@@ -77,10 +84,8 @@ export async function supervisorEditStudent(formData: FormData) {
   const duration = Number(payload.session_duration) || Number(before.session_duration) || 30
   const today = todayKey()
 
-  // زيادة الحصص → سجّل عند المعلم
   if (newLastSessionNum > oldLastSessionNum && effectiveTeacherId) {
     for (let n = oldLastSessionNum + 1; n <= newLastSessionNum; n++) {
-      // تاريخ فريد تقريبًا عشان ميحصلش تعارض نفس اليوم
       const offsetDays = n - oldLastSessionNum - 1
       const d = new Date(today + 'T12:00:00')
       d.setDate(d.getDate() - offsetDays)
@@ -97,7 +102,6 @@ export async function supervisorEditStudent(formData: FormData) {
       })
       if (!insErr) addedSessions.push(n)
       else {
-        // لو موجود بالفعل نعدّل الملاحظات فقط
         await supabase
           .from('attendance')
           .update({
@@ -113,7 +117,6 @@ export async function supervisorEditStudent(formData: FormData) {
     }
   }
 
-  // تقليل الحصص → احذف الزائد من سجل المعلم
   if (newLastSessionNum < oldLastSessionNum) {
     const { data: extra } = await supabase
       .from('attendance')
