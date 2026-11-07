@@ -20,86 +20,108 @@ export function PayrollActions({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState('')
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
+  const [amount, setAmount] = useState(String(remaining || ''))
 
-  function saveRate(formData: FormData) {
+  function saveRate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    formData.set('teacher_id', teacherId)
+    formData.set('teacher_name', teacherName)
     startTransition(async () => {
-      formData.set('teacher_id', teacherId)
-      formData.set('teacher_name', teacherName)
       const r = await setTeacherSessionRate(formData)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg('تم تحديث سعر الحصة')
+        setMsg('تم تحديث سعر الحصة ✓')
         router.refresh()
       }
     })
   }
 
-  function saveAcademy(formData: FormData) {
+  function saveAcademy(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    formData.set('teacher_id', teacherId)
     startTransition(async () => {
-      formData.set('teacher_id', teacherId)
       const r = await setTeacherAcademyRate(formData)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg('تم تحديث نسبة الأكاديمية')
+        setMsg('تم تحديث نسبة الأكاديمية ✓')
         router.refresh()
       }
     })
   }
 
-  function settle(formData: FormData) {
+  function settle(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData()
+    formData.set('teacher_name', teacherName)
+    formData.set('amount', amount)
     startTransition(async () => {
-      formData.set('teacher_name', teacherName)
       const r = await recordTeacherSettlement(formData)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg('تم تسجيل التسوية')
+        setMsg('تم تسجيل التسوية ✓')
+        setAmount('0')
         router.refresh()
       }
     })
   }
 
   return (
-    <div>
+    <div className="mt-2">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="text-[12px] font-bold px-3 py-1.5 rounded-full"
-        style={{ color: '#fff', background: '#176b52' }}
+        className="w-full text-[13px] font-bold px-3 py-2.5 rounded-xl text-white"
+        style={{ background: '#176b52' }}
       >
-        {open ? 'إخفاء' : '💰 تسوية / صرف للمعلم'}
+        {open ? 'إخفاء التسوية / الصرف' : '💰 فتح تسوية / صرف للمعلم'}
       </button>
       {open && (
-        <div className="mt-2 space-y-2 border-t pt-2" style={{ borderColor: 'rgba(18,61,50,0.08)' }}>
-          <form action={saveRate} className="flex gap-2 items-end">
+        <div className="mt-2 space-y-3 rounded-xl p-3" style={{ background: '#f4faf7', border: '1px solid #cde8dc' }}>
+          <form onSubmit={saveRate} className="flex gap-2 items-end">
             <div className="flex-1">
-              <label className="text-[11px]">سعر الحصة</label>
+              <label className="text-[11px] font-bold block mb-1">سعر الحصة الافتراضي</label>
               <input name="session_rate" type="number" defaultValue={sessionRate} className="input" required />
             </div>
             <button type="submit" disabled={isPending} className="btn-primary px-3 py-2 text-[12px]">
               حفظ
             </button>
           </form>
-          <form action={saveAcademy} className="flex gap-2 items-end">
+          <form onSubmit={saveAcademy} className="flex gap-2 items-end">
             <div className="flex-1">
-              <label className="text-[11px]">نسبة الأكاديمية %</label>
+              <label className="text-[11px] font-bold block mb-1">نسبة الأكاديمية %</label>
               <input name="rate_percent" type="number" defaultValue={academyRate} className="input" required />
             </div>
             <button type="submit" disabled={isPending} className="btn-primary px-3 py-2 text-[12px]">
               حفظ
             </button>
           </form>
-          <form action={settle} className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="text-[11px]">صرف (المتبقي {remaining})</label>
-              <input name="amount" type="number" defaultValue={remaining || ''} placeholder="المبلغ" className="input" required />
+          <form onSubmit={settle} className="space-y-2">
+            <label className="text-[11px] font-bold block">صرف للمعلم (المتبقي {remaining.toLocaleString('ar-EG')} ج)</label>
+            <div className="flex gap-2 items-end">
+              <input
+                type="number"
+                min={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="المبلغ"
+                className="input flex-1"
+                required
+              />
+              <button
+                type="submit"
+                disabled={isPending || !amount || Number(amount) <= 0}
+                className="px-4 py-2 text-[12px] font-bold rounded-xl text-white disabled:opacity-50"
+                style={{ background: '#755b1b' }}
+              >
+                {isPending ? '...' : 'صرف'}
+              </button>
             </div>
-            <button type="submit" disabled={isPending} className="btn-gold px-3 py-2 text-[12px]">
-              صرف
-            </button>
           </form>
           {msg && (
-            <p className="text-[11px]" style={{ color: '#176b52' }}>
+            <p className="text-[12px] font-bold" style={{ color: msg.includes('✓') ? '#176b52' : '#93000a' }}>
               {msg}
             </p>
           )}
