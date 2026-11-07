@@ -21,7 +21,11 @@ export default async function AdminDashboard({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  await ensureMonthArchived()
+  try {
+    await ensureMonthArchived()
+  } catch {
+    /* متوقفش الصفحة لو الأرشفة فشلت */
+  }
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
@@ -132,7 +136,7 @@ export default async function AdminDashboard({
       <div className="px-4 mb-4">
         <div className="card p-4">
           <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>
-            {monthLabel} — نظرة سريعة (نفس مصدر الإشراف)
+            {monthLabel} — نظرة سريعة
           </p>
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div>
@@ -150,9 +154,9 @@ export default async function AdminDashboard({
               <b>{withdrawn ?? 0}</b>
             </div>
             <div>
-              <Link href={`/admin/monthly?month=${monthKey}`} style={{ color: '#176b52' }} className="font-bold">
+              <a href={`/admin/monthly?month=${monthKey}`} style={{ color: '#176b52' }} className="font-bold">
                 الملخص الشهري ←
-              </Link>
+              </a>
             </div>
           </div>
         </div>
@@ -165,32 +169,32 @@ export default async function AdminDashboard({
           <p className="text-[12px] font-semibold" style={{ color: '#3f4944' }}>
             المميزات
           </p>
-          <Link href="/admin/features" className="text-[11px] font-bold" style={{ color: '#176b52' }}>
+          <a href="/admin/features" className="text-[11px] font-bold" style={{ color: '#176b52' }}>
             اختيار الظاهر ←
-          </Link>
+          </a>
         </div>
         <FeatureMenuGrid role="admin" items={menu} />
       </div>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 max-w-lg mx-auto"
+        className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 max-w-lg mx-auto z-30"
         style={{ borderColor: '#cde8dc' }}
       >
         {[
           { href: '/admin', icon: 'home', label: 'الرئيسية' },
-          { href: `/admin/monthly?month=${monthKey}`, icon: 'calendar_view_month', label: 'ملخص' },
-          { href: '/admin/sessions-detail', icon: 'list_alt', label: 'حصص' },
+          { href: '/admin/session-settle', icon: 'rule', label: 'تسوية' },
+          { href: '/admin/payroll', icon: 'payments', label: 'رواتب' },
           { href: '/admin/payments', icon: 'credit_card', label: 'دفع' },
           { href: '/admin/more', icon: 'more_horiz', label: 'المزيد' },
         ].map((i) => (
-          <Link key={i.href} href={i.href} prefetch className="flex flex-col items-center gap-0.5 px-2">
+          <a key={i.href} href={i.href} className="flex flex-col items-center gap-0.5 px-2">
             <span className="material-symbols-outlined text-[22px]" style={{ color: '#176b52' }}>
               {i.icon}
             </span>
             <span className="text-[10px]" style={{ color: '#3f4944' }}>
               {i.label}
             </span>
-          </Link>
+          </a>
         ))}
       </nav>
     </div>

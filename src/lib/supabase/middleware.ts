@@ -24,6 +24,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/auth') ||
     pathname.startsWith('/evaluate') ||
     pathname.startsWith('/student') ||
+    pathname.startsWith('/app') ||
     pathname.startsWith('/api/student-portal') ||
     pathname.startsWith('/api/student-courses') ||
     pathname.startsWith('/api/course-subscribe')
@@ -57,13 +58,11 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    // بدون مهلة قصيرة كانت بتعتبر الجلسة منتهية وترجع للوجين بالغلط
     const {
       data: { user },
     } = await supabase.auth.getUser()
 
     if (!user && !isPublic) {
-      // لو فيه كوكيز جلسة قديمة ومش قادرين نتحقق، نسمح مؤقتًا بدل طرد فوري
       const hasAuthCookie = request.cookies
         .getAll()
         .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
@@ -73,23 +72,30 @@ export async function updateSession(request: NextRequest) {
         redirectUrl.search = ''
         return NextResponse.redirect(redirectUrl)
       }
-      // فيه كوكي جلسة — كمل الطلب (الصفحة نفسها هتتحقق)
       return supabaseResponse
     }
 
     if (user && !isPublic) {
       let role = request.cookies.get(ROLE_COOKIE)?.value || ''
 
-      if (!role || !['admin', 'teacher', 'supervisor', 'parent'].includes(role)) {
+      // مسارات التسوية والرواتب حساسة — نحدّث الدور من القاعدة لو مش admin
+      const needsFreshRole =
+        !role ||
+        !['admin', 'teacher', 'supervisor', 'parent'].includes(role) ||
+        pathname.startsWith('/admin/session-settle') ||
+        pathname.startsWith('/admin/payroll')
+
+      if (needsFreshRole) {
         try {
           const { data: profile } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', user.id)
             .maybeSingle()
-          role = String(profile?.role || 'admin')
+          if (profile?.role) role = String(profile.role)
+          else if (!role) role = 'admin'
         } catch {
-          role = 'admin'
+          if (!role) role = 'admin'
         }
         supabaseResponse.cookies.set(ROLE_COOKIE, role, {
           maxAge: ROLE_MAX_AGE,
@@ -113,27 +119,31 @@ export async function updateSession(request: NextRequest) {
       }
 
       if (pathname.startsWith('/admin')) {
-        const supervisorAllowed =
-          pathname.startsWith('/admin/notes') ||
-          pathname.startsWith('/admin/students') ||
-          pathname.startsWith('/admin/finance') ||
-          pathname.startsWith('/admin/fixed-schedule') ||
-          pathname.startsWith('/admin/schedule') ||
-          pathname.startsWith('/admin/subscriptions-log') ||
-          pathname.startsWith('/admin/transfer') ||
-          pathname.startsWith('/admin/supervisor-eval') ||
-          pathname.startsWith('/admin/evaluations') ||
-          pathname.startsWith('/admin/reports') ||
-          pathname.startsWith('/admin/families') ||
-          pathname.startsWith('/admin/chat') ||
-          pathname.startsWith('/admin/edit-session') ||
-          pathname.startsWith('/admin/trials') ||
-          pathname.startsWith('/admin/teacher-absences')
-
+        // الإدارة تدخل كل حاجة
         if (role === 'admin') {
           // ok
-        } else if (role === 'supervisor' && supervisorAllowed) {
-          // ok
+        } else if (role === 'supervisor') {
+          const supervisorAllowed =
+            pathname.startsWith('/admin/notes') ||
+            pathname.startsWith('/admin/students') ||
+            pathname.startsWith('/admin/finance') ||
+            pathname.startsWith('/admin/fixed-schedule') ||
+            pathname.startsWith('/admin/schedule') ||
+            pathname.startsWith('/admin/subscriptions-log') ||
+            pathname.startsWith('/admin/transfer') ||
+            pathname.startsWith('/admin/supervisor-eval') ||
+            pathname.startsWith('/admin/evaluations') ||
+            pathname.startsWith('/admin/reports') ||
+            pathname.startsWith('/admin/families') ||
+            pathname.startsWith('/admin/chat') ||
+            pathname.startsWith('/admin/edit-session') ||
+            pathname.startsWith('/admin/trials') ||
+            pathname.startsWith('/admin/teacher-absences') ||
+            pathname.startsWith('/admin/session-settle') ||
+            pathname.startsWith('/admin/sessions-detail') ||
+            pathname.startsWith('/admin/attended')
+
+          if (!supervisorAllowed) return deny()
         } else {
           return deny()
         }
@@ -146,22 +156,9 @@ export async function updateSession(request: NextRequest) {
       if (pathname.startsWith('/supervisor') && role !== 'supervisor' && role !== 'admin') {
         return deny()
       }
-
-      if (
-        role === 'supervisor' &&
-        (pathname.startsWith('/admin/monthly') ||
-          pathname.startsWith('/admin/analytics') ||
-          pathname.startsWith('/admin/cashbox') ||
-          pathname.startsWith('/admin/users') ||
-          pathname.startsWith('/admin/payroll') ||
-          pathname === '/admin')
-      ) {
-        return deny()
-      }
     }
 
     if (!user && isPublic && request.cookies.get(ROLE_COOKIE)) {
-      // متشيلش role لو لسه فيه كوكي جلسة (منع طرد بالغلط)
       const hasAuthCookie = request.cookies
         .getAll()
         .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))

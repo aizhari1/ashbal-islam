@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   type DashRole,
   type FeatureItem,
@@ -16,9 +14,8 @@ type Props = {
   items: Array<Omit<FeatureItem, 'id'> & { id?: string }>
 }
 
-/** شبكة المميزات — تحترم اختيار الظهور + prefetch عند المرور */
+/** شبكة المميزات — روابط <a> عادية عشان التنقل ما يعلقش */
 export default function FeatureMenuGrid({ role, items }: Props) {
-  const router = useRouter()
   const normalized = useMemo(
     () =>
       items.map((i) => ({
@@ -33,34 +30,19 @@ export default function FeatureMenuGrid({ role, items }: Props) {
 
   useEffect(() => {
     setVisible(filterVisibleFeatures(role, normalized))
-    // استمع لتغيير التفضيلات من تاب المميزات
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'ashbal_features_' + role) {
         setVisible(filterVisibleFeatures(role, normalized))
       }
     }
+    const onCustom = () => setVisible(filterVisibleFeatures(role, normalized))
     window.addEventListener('storage', onStorage)
-    window.addEventListener('ashbal-features-changed', () => {
-      setVisible(filterVisibleFeatures(role, normalized))
-    })
+    window.addEventListener('ashbal-features-changed', onCustom)
     return () => {
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener('ashbal-features-changed', onCustom)
     }
   }, [role, normalized])
-
-  // تحميل مسبق لكل الروابط الظاهرة
-  useEffect(() => {
-    const t = setTimeout(() => {
-      visible.forEach((m) => {
-        try {
-          router.prefetch(m.href.split('?')[0])
-        } catch {
-          /* ignore */
-        }
-      })
-    }, 200)
-    return () => clearTimeout(t)
-  }, [visible, router])
 
   if (visible.length === 0) {
     return (
@@ -68,23 +50,25 @@ export default function FeatureMenuGrid({ role, items }: Props) {
         <p className="text-[13px]" style={{ color: '#6f7974' }}>
           لا مميزات ظاهرة. افتح «المميزات الظاهرة» من المزيد لتفعيل ما تحتاجه.
         </p>
-        <Link href={`/${role === 'admin' ? 'admin' : role}/features`} className="text-[13px] font-bold mt-2 inline-block" style={{ color: '#176b52' }}>
+        <a
+          href={`/${role === 'admin' ? 'admin' : role}/features`}
+          className="text-[13px] font-bold mt-2 inline-block"
+          style={{ color: '#176b52' }}
+        >
           اختيار المميزات ←
-        </Link>
+        </a>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2.5">
+    <div className="grid grid-cols-2 gap-2.5 relative z-10">
       {visible.map((m) => (
-        <Link
+        <a
           key={m.id + m.href}
           href={m.href}
-          prefetch
-          onMouseEnter={() => router.prefetch(m.href.split('?')[0])}
-          onTouchStart={() => router.prefetch(m.href.split('?')[0])}
           className="card p-3.5 flex flex-col gap-1.5 active:scale-[0.98] transition"
+          style={{ textDecoration: 'none', color: 'inherit' }}
         >
           <span className="material-symbols-outlined text-[22px]" style={{ color: m.color }}>
             {m.icon}
@@ -97,7 +81,7 @@ export default function FeatureMenuGrid({ role, items }: Props) {
               {m.desc}
             </p>
           )}
-        </Link>
+        </a>
       ))}
     </div>
   )
