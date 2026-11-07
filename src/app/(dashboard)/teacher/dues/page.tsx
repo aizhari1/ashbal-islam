@@ -30,7 +30,6 @@ export default async function TeacherDuesPage({
     )
   }
 
-  // افتراضي: الشهر الحالي (نوفمبر) وليس كل الشهور
   const month = sp.month || currentMonthKey()
   const pay = await computeOneTeacherPay(supabase, teacher.id, month)
 
@@ -43,7 +42,6 @@ export default async function TeacherDuesPage({
   for (const s of settlements ?? []) {
     const d = s.details as any
     if (d?.teacher_name === teacher.name) {
-      // لو التسوية مربوطة بشهر محدد، نعدّها فقط لنفس الشهر
       if (d?.month && d.month !== month && month !== 'all') continue
       settled += Number(d.amount || 0)
     }
@@ -60,7 +58,7 @@ export default async function TeacherDuesPage({
       </Link>
       <h1 className="text-[18px] font-bold mt-2">مستحقاتي</h1>
       <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>
-        {pay.bounds.label} · نفس حساب الإدارة (حصص × سعر طالب)
+        {pay.bounds.label} · حسب عدد الحصص المسجّلة
       </p>
 
       <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
@@ -87,10 +85,6 @@ export default async function TeacherDuesPage({
         <div className="flex justify-between text-[14px]">
           <span style={{ color: '#6f7974' }}>الحصص (حاضر)</span>
           <b>{pay.sessions}</b>
-        </div>
-        <div className="flex justify-between text-[14px]">
-          <span style={{ color: '#6f7974' }}>التفصيل</span>
-          <b className="text-[12px]">{pay.rateParts}</b>
         </div>
         <hr style={{ borderColor: 'rgba(18,61,50,0.08)' }} />
         <div className="flex justify-between text-[16px]">
@@ -119,7 +113,7 @@ export default async function TeacherDuesPage({
                   <span className="truncate">
                     {l.session_date} · {l.student_name}
                   </span>
-                  <b>{l.rate} ج</b>
+                  <span style={{ color: '#6f7974' }}>حاضر</span>
                 </div>
               ))}
           </div>
