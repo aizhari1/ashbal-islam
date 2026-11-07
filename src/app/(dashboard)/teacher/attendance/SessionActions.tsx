@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { deleteMySession, updateSessionReport } from '@/app/actions/attendance'
+import { deleteMySession, updateMySession } from '@/app/actions/attendance'
 import { waLink } from '@/lib/whatsapp'
 
 export default function SessionActions({
@@ -10,15 +10,24 @@ export default function SessionActions({
   notes,
   phone,
   studentName,
+  status: initialStatus,
+  sessionNum: initialNum,
+  sessionDuration: initialDur,
 }: {
   id: string
   notes: string
   phone: string | null
   studentName?: string
+  status?: string
+  sessionNum?: number | null
+  sessionDuration?: number | null
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(notes)
+  const [status, setStatus] = useState(initialStatus || 'حاضر')
+  const [sessionNum, setSessionNum] = useState(String(initialNum ?? ''))
+  const [duration, setDuration] = useState(String(initialDur ?? ''))
   const [copied, setCopied] = useState(false)
   const [msg, setMsg] = useState('')
   const [pending, start] = useTransition()
@@ -60,7 +69,6 @@ export default function SessionActions({
         </pre>
       )}
 
-      {/* أزرار دائمة: نسخ + واتساب أي وقت */}
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button
           type="button"
@@ -84,30 +92,73 @@ export default function SessionActions({
 
       <div className="flex flex-wrap gap-3 text-[12px] font-bold">
         <button type="button" style={{ color: '#755b1b' }} onClick={() => setEditing(!editing)}>
-          {editing ? 'إلغاء التعديل' : hasReport ? 'تعديل التقرير' : 'كتابة تقرير'}
+          {editing ? 'إلغاء' : 'تعديل الحصة'}
         </button>
         <button
           type="button"
           disabled={pending}
           style={{ color: '#93000a' }}
           onClick={() => {
-            if (!confirm('حذف الحصة؟ هيتحذف تقريرها معاها ويرجع رقم الحصة.'))
+            if (!confirm('حذف الحصة نهائيًا؟ التقرير يتحفظ في السجل وعدّاد الطالب يتظبط.'))
               return
             start(async () => {
               const r: any = await deleteMySession(id)
               if (r?.error) setMsg(r.error)
-              else router.refresh()
+              else {
+                setMsg(r?.message || 'تم الحذف ✓')
+                router.refresh()
+              }
             })
           }}
         >
-          حذف
+          {pending ? '...' : 'حذف'}
         </button>
       </div>
 
       {editing && (
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 space-y-2 rounded-xl p-3" style={{ background: '#f4faf7' }}>
+          <p className="text-[11px] font-bold" style={{ color: '#00513c' }}>
+            تعديل بيانات الحصة
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] font-bold block mb-0.5">الحالة</label>
+              <select
+                className="input text-[12px] py-1.5"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="حاضر">حاضر</option>
+                <option value="متأخر">متأخر</option>
+                <option value="غائب">غائب</option>
+                <option value="معذور">معذور</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold block mb-0.5">رقم الحصة</label>
+              <input
+                className="input text-[12px] py-1.5"
+                type="number"
+                min={0}
+                value={sessionNum}
+                onChange={(e) => setSessionNum(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold block mb-0.5">المدة (د)</label>
+              <input
+                className="input text-[12px] py-1.5"
+                type="number"
+                min={5}
+                max={300}
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+              />
+            </div>
+          </div>
+          <label className="text-[10px] font-bold block">نص التقرير</label>
           <textarea
-            className="input min-h-[160px] text-[12px] leading-relaxed"
+            className="input min-h-[140px] text-[12px] leading-relaxed"
             dir="rtl"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -119,22 +170,27 @@ export default function SessionActions({
             className="btn-primary w-full py-2"
             onClick={() =>
               start(async () => {
-                const r: any = await updateSessionReport(id, text)
+                const r: any = await updateMySession(id, {
+                  status,
+                  session_num: sessionNum === '' ? null : Number(sessionNum),
+                  session_duration: duration === '' ? null : Number(duration),
+                  notes: text,
+                })
                 if (r?.error) setMsg(r.error)
                 else {
-                  setMsg('تم حفظ التعديل ✓')
+                  setMsg(r?.message || 'تم الحفظ ✓')
                   setEditing(false)
                   router.refresh()
                 }
               })
             }
           >
-            {pending ? '...' : 'حفظ التعديل'}
+            {pending ? 'جاري الحفظ...' : 'حفظ تعديل الحصة'}
           </button>
         </div>
       )}
       {msg && (
-        <p className="text-[11px] mt-1" style={{ color: msg.includes('✓') ? '#176b52' : '#93000a' }}>
+        <p className="text-[11px] mt-1" style={{ color: msg.includes('✓') || msg.includes('تم') ? '#176b52' : '#93000a' }}>
           {msg}
         </p>
       )}
