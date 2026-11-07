@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
-import { dueAfterPackageComplete, packageSize, todayKey } from '@/lib/dues'
+import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey } from '@/lib/dues'
 
 export async function recordAttendance(data: {
   student_id: string
@@ -37,7 +37,6 @@ export async function recordAttendance(data: {
 
   const today = todayKey()
 
-  // المعلم: اللي سجّل الحصة (حسابه) ثم معلم الطالب — عشان الحصة ما تتسجلش من غير معلم وتضيع من الرواتب
   let teacherId: string | null = data.teacher_id || null
   if (!teacherId) {
     const { data: t } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
@@ -68,7 +67,6 @@ export async function recordAttendance(data: {
     sharii_note: txt(data.sharii_note),
   }
 
-  // رقم الحلقة في نص التقرير = الرقم الفعلي المسجّل (زي القديم)
   const withNum = (t: string | null | undefined, n: number | null | undefined) =>
     t && n ? t.replace(/(رقم الحلقة: )\d+/, `$1${n}`) : t || null
 
@@ -112,9 +110,7 @@ export async function recordAttendance(data: {
 
   const quota = packageSize(student || {})
   const prevNum = student?.last_session_num || 0
-  let nextSession = prevNum + 1
-  const completedPackage = quota > 0 && nextSession >= quota
-  if (quota > 0 && nextSession > quota) nextSession = 1
+  const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const isPresent =
     data.status === 'حاضر' || data.status === 'متأخر' || data.status === 'تم الحضور'
@@ -156,7 +152,9 @@ export async function recordAttendance(data: {
       const due = dueAfterPackageComplete(student)
       if (due > 0) {
         patch.amount_due = due
-        dueMsg = ` · مستحق ${due} ج`
+        dueMsg = ` · مستحق ${due} ج · الباقة خلصت ويبدأ العد من 1`
+      } else {
+        dueMsg = ' · الباقة خلصت ويبدأ العد من 1'
       }
     }
     await supabase.from('students').update(patch).eq('id', data.student_id)
@@ -173,6 +171,7 @@ export async function recordAttendance(data: {
       session_num: nextSession,
       date: today,
       package_complete: completedPackage,
+      package_size: quota,
     },
   })
 
@@ -185,8 +184,9 @@ export async function recordAttendance(data: {
   return {
     success: true,
     data: row,
+    next_session_num: isPresent ? nextSession : null,
     message: isPresent
-      ? `اتسجل حضور — حصة رقم ${nextSession}${dueMsg}`
+      ? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${dueMsg}`
       : 'اتسجل الغياب مع التقرير',
   }
 }
@@ -201,7 +201,6 @@ export async function bulkAttendance(
   return results
 }
 
-/** حذف حصة المعلم من سجل حصصه (زي القديم): بيتحذف التقرير معاها وبيرجع رقم الحصة خطوة */
 export async function deleteMySession(attendanceId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -211,11 +210,10 @@ export async function deleteMySession(attendanceId: string) {
   const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
   if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
 
-  // الملكية اتأكدت فوق (الحصة بتاعت المعلم نفسه) — الكتابة بالسيرفر عشان ما تتعطلش بسياسات RLS
   const sb = serviceClient()
   const { data: row } = await sb
     .from('attendance')
-    .select('id, student_id, teacher_id, status')
+    .select('id, student_id, teacher_id, status, session_num')
     .eq('id', attendanceId)
     .maybeSingle()
   if (!row) return { error: 'الحصة غير موجودة' }
@@ -225,11 +223,16 @@ export async function deleteMySession(attendanceId: string) {
   if (error) return { error: error.message }
 
   if (row.status === 'حاضر' || row.status === 'متأخر') {
-    const { data: st } = await sb.from('students').select('last_session_num').eq('id', row.student_id).maybeSingle()
-    await sb
+    const { data: st } = await sb
       .from('students')
-      .update({ last_session_num: Math.max(0, (st?.last_session_num || 0) - 1) })
+      .select('last_session_num, monthly_sessions, subscription_type')
       .eq('id', row.student_id)
+      .maybeSingle()
+    const quota = packageSize(st || {})
+    let prev = Math.max(0, (st?.last_session_num || 0) - 1)
+    // لو كان آخر رقم 1 بعد دورة جديدة، الرجوع لآخر حصة في الباقة
+    if (quota > 0 && (st?.last_session_num || 0) === 1) prev = quota
+    await sb.from('students').update({ last_session_num: prev }).eq('id', row.student_id)
   }
 
   await supabase.from('activity_log').insert({
@@ -245,7 +248,6 @@ export async function deleteMySession(attendanceId: string) {
   return { success: true }
 }
 
-/** تعديل نص تقرير حصة المعلم (حصته هو بس) */
 export async function updateSessionReport(attendanceId: string, text: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
