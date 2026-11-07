@@ -10,6 +10,35 @@ export function packageSize(s: {
   return m ? parseInt(m[1], 10) : 0
 }
 
+/**
+ * رقم الحصة التالية داخل الباقة.
+ * باقة 4: بعد 4 يرجع يعد من 1 (مش 5).
+ */
+export function nextPackageSessionNum(
+  prevNum: number,
+  quota: number
+): { next: number; completedPackage: boolean } {
+  const prev = Math.max(0, Number(prevNum) || 0)
+  const q = Math.max(0, Number(quota) || 0)
+  if (q <= 0) {
+    return { next: prev + 1, completedPackage: false }
+  }
+  // خلّص الباقة أو تجاوزها → دورة جديدة من الصفر
+  const base = prev >= q ? 0 : prev
+  const next = base + 1
+  return { next, completedPackage: next === q }
+}
+
+/** عرض رقم الحصة داخل الباقة (1..q) حتى لو last_session_num قديم أكبر من q */
+export function displaySessionInPackage(lastNum: number, quota: number): number {
+  const n = Math.max(0, Number(lastNum) || 0)
+  const q = Math.max(0, Number(quota) || 0)
+  if (q <= 0) return n
+  if (n <= 0) return 0
+  const mod = n % q
+  return mod === 0 ? q : mod
+}
+
 export function packagePrice(s: {
   subscription_type?: string | null
   monthly_sessions?: number | null
@@ -42,7 +71,9 @@ export function isPackageComplete(
 ): boolean {
   const pkg = packageSize(student)
   if (pkg <= 0) return false
-  return lastSessionNum > 0 && lastSessionNum % pkg === 0
+  const n = Math.max(0, Number(lastSessionNum) || 0)
+  if (n <= 0) return false
+  return n % pkg === 0
 }
 
 export const APP_TIME_ZONE = 'Africa/Cairo'
