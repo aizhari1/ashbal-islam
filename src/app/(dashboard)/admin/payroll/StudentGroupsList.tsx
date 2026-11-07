@@ -71,7 +71,7 @@ export function StudentGroupsList({ groups }: { groups: Group[] }) {
               <p className="text-[15px] font-bold" style={{ color: '#176b52' }}>
                 {g.sessions.length} حصة
               </p>
-              <p className="text-[11px]">{(g.sessions.length * g.price).toLocaleString('ar-EG')} ج</p>
+              <p className="text-[11px]">{(g.sessions.length * g.price).toLocaleString('en-US')} ج</p>
             </div>
           </div>
           <div className="divide-y" style={{ borderColor: '#e8f5ef' }}>

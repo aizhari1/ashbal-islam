@@ -99,7 +99,7 @@ export function PayrollActions({
             </button>
           </form>
           <form onSubmit={settle} className="space-y-2">
-            <label className="text-[11px] font-bold block">صرف للمعلم (المتبقي {remaining.toLocaleString('ar-EG')} ج)</label>
+            <label className="text-[11px] font-bold block">صرف للمعلم (المتبقي {remaining.toLocaleString('en-US')} ج)</label>
             <div className="flex gap-2 items-end">
               <input
                 type="number"

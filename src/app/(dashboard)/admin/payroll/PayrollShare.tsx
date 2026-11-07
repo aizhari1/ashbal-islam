@@ -42,13 +42,13 @@ export function PayrollShare({
     L.push(`📅 الفترة: ${monthLabel}`)
     L.push('────────────────')
     L.push(`✅ إجمالي الحصص: *${totalSessions}*`)
-    L.push(`💰 المستحق: *${totalPay.toLocaleString('ar-EG')} ج*`)
+    L.push(`💰 المستحق: *${totalPay.toLocaleString('en-US')} ج*`)
     L.push('────────────────')
     for (const g of groups) {
       const sub = g.sessions.length * g.price
       L.push('')
       L.push(`👦 ${g.name} (${g.code})`)
-      L.push(`   ${g.sessions.length} حصة × ${g.price} ج = *${sub.toLocaleString('ar-EG')} ج*`)
+      L.push(`   ${g.sessions.length} حصة × ${g.price} ج = *${sub.toLocaleString('en-US')} ج*`)
       const dates = g.sessions.map((s) => s.date).slice(0, 15)
       if (dates.length) {
         L.push(`   📆 ${dates.join(' · ')}${g.sessions.length > 15 ? ' …' : ''}`)
@@ -56,7 +56,7 @@ export function PayrollShare({
     }
     L.push('')
     L.push('────────────────')
-    L.push(`📌 الإجمالي النهائي: *${totalPay.toLocaleString('ar-EG')} جنيه*`)
+    L.push(`📌 الإجمالي النهائي: *${totalPay.toLocaleString('en-US')} جنيه*`)
     L.push('جزاكم الله خيرًا 🌿')
     return L.join('\n')
   }, [teacherName, teacherCode, monthLabel, totalSessions, totalPay, groups])
