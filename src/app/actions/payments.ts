@@ -12,13 +12,12 @@ export async function recordPayment(formData: FormData) {
   const studentId = String(formData.get('student_id') || '')
   const file = formData.get('receipt')
   const receiptFile = file instanceof File && file.size > 0 ? file : null
+  const prepaidMonths = Number(formData.get('prepaid_months') || 0)
 
-  // الإيصال اختياري — لو فشل الرفع منكمّل الدفع بدون صورة
   let receiptUrl: string | null = null
   if (receiptFile && studentId) {
     const up = await uploadPaymentReceipt(supabase, receiptFile, studentId)
     if (up.url) receiptUrl = up.url
-    // لا نوقف الدفع لو فشل الرفع
   }
 
   const res = await applyPayment(supabase, {
@@ -28,9 +27,10 @@ export async function recordPayment(formData: FormData) {
     method: String(formData.get('method') || formData.get('payment_method') || 'تحويل'),
     notes: String(formData.get('notes') || formData.get('note') || '') || null,
     payment_date: String(formData.get('payment_date') || '') || null,
-    clear_due: forceClear,
+    clear_due: forceClear || prepaidMonths >= 1,
     idempotency_key: String(formData.get('idempotency_key') || '') || null,
     receipt_url: receiptUrl,
+    prepaid_months: prepaidMonths,
     source: 'admin',
   })
 
@@ -49,5 +49,6 @@ export async function recordPayment(formData: FormData) {
     data: { id: res.payment_id },
     new_due: res.new_due,
     duplicate: res.duplicate,
+    prepaid_until: res.prepaid_until,
   }
 }
