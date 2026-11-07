@@ -2,12 +2,38 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { serviceClient } from '@/lib/supabase/service'
 import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 
 function todayKey() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 }
 
+function revalidateAll() {
+  for (const p of [
+    '/admin/edit-session',
+    '/admin/students',
+    '/admin/sessions-detail',
+    '/admin/payroll',
+    '/admin/session-settle',
+    '/admin/attended',
+    '/teacher',
+    '/teacher/session',
+    '/teacher/attendance',
+    '/teacher/dues',
+    '/teacher/students',
+    '/supervisor/edit-student',
+    '/supervisor/edit-session',
+  ]) {
+    revalidatePath(p)
+  }
+}
+
+/**
+ * تعديل رقم آخر حصة:
+ * - زيادة → إضافة حصص في سجل المعلم
+ * - تقليل → حذف الحصص الزائدة + تقاريرها من سجل المعلم
+ */
 export async function updateSessionNum(formData: FormData) {
   const supabase = await createClient()
   const {
@@ -16,14 +42,15 @@ export async function updateSessionNum(formData: FormData) {
   if (!user) return { error: 'غير مسجل' }
 
   const studentId = String(formData.get('student_id') || '')
-  const lastSessionNum = Number(formData.get('last_session_num') || 0)
+  const lastSessionNum = Math.max(0, Number(formData.get('last_session_num') || 0))
   const lastSessionDate = String(formData.get('last_session_date') || '') || null
 
   if (!studentId) return { error: 'اختر طالب' }
 
-  const { data: before, error: beforeErr } = await supabase
+  const sb = serviceClient()
+  const { data: before, error: beforeErr } = await sb
     .from('students')
-    .select('id, last_session_num, teacher_id, session_duration, monthly_sessions, subscription_type')
+    .select('id, name, last_session_num, teacher_id, session_duration, monthly_sessions, subscription_type')
     .eq('id', studentId)
     .maybeSingle()
   if (beforeErr) return { error: beforeErr.message }
@@ -36,14 +63,15 @@ export async function updateSessionNum(formData: FormData) {
   const oldLast = Number(before.last_session_num || 0)
   const teacherId = before.teacher_id || null
   const addedSessions: number[] = []
+  const removedSessions: number[] = []
+  const removedReports: { session_num: number | null; session_date: string | null; notes: string | null }[] = []
 
-  // زيادة رقم الحصة → تسجيل حضور ناقص عند المعلم فوراً
+  // زيادة رقم الحصة → تسجيل حضور عند المعلم
   if (lastSessionNum > oldLast && teacherId) {
     const today = lastSessionDate || todayKey()
     const duration = Number(before.session_duration) || 30
-    const rows = []
     for (let n = oldLast + 1; n <= lastSessionNum; n++) {
-      rows.push({
+      const { error: attErr } = await sb.from('attendance').insert({
         student_id: studentId,
         teacher_id: teacherId,
         session_date: today,
@@ -52,51 +80,81 @@ export async function updateSessionNum(formData: FormData) {
         session_duration: duration,
         notes: `تعديل إداري — حصة رقم ${n} (أُضيفت من لوحة الإدارة)`,
       })
-      addedSessions.push(n)
-    }
-    if (rows.length > 0) {
-      const { error: attErr } = await supabase.from('attendance').insert(rows)
-      if (attErr) return { error: `فشل تسجيل الحصص المضافة: ${attErr.message}` }
+      if (!attErr) addedSessions.push(n)
+      else {
+        // لو موجود، نحدّث الرقم فقط
+        await sb
+          .from('attendance')
+          .update({ status: 'حاضر', session_num: n, teacher_id: teacherId })
+          .eq('student_id', studentId)
+          .eq('session_num', n)
+        addedSessions.push(n)
+      }
     }
   }
 
-  const { error } = await supabase
+  // تقليل رقم الحصة → شيل الحصص الزائدة مع التقارير من عند المعلم
+  if (lastSessionNum < oldLast) {
+    const { data: extra } = await sb
+      .from('attendance')
+      .select('id, session_num, session_date, notes, status')
+      .eq('student_id', studentId)
+      .gt('session_num', lastSessionNum)
+      .limit(500)
+
+    for (const row of extra ?? []) {
+      // احفظ التقرير في السجل قبل المسح
+      removedReports.push({
+        session_num: row.session_num,
+        session_date: row.session_date,
+        notes: row.notes,
+      })
+      const { error: delErr } = await sb.from('attendance').delete().eq('id', row.id)
+      if (!delErr && row.session_num != null) {
+        removedSessions.push(Number(row.session_num))
+      }
+    }
+  }
+
+  const { error } = await sb
     .from('students')
     .update({
       last_session_num: lastSessionNum,
-      last_session_date: lastSessionDate || (addedSessions.length > 0 ? todayKey() : undefined),
+      last_session_date:
+        lastSessionDate || (addedSessions.length > 0 ? todayKey() : lastSessionDate),
     })
     .eq('id', studentId)
 
   if (error) return { error: error.message }
 
-  await supabase.from('activity_log').insert({
+  await sb.from('activity_log').insert({
     action: 'session_num',
     entity_id: studentId,
     actor_id: user.id,
     details: {
+      student_name: before.name,
       last_session_num: lastSessionNum,
       last_session_date: lastSessionDate,
       old_last_session_num: oldLast,
       added_session_nums: addedSessions,
+      removed_session_nums: removedSessions,
+      removed_reports: removedReports.slice(0, 20),
     },
   })
 
-  revalidatePath('/admin/edit-session')
-  revalidatePath('/admin/students')
-  revalidatePath('/admin/sessions-detail')
-  revalidatePath('/admin/payroll')
-  revalidatePath('/teacher')
-  revalidatePath('/teacher/session')
-  revalidatePath('/teacher/attendance')
-  revalidatePath('/teacher/dues')
+  revalidateAll()
+
+  let message = 'تم الحفظ'
+  if (removedSessions.length > 0) {
+    message = `تم · اتشالت ${removedSessions.length} حصة وتقريرها من سجل المعلم (${removedSessions.join('، ')})`
+  } else if (addedSessions.length > 0) {
+    message = `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم`
+  }
 
   return {
     ok: true,
     addedSessions: addedSessions.length,
-    message:
-      addedSessions.length > 0
-        ? `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم`
-        : 'تم الحفظ',
+    removedSessions: removedSessions.length,
+    message,
   }
 }
