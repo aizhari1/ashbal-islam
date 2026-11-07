@@ -41,15 +41,15 @@ export default async function CashboxPage() {
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
             <p className="text-[11px] text-[#6f7974]">إيرادات</p>
-            <p className="text-[16px] font-bold text-[#0d9b8a]">{income.toLocaleString('ar-EG')}</p>
+            <p className="text-[16px] font-bold text-[#0d9b8a]">{income.toLocaleString('en-US')}</p>
           </div>
           <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
             <p className="text-[11px] text-[#6f7974]">مصروفات</p>
-            <p className="text-[16px] font-bold text-[#ba1a1a]">{expenseTotal.toLocaleString('ar-EG')}</p>
+            <p className="text-[16px] font-bold text-[#ba1a1a]">{expenseTotal.toLocaleString('en-US')}</p>
           </div>
           <div className="bg-white rounded-2xl p-3 text-center shadow-sm">
             <p className="text-[11px] text-[#6f7974]">الرصيد</p>
-            <p className="text-[16px] font-bold">{balance.toLocaleString('ar-EG')}</p>
+            <p className="text-[16px] font-bold">{balance.toLocaleString('en-US')}</p>
           </div>
         </div>
 
@@ -68,7 +68,7 @@ export default async function CashboxPage() {
                   <p className="font-semibold">{d?.category || 'مصروف'}</p>
                   <p className="text-[11px] text-[#6f7974]">{d?.description || e.created_at?.slice(0, 10)}</p>
                 </div>
-                <span className="font-bold text-[#ba1a1a]">-{Number(d?.amount || 0).toLocaleString('ar-EG')}</span>
+                <span className="font-bold text-[#ba1a1a]">-{Number(d?.amount || 0).toLocaleString('en-US')}</span>
               </div>
             )
           })}
@@ -82,7 +82,7 @@ export default async function CashboxPage() {
                 <p className="font-semibold">{p.students?.name || '—'}</p>
                 <p className="text-[11px] text-[#6f7974]">{p.payment_date} · {p.method}</p>
               </div>
-              <span className="font-bold text-[#0d9b8a]">+{Number(p.amount).toLocaleString('ar-EG')}</span>
+              <span className="font-bold text-[#0d9b8a]">+{Number(p.amount).toLocaleString('en-US')}</span>
             </div>
           ))}
         </div>

@@ -25,7 +25,7 @@ export default async function PackagesPage() {
                 <h3 className="text-[15px] font-bold">{p.name}</h3>
                 <p className="text-[12px] text-[#6f7974] mt-0.5">{p.description || `${p.sessions_count} حصة`}</p>
               </div>
-              <p className="text-[18px] font-bold text-[#176b52]">{Number(p.price).toLocaleString('ar-EG')}</p>
+              <p className="text-[18px] font-bold text-[#176b52]">{Number(p.price).toLocaleString('en-US')}</p>
             </div>
           </div>
         ))}

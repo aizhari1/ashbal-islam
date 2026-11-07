@@ -25,7 +25,7 @@ export default async function SubscriptionsLogPage() {
               <p className="font-bold">{p.students?.name || '—'}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>{p.payment_date} · {p.method || '—'}</p>
             </div>
-            <b style={{ color: '#176b52' }}>{Number(p.amount).toLocaleString('ar-EG')}</b>
+            <b style={{ color: '#176b52' }}>{Number(p.amount).toLocaleString('en-US')}</b>
           </div>
         ))}
       </div>
