@@ -44,7 +44,7 @@ export default async function TeacherAttendancePage() {
         </Link>
       </div>
       <p className="text-[11px] mb-4" style={{ color: '#6f7974' }}>
-        من هنا تنسخ آخر تقرير أو تبعته واتساب في أي وقت
+        عدّل رقم الحصة أو الحالة أو المدة، أو احذف الحصة — العدّاد بيتظبط لوحده
       </p>
       <div className="space-y-2">
         {rows.map((r) => (
@@ -70,6 +70,9 @@ export default async function TeacherAttendancePage() {
               notes={r.notes || ''}
               phone={r.students?.phone || null}
               studentName={r.students?.name || ''}
+              status={r.status}
+              sessionNum={r.session_num}
+              sessionDuration={r.session_duration}
             />
           </div>
         ))}
