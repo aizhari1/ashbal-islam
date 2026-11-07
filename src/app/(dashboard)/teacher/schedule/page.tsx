@@ -32,33 +32,33 @@ export default async function TeacherSchedulePage() {
     entries = data ?? []
   }
 
-  // اليوم (توقيت القاهرة تقريبًا UTC+2)
-  const now = new Date()
-  const cairoOffset = 2 * 60
-  const local = new Date(now.getTime() + (cairoOffset - now.getTimezoneOffset()) * 60000)
-  const todayDow = local.getDay()
-  const todayStr = local.toISOString().slice(0, 10)
+  // اليوم بتوقيت القاهرة — لو الجمعة تظهر مواعيد الجمعة تلقائي
+  const cairoNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }))
+  const todayDow = cairoNow.getDay()
+  const todayStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 
-  // مواعيد اليوم: أسبوعي بنفس اليوم أو بتاريخ اليوم
+  // مواعيد اليوم فقط (أسبوعي بنفس يوم الأسبوع أو بتاريخ اليوم)
   const todaySessions = entries.filter((e) => {
     if (e.session_date && String(e.session_date).slice(0, 10) === todayStr) return true
     if (e.day_of_week != null && Number(e.day_of_week) === todayDow) {
-      // لو فيه تاريخ في المستقبل/الماضي ليوم تاني نتجاهل؟ نعرض الأسبوعي دائمًا
       if (!e.session_date) return true
-      // بتاريخ في نوفمبر أو بدون تقييد شهر — لو نفس يوم الأسبوع
       return Number(e.day_of_week) === todayDow
     }
     return false
   })
 
-  // تجميع أسبوعي (قوالب + أي يوم)
   const byDay = new Map<number, any[]>()
   for (const e of entries) {
     let d: number | null = e.day_of_week != null ? Number(e.day_of_week) : null
     if (d == null && e.session_date) {
       d = new Date(String(e.session_date).slice(0, 10) + 'T12:00:00').getDay()
     }
-    if (d == null || d < 0 || d > 6) d = 9
+    if (d == null || d < 0 || d > 6) continue
     byDay.set(d, [...(byDay.get(d) || []), e])
   }
 
@@ -126,10 +126,9 @@ export default async function TeacherSchedulePage() {
       </Link>
       <h1 className="text-[18px] font-bold mt-2">جدولي</h1>
       <p className="text-[12px] mt-1" style={{ color: '#6f7974' }}>
-        حصصك حسب اليوم مع اسم الطالب وتفاصيل الحصة
+        ديناميكي: النهاردة {DAYS[todayDow]} — تظهر مواعيد {DAYS[todayDow]} تلقائي
       </p>
 
-      {/* حصص اليوم */}
       <section className="mt-4">
         <h2 className="text-[14px] font-bold mb-2" style={{ color: '#00513c' }}>
           اليوم — {DAYS[todayDow]} {todayStr}
@@ -149,7 +148,6 @@ export default async function TeacherSchedulePage() {
         )}
       </section>
 
-      {/* الجدول الأسبوعي */}
       <section className="mt-6">
         <h2 className="text-[14px] font-bold mb-2" style={{ color: '#00513c' }}>
           الجدول الأسبوعي
