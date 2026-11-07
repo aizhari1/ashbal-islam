@@ -5,8 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** مبالغ بأرقام إنجليزية */
 export function formatCurrency(amount: number, currency = 'EGP') {
-  return new Intl.NumberFormat('ar-EG', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
@@ -14,6 +15,7 @@ export function formatCurrency(amount: number, currency = 'EGP') {
   }).format(amount)
 }
 
+/** تاريخ بأسماء شهور عربية + أرقام إنجليزية */
 export function formatDate(date: string | Date | null | undefined) {
   if (!date) return '—'
   const d = typeof date === 'string' ? new Date(date) : date
@@ -21,6 +23,7 @@ export function formatDate(date: string | Date | null | undefined) {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    numberingSystem: 'latn',
   }).format(d)
 }
 
