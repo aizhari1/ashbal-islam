@@ -18,7 +18,6 @@ export default async function TeacherStudentsPage() {
     name: string
     code: string
     status: string
-    amount_due: number
     phone: string | null
   }[] = []
   const lastByStudent: Record<string, { notes: string; session_date: string; session_num: number | null }> = {}
@@ -26,12 +25,11 @@ export default async function TeacherStudentsPage() {
   if (teacher) {
     const { data } = await supabase
       .from('students')
-      .select('id, name, code, status, amount_due, phone')
+      .select('id, name, code, status, phone')
       .eq('teacher_id', teacher.id)
       .order('name')
     students = (data as any) ?? []
 
-    // آخر تقرير لكل طالب (حضور مع ملاحظات)
     const ids = students.map((s) => s.id)
     if (ids.length) {
       const { data: att } = await supabase
@@ -72,16 +70,12 @@ export default async function TeacherStudentsPage() {
                 </p>
               </div>
               <div className="text-left">
-                {s.amount_due > 0 && <span className="text-[12px] text-[#ba1a1a] font-bold block">{s.amount_due}</span>}
                 <Link href={`/teacher/session`} className="text-[11px] font-bold" style={{ color: '#176b52' }}>
                   تحضير
                 </Link>
               </div>
             </div>
-            <StudentLastReport
-              phone={s.phone}
-              last={lastByStudent[s.id] || null}
-            />
+            <StudentLastReport phone={s.phone} last={lastByStudent[s.id] || null} />
           </div>
         ))}
         {students.length === 0 && (
