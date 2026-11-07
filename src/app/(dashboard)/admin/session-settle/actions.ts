@@ -12,11 +12,14 @@ function revalidateTeacherPaths() {
     '/admin/attended',
     '/admin/edit-session',
     '/admin/sessions-detail',
+    '/admin/students',
     '/teacher',
     '/teacher/attendance',
     '/teacher/dues',
     '/teacher/students',
+    '/teacher/session',
     '/supervisor/edit-student',
+    '/supervisor/edit-session',
   ]) {
     revalidatePath(p)
   }
@@ -57,6 +60,7 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
     if (error) return { error: error.message }
 
     const sid = studentId || row.student_id
+    let lastSessionNum = 0
     if (sid) {
       const { data } = await sb
         .from('attendance')
@@ -67,17 +71,24 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
         .order('session_num', { ascending: false })
         .limit(1)
       const last = data?.[0]
-      await sb
+      lastSessionNum = last?.session_num != null ? Number(last.session_num) : 0
+      const { error: syncErr } = await sb
         .from('students')
         .update({
-          last_session_num: last?.session_num != null ? Number(last.session_num) : 0,
+          last_session_num: lastSessionNum,
           last_session_date: last?.session_date || null,
         })
         .eq('id', sid)
+      if (syncErr) return { error: `اتحذفت الحصة لكن فشل تحديث العداد: ${syncErr.message}` }
     }
 
     revalidateTeacherPaths()
-    return { ok: true }
+    return {
+      ok: true,
+      message: 'اتحذفت من عند الجميع',
+      last_session_num: lastSessionNum,
+      deleted_id: id,
+    }
   } catch (e: any) {
     return { error: e?.message || 'فشل الحذف' }
   }
@@ -151,7 +162,7 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
           ? `تم · أُضيفت ${added} حصة عند المعلم`
           : removed > 0
             ? `تم · اتشالت ${removed} حصة زيادة`
-            : 'تم تحديث رقم الحصة',
+            : 'تم تحديث رقم الحصة عند الجميع',
     }
   } catch (e: any) {
     return { error: e?.message || 'فشل التحديث' }
