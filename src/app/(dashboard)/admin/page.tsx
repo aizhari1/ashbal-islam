@@ -157,14 +157,21 @@ export default async function AdminDashboard({
         </div>
       </div>
 
-      <div className="px-4 mb-3">
-        <Link
+      <div className="px-4 mb-3 space-y-2">
+        <a
           href="/admin/session-settle"
-          className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
+          className="block rounded-2xl px-4 py-3.5 text-center font-bold text-[14px] text-white"
           style={{ background: '#ba1a1a' }}
         >
           تسوية حصص المعلم (بحث طالب · حذف · مزامنة)
-        </Link>
+        </a>
+        <a
+          href="/admin/payroll"
+          className="block rounded-2xl px-4 py-3.5 text-center font-bold text-[14px] text-white"
+          style={{ background: '#755b1b' }}
+        >
+          مسير الرواتب · تسوية / صرف المعلمين
+        </a>
       </div>
 
       <div className="px-4 mb-6">
