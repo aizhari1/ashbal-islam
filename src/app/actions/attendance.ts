@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
-import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey } from '@/lib/dues'
+import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey, validateSessionWithinPackage } from '@/lib/dues'
 
 /** بعد حذف/تعديل: رقم آخر حصة للطالب = آخر حضور فعلي متبقي */
 async function syncStudentLastSession(
@@ -197,13 +197,17 @@ export async function recordAttendance(data: {
     if (completedPackage) {
       const due = dueAfterPackageComplete(student)
       if (due > 0) {
-        patch.amount_due = due
-        dueMsg = ` · مستحق ${due} ج · الباقة خلصت ويبدأ العد من 1`
+        const prevDue = Number(student.amount_due || 0)
+        // تراكم المستحق لو الباقة خلصت ومفيش دفع — مش استبدال لو في باقي قديم
+        patch.amount_due = prevDue > 0 ? prevDue + due : due
+        dueMsg = ` · مستحق ${patch.amount_due} ج · الباقة خلصت ويبدأ العد من 1`
       } else {
         dueMsg = ' · الباقة خلصت ويبدأ العد من 1'
       }
     }
-    await supabase.from('students').update(patch).eq('id', data.student_id)
+    // service client عشان التحديث يمشي حتى لو RLS يمنع المعلم
+    const sbWrite = serviceClient()
+    await sbWrite.from('students').update(patch).eq('id', data.student_id)
   }
 
   await supabase.from('activity_log').insert({
@@ -339,7 +343,18 @@ export async function updateMySession(
     }
     if (patch.session_num !== undefined) {
       const n = Number(patch.session_num)
-      update.session_num = Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+      const rounded = Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+      if (rounded != null && row.student_id) {
+        const { data: st } = await sb
+          .from('students')
+          .select('monthly_sessions, subscription_type')
+          .eq('id', row.student_id)
+          .maybeSingle()
+        const quota = packageSize(st || {})
+        const check = validateSessionWithinPackage(rounded, quota)
+        if (!check.ok) return { error: check.error }
+      }
+      update.session_num = rounded
     }
     if (patch.session_duration !== undefined) {
       const d = Number(patch.session_duration)
