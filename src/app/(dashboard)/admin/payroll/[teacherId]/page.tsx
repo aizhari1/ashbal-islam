@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { PayrollShare } from '../PayrollShare'
+import { StudentGroupsList } from '../StudentGroupsList'
 
 export const dynamic = 'force-dynamic'
 
@@ -173,48 +174,15 @@ export default async function TeacherPayrollDetailPage({
         groups={shareGroups}
       />
 
-      <div className="px-4 space-y-3">
-        {groups.length === 0 && (
+      {groups.length === 0 ? (
+        <div className="px-4">
           <div className="card p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
             لا حصص في {label}
           </div>
-        )}
-        {groups.map((g) => (
-          <div key={g.id} className="card overflow-hidden">
-            <div className="p-3.5 flex justify-between gap-2" style={{ background: '#f0faf5' }}>
-              <div>
-                <p className="text-[14px] font-bold" style={{ color: '#00513c' }}>
-                  {g.name}
-                </p>
-                <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                  {g.code} · سعر {g.price} ج · {g.duration}د
-                </p>
-              </div>
-              <div className="text-left shrink-0">
-                <p className="text-[15px] font-bold" style={{ color: '#176b52' }}>
-                  {g.sessions.length} حصة
-                </p>
-                <p className="text-[11px]">{(g.sessions.length * g.price).toLocaleString('ar-EG')} ج</p>
-              </div>
-            </div>
-            <div className="divide-y" style={{ borderColor: '#e8f5ef' }}>
-              {g.sessions.map((s, i) => (
-                <div key={s.id} className="px-3.5 py-2.5 flex justify-between items-center">
-                  <div>
-                    <p className="text-[13px] font-semibold">{s.date}</p>
-                    <p className="text-[10px]" style={{ color: '#6f7974' }}>
-                      {s.num != null ? `حصة ${s.num}` : `#${i + 1}`}
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-bold" style={{ color: '#176b52' }}>
-                    {g.price} ج
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <StudentGroupsList groups={groups} />
+      )}
     </div>
   )
 }
