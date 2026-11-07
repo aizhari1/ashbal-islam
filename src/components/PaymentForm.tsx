@@ -27,6 +27,8 @@ export function PaymentForm({
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
   const [receiptName, setReceiptName] = useState('')
+  const [prepaid, setPrepaid] = useState(false)
+  const [months, setMonths] = useState(2)
   const [pending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
@@ -51,6 +53,7 @@ export function PaymentForm({
     const form = e.currentTarget
     const fd = new FormData(form)
     fd.set('student_id', selected.id)
+    fd.set('prepaid_months', prepaid ? String(months) : '0')
     if (!fd.get('idempotency_key')) {
       fd.set('idempotency_key', crypto.randomUUID())
     }
@@ -60,11 +63,18 @@ export function PaymentForm({
       if (r && 'error' in r && r.error) {
         setMsg({ type: 'err', text: `فشل: ${r.error}` })
       } else {
-        setMsg({ type: 'ok', text: 'تم تسجيل الدفعة بنجاح ✓' })
+        setMsg({
+          type: 'ok',
+          text: prepaid
+            ? `تم · دفع مقدم ${months} شهر — مش هيظهر في المستحقات غير بعد انتهائها ✓`
+            : 'تم تسجيل الدفعة بنجاح ✓',
+        })
         form.reset()
         setSelected(null)
         setQ('')
         setReceiptName('')
+        setPrepaid(false)
+        setMonths(2)
         router.refresh()
       }
     })
@@ -185,6 +195,42 @@ export function PaymentForm({
         </select>
       </div>
 
+      {/* دفع مقدم */}
+      <div className="rounded-xl p-3 space-y-2" style={{ background: '#f4faf7', border: '1px solid #cde8dc' }}>
+        <label className="flex items-center gap-2 text-[13px] font-bold" style={{ color: '#00513c' }}>
+          <input
+            type="checkbox"
+            checked={prepaid}
+            onChange={(e) => setPrepaid(e.target.checked)}
+            className="w-4 h-4"
+          />
+          دفع مقدم (عدة شهور)
+        </label>
+        {prepaid && (
+          <>
+            <label className="block text-[11px] font-bold" style={{ color: '#3f4944' }}>
+              عدد الشهور المدفوعة
+            </label>
+            <select
+              value={months}
+              onChange={(e) => setMonths(Number(e.target.value))}
+              className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
+              style={{ borderColor: '#cde8dc' }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? 'شهر' : 'شهور'}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] leading-snug" style={{ color: '#6f7974' }}>
+              مثال: دافع نوفمبر وديسمبر (شهرين) → مش هيظهر في المستحقات غير من يناير.
+              المستحق بيتصفّر طول فترة المقدم.
+            </p>
+          </>
+        )}
+      </div>
+
       <div>
         <label className="block text-[11px] font-bold mb-1" style={{ color: '#3f4944' }}>
           سكرين شوت التحويل <span style={{ color: '#6f7974', fontWeight: 500 }}>(اختياري)</span>
@@ -219,7 +265,7 @@ export function PaymentForm({
         className="w-full py-3 rounded-2xl text-white font-bold text-[14px] disabled:opacity-50"
         style={{ background: '#176b52' }}
       >
-        {pending ? 'جاري الحفظ...' : 'حفظ الدفعة'}
+        {pending ? 'جاري الحفظ...' : prepaid ? `حفظ دفع مقدم (${months} شهر)` : 'حفظ الدفعة'}
       </button>
     </form>
   )
