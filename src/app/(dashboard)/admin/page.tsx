@@ -45,6 +45,8 @@ export default async function AdminDashboard({
   const dueCount = summary.dueCount
 
   const menu = [
+    { href: '/admin/session-settle', icon: 'rule', title: 'تسوية حصص المعلم', desc: 'حذف/مزامنة حصص طالب مع معلم', color: '#ba1a1a' },
+    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × سعر · صرف/تسوية مالية', color: '#755b1b' },
     { href: '/admin/today', icon: 'today', title: 'جدول اليوم', desc: 'حصص النهارده عند كل المعلمين', color: '#176b52' },
     { href: '/admin/cumulative', icon: 'leaderboard', title: 'التقرير التراكمي', desc: 'ترتيب المعلمين بالدرجة المركبة', color: '#176b52' },
     { href: '/admin/courses', icon: 'school', title: 'الكورسات', desc: 'فيديوهات · صور · اشتراكات · تفعيل', color: '#755b1b' },
@@ -64,7 +66,6 @@ export default async function AdminDashboard({
     { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخص شهري', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء + إدارة', color: '#176b52' },
     { href: '/admin/finance', icon: 'payments', title: 'التذكير المالي', desc: 'مستحقات واشتراكات', color: '#755b1b' },
-    { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × سعر الطالب', color: '#755b1b' },
     { href: '/admin/cashbox', icon: 'savings', title: 'الصندوق', desc: 'دخل وصرف', color: '#176b52' },
     { href: '/admin/schedule', icon: 'calendar_month', title: 'الجدول', desc: 'مواعيد', color: '#3d665a' },
     { href: '/admin/fixed-schedule', icon: 'event_repeat', title: 'المواعيد الثابتة', desc: 'جدول ثابت', color: '#3d665a' },
@@ -154,6 +155,16 @@ export default async function AdminDashboard({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 mb-3">
+        <Link
+          href="/admin/session-settle"
+          className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
+          style={{ background: '#ba1a1a' }}
+        >
+          تسوية حصص المعلم (بحث طالب · حذف · مزامنة)
+        </Link>
       </div>
 
       <div className="px-4 mb-6">
