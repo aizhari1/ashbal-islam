@@ -139,18 +139,28 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       }
     }
     if (n < old) {
+      // كل الحصص اللي رقمها أكبر من الرقم الجديد (مع تقاريرها) تتشال من عند المعلم
       const { data: extra } = await sb
         .from('attendance')
-        .select('id')
+        .select('id, session_num, notes, session_date')
         .eq('student_id', studentId)
-        .eq('status', 'حاضر')
         .gt('session_num', n)
-        .order('session_date', { ascending: false })
-        .limit(Math.max(1, old - n + 5))
+        .limit(500)
       for (const row of extra ?? []) {
+        await sb.from('activity_log').insert({
+          actor_id: user.id,
+          action: 'reduce_session_remove',
+          entity_type: 'attendance',
+          entity_id: row.id,
+          details: {
+            student_id: studentId,
+            session_num: row.session_num,
+            session_date: row.session_date,
+            report: row.notes,
+          },
+        })
         const { error: delErr } = await sb.from('attendance').delete().eq('id', row.id)
         if (!delErr) removed++
-        if (removed >= old - n) break
       }
     }
 
@@ -161,7 +171,7 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
         added > 0
           ? `تم · أُضيفت ${added} حصة عند المعلم`
           : removed > 0
-            ? `تم · اتشالت ${removed} حصة زيادة`
+            ? `تم · اتشالت ${removed} حصة مع تقريرها من سجل المعلم`
             : 'تم تحديث رقم الحصة عند الجميع',
     }
   } catch (e: any) {
