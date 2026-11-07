@@ -5,6 +5,38 @@ import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
 import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey } from '@/lib/dues'
 
+/** بعد حذف/تعديل: رقم آخر حصة للطالب = آخر حضور فعلي متبقي */
+async function syncStudentLastSession(sb: ReturnType<typeof serviceClient>, studentId: string) {
+  const { data } = await sb
+    .from('attendance')
+    .select('session_num, session_date')
+    .eq('student_id', studentId)
+    .in('status', ['حاضر', 'متأخر'])
+    .order('session_date', { ascending: false })
+    .order('session_num', { ascending: false })
+    .limit(5)
+
+  const last = (data || [])[0]
+  await sb
+    .from('students')
+    .update({
+      last_session_num: last?.session_num != null ? Number(last.session_num) : 0,
+      last_session_date: last?.session_date || null,
+    })
+    .eq('id', studentId)
+}
+
+function revalidateTeacherPaths() {
+  revalidatePath('/teacher')
+  revalidatePath('/teacher/session')
+  revalidatePath('/teacher/attendance')
+  revalidatePath('/teacher/dues')
+  revalidatePath('/admin/attended')
+  revalidatePath('/admin/sessions-detail')
+  revalidatePath('/admin/payroll')
+  revalidatePath('/admin/students')
+}
+
 export async function recordAttendance(data: {
   student_id: string
   teacher_id?: string | null
@@ -97,8 +129,7 @@ export async function recordAttendance(data: {
       .single()
     if (error) return { error: error.message }
 
-    revalidatePath('/teacher')
-    revalidatePath('/teacher/session')
+    revalidateTeacherPaths()
     return { success: true, data: row, message: 'اتحدّث تقرير اليوم' }
   }
 
@@ -175,12 +206,9 @@ export async function recordAttendance(data: {
     },
   })
 
-  revalidatePath('/teacher')
-  revalidatePath('/teacher/session')
-  revalidatePath('/teacher/attendance')
-  revalidatePath('/admin/students')
-  revalidatePath('/admin/finance')
+  revalidateTeacherPaths()
   revalidatePath('/supervisor')
+  revalidatePath('/admin/finance')
   return {
     success: true,
     data: row,
@@ -201,70 +229,130 @@ export async function bulkAttendance(
   return results
 }
 
+/** حذف حصة المعلم — دايمًا بيمسح الصف، ويظبط عدّاد الطالب من آخر حضور متبقي */
 export async function deleteMySession(attendanceId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'غير مصرح' }
-  if (!/^[0-9a-f-]{36}$/i.test(attendanceId)) return { error: 'معرّف غير صالح' }
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'غير مصرح' }
+    if (!/^[0-9a-f-]{36}$/i.test(attendanceId)) return { error: 'معرّف غير صالح' }
 
-  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
-  if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
+    const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+    if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
 
-  const sb = serviceClient()
-  const { data: row } = await sb
-    .from('attendance')
-    .select('id, student_id, teacher_id, status, session_num')
-    .eq('id', attendanceId)
-    .maybeSingle()
-  if (!row) return { error: 'الحصة غير موجودة' }
-  if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
-
-  const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
-  if (error) return { error: error.message }
-
-  if (row.status === 'حاضر' || row.status === 'متأخر') {
-    const { data: st } = await sb
-      .from('students')
-      .select('last_session_num, monthly_sessions, subscription_type')
-      .eq('id', row.student_id)
+    const sb = serviceClient()
+    const { data: row, error: fetchErr } = await sb
+      .from('attendance')
+      .select('id, student_id, teacher_id, status, session_num, notes, session_date')
+      .eq('id', attendanceId)
       .maybeSingle()
-    const quota = packageSize(st || {})
-    let prev = Math.max(0, (st?.last_session_num || 0) - 1)
-    // لو كان آخر رقم 1 بعد دورة جديدة، الرجوع لآخر حصة في الباقة
-    if (quota > 0 && (st?.last_session_num || 0) === 1) prev = quota
-    await sb.from('students').update({ last_session_num: prev }).eq('id', row.student_id)
-  }
+    if (fetchErr) return { error: fetchErr.message }
+    if (!row) return { error: 'الحصة غير موجودة أو اتحذفت قبل كده' }
+    if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
 
-  await supabase.from('activity_log').insert({
-    actor_id: user.id,
-    action: 'teacher_delete_session',
-    entity_type: 'attendance',
-    entity_id: attendanceId,
-    details: { student_id: row.student_id, status: row.status },
-  })
-  revalidatePath('/teacher')
-  revalidatePath('/teacher/attendance')
-  revalidatePath('/teacher/session')
-  return { success: true }
+    // نسخة من التقرير قبل الحذف
+    await sb.from('activity_log').insert({
+      actor_id: user.id,
+      action: 'teacher_delete_session',
+      entity_type: 'attendance',
+      entity_id: attendanceId,
+      details: {
+        student_id: row.student_id,
+        status: row.status,
+        session_num: row.session_num,
+        session_date: row.session_date,
+        report: row.notes,
+      },
+    })
+
+    const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
+    if (error) return { error: `فشل الحذف: ${error.message}` }
+
+    if (row.student_id) {
+      await syncStudentLastSession(sb, row.student_id)
+    }
+
+    revalidateTeacherPaths()
+    return { success: true, message: 'اتحذفت الحصة واتظبط عدّاد الطالب' }
+  } catch (e: any) {
+    return { error: e?.message || 'خطأ غير متوقع أثناء الحذف' }
+  }
+}
+
+/** تعديل حصة المعلم: الحالة + رقم الحصة + المدة + التقرير */
+export async function updateMySession(
+  attendanceId: string,
+  patch: {
+    status?: string
+    session_num?: number | null
+    session_duration?: number | null
+    notes?: string | null
+  }
+) {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'غير مصرح' }
+    if (!/^[0-9a-f-]{36}$/i.test(attendanceId)) return { error: 'معرّف غير صالح' }
+
+    const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+    if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
+
+    const sb = serviceClient()
+    const { data: row } = await sb
+      .from('attendance')
+      .select('id, teacher_id, student_id, status')
+      .eq('id', attendanceId)
+      .maybeSingle()
+    if (!row) return { error: 'الحصة غير موجودة' }
+    if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
+
+    const update: Record<string, unknown> = {}
+    if (patch.status) {
+      const allowed = ['حاضر', 'غائب', 'متأخر', 'معذور']
+      if (!allowed.includes(patch.status)) return { error: 'حالة غير صالحة' }
+      update.status = patch.status
+    }
+    if (patch.session_num !== undefined) {
+      const n = Number(patch.session_num)
+      update.session_num = Number.isFinite(n) && n >= 0 ? Math.round(n) : null
+    }
+    if (patch.session_duration !== undefined) {
+      const d = Number(patch.session_duration)
+      update.session_duration = Number.isFinite(d) && d >= 5 && d <= 300 ? Math.round(d) : null
+    }
+    if (patch.notes !== undefined) {
+      const t = String(patch.notes || '').trim()
+      update.notes = t ? t.slice(0, 4000) : null
+    }
+    if (Object.keys(update).length === 0) return { error: 'مفيش تعديل' }
+
+    const { error } = await sb.from('attendance').update(update).eq('id', attendanceId)
+    if (error) return { error: error.message }
+
+    if (row.student_id) {
+      await syncStudentLastSession(sb, row.student_id)
+    }
+
+    await supabase.from('activity_log').insert({
+      actor_id: user.id,
+      action: 'teacher_update_session',
+      entity_type: 'attendance',
+      entity_id: attendanceId,
+      details: update,
+    })
+
+    revalidateTeacherPaths()
+    return { success: true, message: 'تم حفظ تعديل الحصة' }
+  } catch (e: any) {
+    return { error: e?.message || 'خطأ غير متوقع' }
+  }
 }
 
 export async function updateSessionReport(attendanceId: string, text: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'غير مصرح' }
-  if (!/^[0-9a-f-]{36}$/i.test(attendanceId)) return { error: 'معرّف غير صالح' }
-  const clean = String(text || '').trim().slice(0, 4000)
-  if (!clean) return { error: 'التقرير فاضي' }
-
-  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
-  if (!teacher) return { error: 'لا يوجد ملف معلم مرتبط بحسابك' }
-  const sb = serviceClient()
-  const { data: row } = await sb.from('attendance').select('id, teacher_id').eq('id', attendanceId).maybeSingle()
-  if (!row) return { error: 'الحصة غير موجودة' }
-  if (row.teacher_id !== teacher.id) return { error: 'الحصة دي مش بتاعتك' }
-
-  const { error } = await sb.from('attendance').update({ notes: clean }).eq('id', attendanceId)
-  if (error) return { error: error.message }
-  revalidatePath('/teacher/attendance')
-  return { success: true }
+  return updateMySession(attendanceId, { notes: text })
 }
