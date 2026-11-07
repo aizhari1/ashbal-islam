@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 
 function todayKey() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
@@ -22,11 +23,15 @@ export async function updateSessionNum(formData: FormData) {
 
   const { data: before, error: beforeErr } = await supabase
     .from('students')
-    .select('id, last_session_num, teacher_id, session_duration')
+    .select('id, last_session_num, teacher_id, session_duration, monthly_sessions, subscription_type')
     .eq('id', studentId)
     .maybeSingle()
   if (beforeErr) return { error: beforeErr.message }
   if (!before) return { error: 'الطالب غير موجود' }
+
+  const quota = packageSize(before)
+  const check = validateSessionWithinPackage(lastSessionNum, quota)
+  if (!check.ok) return { error: check.error }
 
   const oldLast = Number(before.last_session_num || 0)
   const teacherId = before.teacher_id || null

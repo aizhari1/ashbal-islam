@@ -11,6 +11,28 @@ export function packageSize(s: {
 }
 
 /**
+ * يمنع حفظ رقم حصة أكبر من حجم الباقة.
+ * quota = 0 يعني مفيش باقة محددة → مفيش حد أعلى صارم.
+ */
+export function validateSessionWithinPackage(
+  sessionNum: number,
+  quota: number | null | undefined
+): { ok: true } | { ok: false; error: string } {
+  const n = Math.floor(Number(sessionNum))
+  if (!Number.isFinite(n) || n < 0) {
+    return { ok: false, error: 'رقم الحصة غير صالح' }
+  }
+  const q = Math.floor(Number(quota) || 0)
+  if (q > 0 && n > q) {
+    return {
+      ok: false,
+      error: `لا يمكن تسجيل رقم حصة ${n} — الباقة ${q} حصص فقط. أقصى رقم مسموح: ${q}`,
+    }
+  }
+  return { ok: true }
+}
+
+/**
  * رقم الحصة التالية داخل الباقة.
  * باقة 4: بعد 4 يرجع يعد من 1 (مش 5).
  */
