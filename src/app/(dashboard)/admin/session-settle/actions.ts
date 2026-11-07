@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
+import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 
 function revalidateTeacherPaths() {
   for (const p of [
@@ -94,10 +95,14 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     const sb = serviceClient()
     const { data: before } = await sb
       .from('students')
-      .select('last_session_num, teacher_id, name, session_duration')
+      .select('last_session_num, teacher_id, name, session_duration, monthly_sessions, subscription_type')
       .eq('id', studentId)
       .maybeSingle()
     if (!before) return { error: 'طالب غير موجود' }
+
+    const quota = packageSize(before)
+    const check = validateSessionWithinPackage(n, quota)
+    if (!check.ok) return { error: check.error }
 
     const old = Number(before.last_session_num || 0)
     const { error } = await sb.from('students').update({ last_session_num: n }).eq('id', studentId)
