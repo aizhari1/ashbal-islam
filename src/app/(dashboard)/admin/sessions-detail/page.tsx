@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { fetchAll } from '@/lib/dues-engine'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,11 +39,14 @@ export default async function SessionsDetailPage({
 
   const [{ data: teachers }, { data: students }] = await Promise.all([
     supabase.from('teachers').select('id, code, name, is_active').order('name'),
-    supabase
-      .from('students')
-      .select('id, code, name, teacher_id, monthly_sessions, session_duration, price_per_session, status')
-      .order('name')
-      .limit(500),
+    fetchAll<any>((from, to) =>
+      supabase
+        .from('students')
+        .select('id, code, name, teacher_id, monthly_sessions, session_duration, price_per_session, status')
+        .order('name')
+        .order('id')
+        .range(from, to)
+    ).then((data) => ({ data })),
   ])
 
   const attendance: any[] = []
@@ -54,6 +58,7 @@ export default async function SessionsDetailPage({
       .gte('session_date', start)
       .lte('session_date', end)
       .order('session_date', { ascending: false })
+      .order('id', { ascending: false })
       .range(off, off + 999)
     if (!chunk?.length) break
     attendance.push(...chunk)
@@ -64,7 +69,7 @@ export default async function SessionsDetailPage({
 
   const teacherMap = new Map((teachers ?? []).map((t) => [t.id, t]))
   const studentMap = new Map((students ?? []).map((s) => [s.id, s]))
-  const present = attendance.filter((a) => a.status === 'حاضر')
+  const present = attendance.filter((a) => a.status === 'حاضر' || a.status === 'متأخر')
   const filterTeacher = sp.teacher || 'all'
 
   type Group = {
