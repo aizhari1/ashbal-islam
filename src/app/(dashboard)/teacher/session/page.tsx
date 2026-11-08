@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordAttendance } from '@/app/actions/attendance'
+import { ensureMyTeacher } from '@/app/actions/ensure-teacher'
 import Link from 'next/link'
 import { normalizePhone } from '@/lib/whatsapp'
 import { displaySessionInPackage, nextPackageSessionNum, packageSize } from '@/lib/dues'
@@ -24,6 +25,7 @@ export default function TeacherSessionPage() {
   const [showForm, setShowForm] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState('')
+  const [loadErr, setLoadErr] = useState('')
   const [preview, setPreview] = useState('')
   const [lastReport, setLastReport] = useState<{ title: string; text: string } | null>(null)
 
@@ -51,22 +53,32 @@ export default function TeacherSessionPage() {
 
   useEffect(() => {
     ;(async () => {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: teacher } = await supabase.from('teachers').select('id, name').eq('profile_id', user.id).maybeSingle()
-      if (teacher?.id) setTeacherId(teacher.id)
-      if (teacher?.name) setTeacherName(teacher.name)
-      let q = supabase
-        .from('students')
-        .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
-        .eq('status', 'نشط')
-        .order('name')
-      if (teacher?.id) q = q.eq('teacher_id', teacher.id)
-      const { data } = await q
-      setStudents((data as Student[]) || [])
+      try {
+        const ensured = await ensureMyTeacher()
+        if (ensured.error || !ensured.teacher) {
+          setLoadErr(ensured.error || 'لا يوجد ملف معلم مرتبط بحسابك')
+          return
+        }
+        setTeacherId(ensured.teacher.id)
+        setTeacherName(ensured.teacher.name || '')
+        const supabase = createClient()
+        const { data, error } = await supabase
+          .from('students')
+          .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
+          .eq('status', 'نشط')
+          .eq('teacher_id', ensured.teacher.id)
+          .order('name')
+        if (error) {
+          setLoadErr(error.message)
+          return
+        }
+        setStudents((data as Student[]) || [])
+        if (!data?.length) {
+          setLoadErr('مفيش طلاب نشطين مربوطين بيك — من الإشراف: تعديل طالب → اختَر هذا المعلم')
+        }
+      } catch (e: any) {
+        setLoadErr(e?.message || 'فشل تحميل غرفة التسميع')
+      }
     })()
   }, [])
 
@@ -255,7 +267,12 @@ export default function TeacherSessionPage() {
             </div>
           </div>
         ))}
-        {students.length === 0 && (
+        {loadErr && (
+          <p className="text-center text-[13px] py-4 px-3 rounded-xl font-bold" style={{ background: '#fff8e8', color: '#8a5a00' }}>
+            {loadErr}
+          </p>
+        )}
+        {students.length === 0 && !loadErr && (
           <p className="text-center text-[13px] py-10" style={{ color: '#6f7974' }}>
             لا طلاب نشطين مرتبطين بحسابك
           </p>
