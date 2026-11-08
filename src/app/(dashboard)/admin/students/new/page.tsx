@@ -113,12 +113,24 @@ export default function NewStudentPage() {
             <p className="text-[13px] font-bold text-[#176b52]">التسعير والحالة</p>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[12px] text-[#6f7974]">سعر الحصة</label>
-                <input value={form.price_per_session} onChange={(e) => set('price_per_session', e.target.value)} type="number"
-                  className="w-full bg-white border border-[#e5efe8] rounded-xl px-4 py-3 text-[14px]" />
+                <label className="text-[12px] font-bold block mb-1" style={{ color: '#176b52' }}>
+                  سعر الحصة للمعلم (ج)
+                </label>
+                <input
+                  value={form.price_per_session}
+                  onChange={(e) => set('price_per_session', e.target.value)}
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="مثال: 60"
+                  className="w-full bg-white border border-[#e5efe8] rounded-xl px-4 py-3 text-[14px]"
+                />
+                <p className="text-[11px] mt-1" style={{ color: '#6f7974' }}>
+                  يُحسب منه راتب المعلم لكل حصة حاضر/متأخر
+                </p>
               </div>
               <div>
-                <label className="text-[12px] text-[#6f7974]">العملة</label>
+                <label className="text-[12px] text-[#6f7974] block mb-1">العملة</label>
                 <select value={form.currency} onChange={(e) => set('currency', e.target.value)}
                   className="w-full bg-white border border-[#e5efe8] rounded-xl px-4 py-3 text-[14px]">
                   <option value="EGP">ج.م</option>
@@ -137,7 +149,7 @@ export default function NewStudentPage() {
               <p><b>الاسم:</b> {form.name}</p>
               <p><b>المعلم:</b> {teachers.find((t) => t.id === form.teacher_id)?.name || '—'}</p>
               <p><b>الاشتراك:</b> {form.subscription_type} · {form.monthly_sessions} حصة</p>
-              <p><b>السعر:</b> {form.price_per_session} {form.currency}/حصة</p>
+              <p><b>سعر الحصة للمعلم:</b> {form.price_per_session} {form.currency}</p>
             </div>
           </div>
         )}
