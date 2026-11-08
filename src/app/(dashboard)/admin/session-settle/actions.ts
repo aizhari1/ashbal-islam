@@ -25,6 +25,16 @@ function revalidateTeacherPaths() {
   }
 }
 
+function isAdminFabricatedNote(notes: string | null | undefined): boolean {
+  const t = String(notes || '')
+  return (
+    t.includes('تسوية إدارية') ||
+    t.includes('تعديل إداري') ||
+    t.includes('أُضيفت من لوحة') ||
+    t.includes('مزامنة')
+  )
+}
+
 export async function deleteAttendanceRow(id: string, studentId?: string) {
   try {
     const supabase = await createClient()
@@ -94,6 +104,12 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
   }
 }
 
+/**
+ * مزامنة رقم الهدف مع سجل المعلم:
+ * - المرجع للزيادة/النقص = أعلى رقم فعلي في الحضور (maxAtt) مش العداد المتضخّم
+ * - لو الهدف أكبر من maxAtt → أضف الأرقام الناقصة فقط
+ * - لو الهدف أصغر → امسح فقط الحصص الإدارية المُفتعلة فوق الهدف، ومتلمسش حصص المعلم الحقيقية
+ */
 export async function setStudentLastSession(studentId: string, lastSessionNum: number) {
   try {
     const supabase = await createClient()
@@ -102,7 +118,7 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     } = await supabase.auth.getUser()
     if (!user) return { error: 'غير مصرح' }
 
-    const n = Math.max(0, Number(lastSessionNum) || 0)
+    const target = Math.max(0, Math.floor(Number(lastSessionNum) || 0))
     const sb = serviceClient()
     const { data: before } = await sb
       .from('students')
@@ -112,40 +128,40 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     if (!before) return { error: 'طالب غير موجود' }
 
     const quota = packageSize(before)
-    const check = validateSessionWithinPackage(n, quota)
+    const check = validateSessionWithinPackage(target, quota)
     if (!check.ok) return { error: check.error }
 
     const stored = Number(before.last_session_num || 0)
-    const { data: maxRow } = await sb
-      .from('attendance')
-      .select('session_num')
-      .eq('student_id', studentId)
-      .not('session_num', 'is', null)
-      .order('session_num', { ascending: false })
-      .limit(1)
-    const maxAtt = maxRow?.[0]?.session_num != null ? Number(maxRow[0].session_num) : 0
-    const old = Math.max(stored, maxAtt)
+    const teacherId = before.teacher_id
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 
-    const { error } = await sb.from('students').update({ last_session_num: n }).eq('id', studentId)
+    const { data: allAtt } = await sb
+      .from('attendance')
+      .select('id, session_num, notes, session_date, status')
+      .eq('student_id', studentId)
+      .limit(500)
+
+    const existingNums = new Set<number>()
+    let maxAtt = 0
+    for (const row of allAtt || []) {
+      const num = row.session_num != null ? Number(row.session_num) : NaN
+      if (Number.isFinite(num) && num > 0) {
+        existingNums.add(num)
+        if (num > maxAtt) maxAtt = num
+      }
+    }
+
+    // حدّث عداد الطالب دائمًا للهدف
+    const { error } = await sb.from('students').update({ last_session_num: target }).eq('id', studentId)
     if (error) return { error: error.message }
 
     let added = 0
     let removed = 0
-    const teacherId = before.teacher_id
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
+    let keptReal = 0
 
-    const { data: existingRows } = await sb
-      .from('attendance')
-      .select('session_num')
-      .eq('student_id', studentId)
-      .not('session_num', 'is', null)
-      .limit(500)
-    const existingNums = new Set(
-      (existingRows || []).map((r) => Number(r.session_num)).filter((x) => Number.isFinite(x) && x > 0)
-    )
-
-    if (n > old && teacherId) {
-      for (let i = old + 1; i <= n; i++) {
+    // زيادة حسب سجل المعلم الفعلي — مش العداد المخزون المتضخّم
+    if (target > maxAtt && teacherId) {
+      for (let i = maxAtt + 1; i <= target; i++) {
         if (existingNums.has(i)) continue
         const { error: insErr } = await sb.from('attendance').insert({
           student_id: studentId,
@@ -162,17 +178,19 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
         }
       }
     }
-    if (n < old) {
-      const { data: extra } = await sb
-        .from('attendance')
-        .select('id, session_num, notes, session_date')
-        .eq('student_id', studentId)
-        .gt('session_num', n)
-        .limit(500)
-      for (const row of extra ?? []) {
+
+    // تقليل: امسح الإداري فقط فوق الهدف — حصص المعلم الحقيقية تفضل
+    if (target < maxAtt) {
+      for (const row of allAtt || []) {
+        const num = row.session_num != null ? Number(row.session_num) : NaN
+        if (!Number.isFinite(num) || num <= target) continue
+        if (!isAdminFabricatedNote(row.notes)) {
+          keptReal++
+          continue
+        }
         await sb.from('activity_log').insert({
           actor_id: user.id,
-          action: 'reduce_session_remove',
+          action: 'reduce_session_remove_admin_only',
           entity_type: 'attendance',
           entity_id: row.id,
           details: {
@@ -207,14 +225,22 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     }
 
     revalidateTeacherPaths()
+
+    let message = `تم ضبط عداد الطالب على ${target}`
+    if (added > 0) message = `تم · أُضيفت ${added} حصة لسجل المعلم (من ${maxAtt} → ${target})`
+    if (removed > 0) message += ` · اتشالت ${removed} حصة إدارية زيادة`
+    if (keptReal > 0)
+      message += ` · اتفادت ${keptReal} حصة حقيقية للمعلم (اتمسحتش)`
+    if (added === 0 && removed === 0 && stored === target) message = 'تم · مفيش تغيير في السجل'
+
     return {
       ok: true,
-      message:
-        added > 0
-          ? `تم · أُضيفت ${added} حصة ناقصة فقط`
-          : removed > 0
-            ? `تم · اتشالت ${removed} حصة مع تقريرها من سجل المعلم`
-            : 'تم تحديث رقم الحصة عند الجميع',
+      message,
+      added,
+      removed,
+      maxAtt,
+      target,
+      keptReal,
     }
   } catch (e: any) {
     return { error: e?.message || 'فشل التحديث' }
