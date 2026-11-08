@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { serviceClient } from '@/lib/supabase/service'
 import { requireAdmin } from '@/lib/courses'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
+import { fetchAll } from '@/lib/dues-engine'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +21,13 @@ export default async function CumulativePage({ searchParams }: { searchParams: P
   const sb = serviceClient()
   const [{ data: teachers }, { data: students }, { data: logs }, { data: sessions }] = await Promise.all([
     sb.from('teachers').select('id, name').eq('is_active', true),
-    sb.from('students').select('id, teacher_id'),
-    sb.from('activity_log').select('action, entity_id, details, created_at').in('action', ['parent_evaluation', 'supervisor_eval', 'admin_teacher_eval', 'admin_supervisor_eval']).gte('created_at', from).lte('created_at', to).limit(5000),
-    sb.from('attendance').select('teacher_id').in('status', ['حاضر', 'متأخر']).gte('session_date', start).lte('session_date', end).limit(20000),
+    fetchAll<any>((f, t) => sb.from('students').select('id, teacher_id').order('id').range(f, t)).then((data) => ({ data })),
+    fetchAll<any>((f, t) =>
+      sb.from('activity_log').select('id, action, entity_id, details, created_at').in('action', ['parent_evaluation', 'supervisor_eval', 'admin_teacher_eval', 'admin_supervisor_eval']).gte('created_at', from).lte('created_at', to).order('id').range(f, t)
+    ).then((data) => ({ data })),
+    fetchAll<any>((f, t) =>
+      sb.from('attendance').select('id, teacher_id').in('status', ['حاضر', 'متأخر']).gte('session_date', start).lte('session_date', end).order('id').range(f, t)
+    ).then((data) => ({ data })),
   ])
 
   const teacherOfStudent = new Map((students || []).map((s: any) => [s.id, s.teacher_id]))
@@ -49,10 +54,9 @@ export default async function CumulativePage({ searchParams }: { searchParams: P
     }
   }
 
-  // نفس معادلة القديم: أولياء الأمور 40% + تقييم الحصص (الإشراف) 35% + تقييم الإدارة 25% (كلها من 5)
   const rows = [...T.values()].map((t) => {
     const parent = t.pN ? r1(t.pSum / t.pN) : null
-    const sess = t.sN ? r1(t.sPts / t.sN / 4) : null // نقاط الإشراف 0–20 → من 5
+    const sess = t.sN ? r1(t.sPts / t.sN / 4) : null
     const admin = t.aN ? r1(t.aSum / t.aN) : null
     let c = 0, w = 0
     if (parent != null) { c += parent * 0.4; w += 0.4 }
