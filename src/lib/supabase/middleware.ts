@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const ROLE_COOKIE = 'ashbal_role'
-const ROLE_MAX_AGE = 60 * 60 * 24 * 30 // 30 يوم
+const ROLE_MAX_AGE = 60 * 60 * 24 * 30
 
 function homeForRole(r: string) {
   if (r === 'teacher') return '/teacher'
@@ -78,12 +78,13 @@ export async function updateSession(request: NextRequest) {
     if (user && !isPublic) {
       let role = request.cookies.get(ROLE_COOKIE)?.value || ''
 
-      // مسارات التسوية والرواتب حساسة — نحدّث الدور من القاعدة لو مش admin
       const needsFreshRole =
         !role ||
         !['admin', 'teacher', 'supervisor', 'parent'].includes(role) ||
         pathname.startsWith('/admin/session-settle') ||
-        pathname.startsWith('/admin/payroll')
+        pathname.startsWith('/admin/payroll') ||
+        pathname.startsWith('/teacher') ||
+        pathname.startsWith('/supervisor')
 
       if (needsFreshRole) {
         try {
@@ -119,7 +120,6 @@ export async function updateSession(request: NextRequest) {
       }
 
       if (pathname.startsWith('/admin')) {
-        // الإدارة تدخل كل حاجة
         if (role === 'admin') {
           // ok
         } else if (role === 'supervisor') {

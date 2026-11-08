@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
+import { resolveTeacherForUser } from '@/lib/resolve-teacher'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,40 +13,54 @@ export default async function TeacherDashboard() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  if (profile && profile.role !== 'teacher' && profile.role !== 'admin') redirect('/login')
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
 
-  const { data: teacher } = await supabase.from('teachers').select('*').eq('profile_id', user.id).maybeSingle()
+  const resolved = await resolveTeacherForUser(supabase, user.id)
+  const teacher = resolved.teacher
+
+  if (!teacher) {
+    return (
+      <div className="min-h-dvh max-w-lg mx-auto p-6" style={{ background: '#eefdf6' }}>
+        <p className="font-bold text-[15px]" style={{ color: '#93000a' }}>
+          مفيش ملف معلم مرتبط بحسابك
+        </p>
+        <p className="text-[13px] mt-2" style={{ color: '#6f7974' }}>
+          {resolved.message || 'تواصل مع الإدارة من «إدارة المستخدمين» واضغط إصلاح تلقائي.'}
+        </p>
+        <p className="text-[12px] mt-2" dir="ltr" style={{ color: '#6f7974' }}>
+          user: {user.id.slice(0, 8)}… · role: {profile?.role || '—'} · name: {profile?.full_name || '—'}
+        </p>
+        <Link href="/login" className="inline-block mt-4 text-[13px] font-bold" style={{ color: '#176b52' }}>
+          تسجيل خروج وإعادة دخول
+        </Link>
+      </div>
+    )
+  }
 
   const monthKey = currentMonthKey()
   const { start, end } = monthBounds(monthKey)
 
-  let active = 0,
-    sessions = 0,
-    trials = 0
-  if (teacher) {
-    const { count: a } = await supabase
-      .from('students')
-      .select('*', { count: 'exact', head: true })
-      .eq('teacher_id', teacher.id)
-      .eq('status', 'نشط')
-    // حصص الشهر الحالي فقط
-    const { count: s } = await supabase
-      .from('attendance')
-      .select('*', { count: 'exact', head: true })
-      .eq('teacher_id', teacher.id)
-      .in('status', ['حاضر', 'متأخر'])
-      .gte('session_date', start)
-      .lte('session_date', end)
-    const { count: tr } = await supabase
-      .from('students')
-      .select('*', { count: 'exact', head: true })
-      .eq('teacher_id', teacher.id)
-      .eq('status', 'تجريبي')
-    trials = tr ?? 0
-    active = a ?? 0
-    sessions = s ?? 0
-  }
+  const { count: a } = await supabase
+    .from('students')
+    .select('*', { count: 'exact', head: true })
+    .eq('teacher_id', teacher.id)
+    .eq('status', 'نشط')
+  const { count: s } = await supabase
+    .from('attendance')
+    .select('*', { count: 'exact', head: true })
+    .eq('teacher_id', teacher.id)
+    .in('status', ['حاضر', 'متأخر'])
+    .gte('session_date', start)
+    .lte('session_date', end)
+  const { count: tr } = await supabase
+    .from('students')
+    .select('*', { count: 'exact', head: true })
+    .eq('teacher_id', teacher.id)
+    .eq('status', 'تجريبي')
+
+  const active = a ?? 0
+  const sessions = s ?? 0
+  const trials = tr ?? 0
 
   const cards = [
     { href: '/teacher/students', icon: 'groups', title: 'طلابي', desc: 'تسجيل حضور بعد كل حصة' },
@@ -72,6 +87,9 @@ export default async function TeacherDashboard() {
               أهلاً، {profile?.full_name || teacher?.name || 'معلم'}
             </p>
             <p className="text-[11px] opacity-70 mt-0.5 text-white">{monthLabelAr(monthKey)}</p>
+            {(resolved.linked || resolved.created) && (
+              <p className="text-[10px] opacity-90 mt-1 text-white">✓ {resolved.message}</p>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-3 text-center text-white">
@@ -89,6 +107,17 @@ export default async function TeacherDashboard() {
           </div>
         </div>
       </div>
+
+      {active === 0 && (
+        <div className="px-3 -mt-1 mb-2">
+          <p
+            className="rounded-xl px-3 py-2 text-[12px] font-bold text-center"
+            style={{ background: '#fff8e8', color: '#8a5a00' }}
+          >
+            مفيش طلاب مرتبطين بيك حالياً. من الإشراف/الإدارة: تعديل طالب → اختَر المعلم «{teacher.name}».
+          </p>
+        </div>
+      )}
 
       <main className="px-3 -mt-3">
         <div className="card p-2 grid grid-cols-2 gap-2">
