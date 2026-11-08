@@ -28,7 +28,7 @@ export default async function SupervisorPaymentPage() {
         <Link href="/supervisor" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>
             تسجيل اشتراك (دفعة)
           </h1>
@@ -38,10 +38,20 @@ export default async function SupervisorPaymentPage() {
         </div>
       </header>
 
-      <div className="px-4 mb-3">
-        <div className="rounded-2xl px-3 py-2.5 text-[12px] font-bold" style={{ background: '#fff8e6', color: '#5c4500', border: '1px solid #e8b84a' }}>
+      <div className="px-4 mb-3 space-y-2">
+        <div
+          className="rounded-2xl px-3 py-2.5 text-[12px] font-bold"
+          style={{ background: '#fff8e6', color: '#5c4500', border: '1px solid #e8b84a' }}
+        >
           فوق في الفورم: مربع أصفر «دفع مقدم» — علّمه واختار عدد الشهور
         </div>
+        <Link
+          href="/admin/payments"
+          className="block text-center rounded-2xl px-3 py-2.5 text-[13px] font-bold text-white"
+          style={{ background: '#755b1b' }}
+        >
+          عرض / تعديل / حذف الدفعات المسجّلة ←
+        </Link>
       </div>
 
       <div className="px-4">
