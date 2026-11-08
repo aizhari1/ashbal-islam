@@ -1,4 +1,5 @@
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
+import { fetchAll } from '@/lib/dues-engine'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -28,14 +29,18 @@ export default async function ReportsPage() {
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'منسحب'),
     supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'تجريبي'),
     supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('payments').select('amount, payment_date').gte('payment_date', monthStart).lte('payment_date', monthEnd),
+    fetchAll<any>((from, to) =>
+      supabase.from('payments').select('id, amount, payment_date').gte('payment_date', monthStart).lte('payment_date', monthEnd).order('id').range(from, to)
+    ).then((data) => ({ data })),
     supabase.from('students').select('id, name, code, amount_due').gt('amount_due', 0).order('amount_due', { ascending: false }).limit(20),
-    supabase.from('attendance').select('id, status').gte('session_date', monthStart).lte('session_date', monthEnd),
+    fetchAll<any>((from, to) =>
+      supabase.from('attendance').select('id, status').gte('session_date', monthStart).lte('session_date', monthEnd).order('id').range(from, to)
+    ).then((data) => ({ data })),
     supabase.from('activity_log').select('id').eq('action', 'parent_evaluation'),
   ])
 
   const collected = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
-  const present = (attendance ?? []).filter((a: any) => a.status === 'حاضر').length
+  const present = (attendance ?? []).filter((a: any) => a.status === 'حاضر' || a.status === 'متأخر').length
   const absent = (attendance ?? []).filter((a: any) => a.status === 'غائب').length
   const totalAtt = attendance?.length ?? 0
 
