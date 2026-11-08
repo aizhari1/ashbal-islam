@@ -29,10 +29,21 @@ function revalidateAll() {
   }
 }
 
+function isAdminFabricatedNote(notes: string | null | undefined): boolean {
+  const t = String(notes || '')
+  return (
+    t.includes('تسوية إدارية') ||
+    t.includes('تعديل إداري') ||
+    t.includes('أُضيفت من لوحة') ||
+    t.includes('مزامنة')
+  )
+}
+
 /**
  * تعديل رقم آخر حصة:
- * - زيادة → إضافة الحصص الناقصة فقط (مش من 1 تاني)
- * - تقليل → حذف الحصص الزائدة + تقاريرها من سجل المعلم
+ * المرجع = أعلى رقم في سجل المعلم (maxAtt) وليس العداد المتضخّم
+ * زيادة عن maxAtt → أضف الناقص فقط
+ * تقليل → امسح الإداري فقط فوق الهدف، حصص المعلم الحقيقية تفضل
  */
 export async function updateSessionNum(formData: FormData) {
   const supabase = await createClient()
@@ -57,21 +68,26 @@ export async function updateSessionNum(formData: FormData) {
   if (!before) return { error: 'الطالب غير موجود' }
 
   const storedLast = Number(before.last_session_num || 0)
-  const { data: maxRow } = await sb
+  const { data: allAtt } = await sb
     .from('attendance')
-    .select('session_num')
+    .select('id, session_num, session_date, notes, status')
     .eq('student_id', studentId)
-    .not('session_num', 'is', null)
-    .order('session_num', { ascending: false })
-    .limit(1)
-  const maxAtt = maxRow?.[0]?.session_num != null ? Number(maxRow[0].session_num) : 0
-  const oldLast = Math.max(storedLast, maxAtt)
-  const teacherId = before.teacher_id || null
+    .limit(500)
 
-  // حقل فاضي → متغيّرش الرقم
+  let maxAtt = 0
+  const existingNums = new Set<number>()
+  for (const row of allAtt || []) {
+    const num = row.session_num != null ? Number(row.session_num) : NaN
+    if (Number.isFinite(num) && num > 0) {
+      existingNums.add(num)
+      if (num > maxAtt) maxAtt = num
+    }
+  }
+
+  const teacherId = before.teacher_id || null
   const lastSessionNum =
     rawLast === null || String(rawLast).trim() === ''
-      ? oldLast
+      ? Math.max(storedLast, maxAtt)
       : Math.max(0, Math.floor(Number(rawLast) || 0))
 
   const quota = packageSize(before)
@@ -82,23 +98,13 @@ export async function updateSessionNum(formData: FormData) {
   const removedSessions: number[] = []
   const removedReports: { session_num: number | null; session_date: string | null; notes: string | null }[] =
     []
+  let keptReal = 0
 
-  const { data: existingRows } = await sb
-    .from('attendance')
-    .select('session_num')
-    .eq('student_id', studentId)
-    .not('session_num', 'is', null)
-    .limit(500)
-  const existingNums = new Set(
-    (existingRows || [])
-      .map((r) => Number(r.session_num))
-      .filter((n) => Number.isFinite(n) && n > 0)
-  )
-
-  if (lastSessionNum > oldLast && teacherId) {
+  // زيادة من maxAtt الفعلي
+  if (lastSessionNum > maxAtt && teacherId) {
     const today = lastSessionDate || todayKey()
     const duration = Number(before.session_duration) || 30
-    for (let n = oldLast + 1; n <= lastSessionNum; n++) {
+    for (let n = maxAtt + 1; n <= lastSessionNum; n++) {
       if (existingNums.has(n)) continue
       const { error: attErr } = await sb.from('attendance').insert({
         student_id: studentId,
@@ -116,15 +122,15 @@ export async function updateSessionNum(formData: FormData) {
     }
   }
 
-  if (lastSessionNum < oldLast) {
-    const { data: extra } = await sb
-      .from('attendance')
-      .select('id, session_num, session_date, notes, status')
-      .eq('student_id', studentId)
-      .gt('session_num', lastSessionNum)
-      .limit(500)
-
-    for (const row of extra ?? []) {
+  // تقليل: إداري فقط
+  if (lastSessionNum < maxAtt) {
+    for (const row of allAtt || []) {
+      const num = row.session_num != null ? Number(row.session_num) : NaN
+      if (!Number.isFinite(num) || num <= lastSessionNum) continue
+      if (!isAdminFabricatedNote(row.notes)) {
+        keptReal++
+        continue
+      }
       removedReports.push({
         session_num: row.session_num,
         session_date: row.session_date,
@@ -138,7 +144,7 @@ export async function updateSessionNum(formData: FormData) {
   }
 
   let resolvedDate = lastSessionDate
-  if (!resolvedDate && removedSessions.length > 0) {
+  if (!resolvedDate && (removedSessions.length > 0 || addedSessions.length > 0)) {
     const { data: lastAtt } = await sb
       .from('attendance')
       .select('session_date')
@@ -169,24 +175,26 @@ export async function updateSessionNum(formData: FormData) {
       student_name: before.name,
       last_session_num: lastSessionNum,
       last_session_date: lastSessionDate,
-      old_last_session_num: oldLast,
       stored_last: storedLast,
       max_attendance_num: maxAtt,
       added_session_nums: addedSessions,
       removed_session_nums: removedSessions,
+      kept_real: keptReal,
       removed_reports: removedReports.slice(0, 20),
     },
   })
 
   revalidateAll()
 
-  let message = 'تم الحفظ'
+  let message = `تم ضبط العداد على ${lastSessionNum}`
+  if (addedSessions.length > 0) {
+    message = `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم (${addedSessions.join('، ')})`
+  }
   if (removedSessions.length > 0) {
-    message = `تم · اتشالت ${removedSessions.length} حصة وتقريرها من سجل المعلم (${removedSessions.join('، ')})`
-  } else if (addedSessions.length > 0) {
-    message = `تم · أُضيفت ${addedSessions.length} حصة ناقصة فقط (${addedSessions.join('، ')})`
-  } else if (lastSessionNum === oldLast) {
-    message = 'تم الحفظ · مفيش حصص اتضافت'
+    message += ` · اتشالت ${removedSessions.length} إدارية زيادة`
+  }
+  if (keptReal > 0) {
+    message += ` · اتفادت ${keptReal} حصة حقيقية للمعلم`
   }
 
   return {
