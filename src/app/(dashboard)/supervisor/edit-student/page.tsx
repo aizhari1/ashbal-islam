@@ -67,7 +67,13 @@ export default async function SupervisorEditStudentPage({
 
       {selected && (
         <div className="px-4">
-          <EditStudentForm student={selected as any} teachers={teacherOptions} />
+          {/* key: لما الطالب يتغيّر (أو بياناته تتحدّث بعد الحفظ) الفورم يتبني من جديد —
+              الخانات defaultValue ومش بتتحدّث لوحدها، وكانت بتفضل بيانات الطالب اللي قبله */}
+          <EditStudentForm
+            key={[selected.id, selected.name, selected.phone, selected.teacher_id, selected.monthly_sessions, selected.session_duration, selected.last_session_num, selected.amount_due, selected.price_per_session, selected.join_date].join('|')}
+            student={selected as any}
+            teachers={teacherOptions}
+          />
         </div>
       )}
 
