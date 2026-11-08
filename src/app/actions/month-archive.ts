@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { currentMonthKey, previousMonthKey } from '@/lib/dues'
+import { fetchAll } from '@/lib/dues-engine'
 
 /**
  * أول ما يدخل شهر جديد: يحفظ ملخص الشهر السابق في activity_log
@@ -35,25 +36,43 @@ export async function ensureMonthArchived() {
   const lastDay = new Date(y, m, 0).getDate()
   const end = `${prev}-${String(lastDay).padStart(2, '0')}`
 
-  const [{ data: att }, { data: pays }, { data: students }] = await Promise.all([
-    supabase
-      .from('attendance')
-      .select('id, status, teacher_id, student_id')
-      .gte('session_date', start)
-      .lte('session_date', end)
-      .limit(5000),
-    supabase
-      .from('payments')
-      .select('id, amount, student_id')
-      .gte('payment_date', start)
-      .lte('payment_date', end)
-      .limit(3000),
-    supabase.from('students').select('id, amount_due, status').limit(500),
-  ])
+  // .limit(5000) كانت بتتقصّ فعليًا عند 1000 صف (حد Supabase) فالأرشيف كان بيطلع أقل من الحقيقي
+  // — بنقرأ بالصفحات بترتيب ثابت، ونحسب الحضور بنفس تعريف الرواتب (حاضر + متأخر)
+  let att: { id: string; status: string | null }[]
+  let pays: { id: string; amount: number | null }[]
+  let students: { id: string; amount_due: number | null; status: string | null }[]
+  try {
+    ;[att, pays, students] = await Promise.all([
+      fetchAll<{ id: string; status: string | null }>((from, to) =>
+        supabase
+          .from('attendance')
+          .select('id, status')
+          .gte('session_date', start)
+          .lte('session_date', end)
+          .order('id')
+          .range(from, to)
+      ),
+      fetchAll<{ id: string; amount: number | null }>((from, to) =>
+        supabase
+          .from('payments')
+          .select('id, amount')
+          .gte('payment_date', start)
+          .lte('payment_date', end)
+          .order('id')
+          .range(from, to)
+      ),
+      fetchAll<{ id: string; amount_due: number | null; status: string | null }>((from, to) =>
+        supabase.from('students').select('id, amount_due, status').order('id').range(from, to)
+      ),
+    ])
+  } catch (e: any) {
+    // مانسجّلش أرشيف ناقص — هنحاول تاني في أول زيارة بعدها
+    return { error: e?.message || 'تعذّر جلب بيانات الشهر للأرشفة' }
+  }
 
-  const present = (att ?? []).filter((a) => a.status === 'حاضر').length
-  const paidTotal = (pays ?? []).reduce((s, p) => s + Number(p.amount || 0), 0)
-  const dueTotal = (students ?? []).reduce((s, st) => s + Number(st.amount_due || 0), 0)
+  const present = att.filter((a) => a.status === 'حاضر' || a.status === 'متأخر').length
+  const paidTotal = pays.reduce((s, p) => s + Number(p.amount || 0), 0)
+  const dueTotal = students.reduce((s, st) => s + Number(st.amount_due || 0), 0)
 
   const { error } = await supabase.from('activity_log').insert({
     actor_id: user.id,
@@ -63,9 +82,9 @@ export async function ensureMonthArchived() {
       month: prev,
       archived_at: new Date().toISOString(),
       current_month: cur,
-      sessions_total: (att ?? []).length,
+      sessions_total: att.length,
       sessions_present: present,
-      payments_count: (pays ?? []).length,
+      payments_count: pays.length,
       payments_total: paidTotal,
       amount_due_total_at_archive: dueTotal,
       note: 'ملخص الشهر محفوظ — البيانات التفصيلية (حضور/دفعات) تفضل في الجداول',
