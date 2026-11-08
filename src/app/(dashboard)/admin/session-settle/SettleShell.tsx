@@ -42,6 +42,8 @@ export function SettleShell() {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [maxTeacherNum, setMaxTeacherNum] = useState(0)
+  const [teacherPresentCount, setTeacherPresentCount] = useState(0)
   const [lastNum, setLastNum] = useState('0')
   const [msg, setMsg] = useState('')
   const [pending, start] = useTransition()
@@ -95,38 +97,65 @@ export function SettleShell() {
       .slice(0, 60)
   }, [q, students])
 
-  async function pick(s: Student) {
-    setSelected(s)
-    setLastNum(String(s.last_session_num ?? 0))
-    setMsg('')
-    setSessions([])
-    try {
-      const supabase = createClient()
-      const startDate = `${month}-01`
-      const endDate = monthEnd(month)
-      const { data, error } = await supabase
+  async function loadStudentSessions(s: Student) {
+    const supabase = createClient()
+    const startDate = `${month}-01`
+    const endDate = monthEnd(month)
+
+    const [monthRes, statsRes] = await Promise.all([
+      supabase
         .from('attendance')
         .select('id, session_date, session_num, status, notes, session_duration, teachers(name)')
         .eq('student_id', s.id)
         .gte('session_date', startDate)
         .lte('session_date', endDate)
         .order('session_date', { ascending: false })
-        .limit(200)
-      if (error) throw new Error(error.message)
-      setSessions(
-        (data || []).map((r: any) => {
-          const t = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers
-          return {
-            id: r.id,
-            session_date: String(r.session_date).slice(0, 10),
-            session_num: r.session_num,
-            status: r.status,
-            notes: r.notes,
-            session_duration: r.session_duration,
-            teacher_name: t?.name || '—',
-          }
-        })
-      )
+        .limit(200),
+      supabase
+        .from('attendance')
+        .select('session_num, status')
+        .eq('student_id', s.id)
+        .in('status', ['حاضر', 'متأخر'])
+        .limit(500),
+    ])
+
+    if (monthRes.error) throw new Error(monthRes.error.message)
+    if (statsRes.error) throw new Error(statsRes.error.message)
+
+    setSessions(
+      (monthRes.data || []).map((r: any) => {
+        const t = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers
+        return {
+          id: r.id,
+          session_date: String(r.session_date).slice(0, 10),
+          session_num: r.session_num,
+          status: r.status,
+          notes: r.notes,
+          session_duration: r.session_duration,
+          teacher_name: t?.name || '—',
+        }
+      })
+    )
+
+    const rows = statsRes.data || []
+    setTeacherPresentCount(rows.length)
+    let maxN = 0
+    for (const r of rows) {
+      const n = Number(r.session_num)
+      if (Number.isFinite(n) && n > maxN) maxN = n
+    }
+    setMaxTeacherNum(maxN)
+  }
+
+  async function pick(s: Student) {
+    setSelected(s)
+    setLastNum(String(s.last_session_num ?? 0))
+    setMsg('')
+    setSessions([])
+    setMaxTeacherNum(0)
+    setTeacherPresentCount(0)
+    try {
+      await loadStudentSessions(s)
     } catch (e: any) {
       setMsg(e?.message || 'فشل تحميل الحصص')
     }
@@ -140,14 +169,18 @@ export function SettleShell() {
       if (r?.error) setMsg(r.error)
       else {
         setMsg(r?.message || 'اتحذفت من عند الجميع ✓')
-        setSessions((prev) => prev.filter((x) => x.id !== id))
         if (typeof r?.last_session_num === 'number') {
           const n = r.last_session_num
           setLastNum(String(n))
           setSelected({ ...selected, last_session_num: n })
           setStudents((prev) =>
-            prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: n } : s))
+            prev.map((x) => (x.id === selected.id ? { ...x, last_session_num: n } : x))
           )
+        }
+        try {
+          await loadStudentSessions(selected)
+        } catch {
+          /* ignore */
         }
       }
     })
@@ -161,6 +194,18 @@ export function SettleShell() {
       setMsg(`لا يمكن حفظ رقم ${n} — الباقة ${pkg} حصص فقط`)
       return
     }
+    const studentNum = Number(selected.last_session_num) || 0
+    const teacherMax = maxTeacherNum
+    let confirmMsg = `تأكيد المزامنة على الرقم ${n}؟`
+    if (n > teacherMax) {
+      confirmMsg = `الطالب هيبقى على ${n} والمعلم حالياً أعلى رقم عنده ${teacherMax}.\nهتتضاف الحصص الناقصة فقط (${teacherMax + 1} ← ${n}) لسجل المعلم.\nمتأكد؟`
+    } else if (n < teacherMax) {
+      confirmMsg = `الطالب هيبقى على ${n} والمعلم عنده حصص بأرقام أكبر من ${n}.\nهتتشال الحصص الزيادة من سجل المعلم.\nمتأكد؟`
+    } else if (n === studentNum && n === teacherMax) {
+      confirmMsg = `الرقم ${n} متطابق أصلاً. تحفظ تاني؟`
+    }
+    if (!confirm(confirmMsg)) return
+
     start(async () => {
       const r = await setStudentLastSession(selected.id, n)
       if (r?.error) setMsg(r.error)
@@ -168,13 +213,20 @@ export function SettleShell() {
         setMsg(r?.message || 'تم ✓')
         setSelected({ ...selected, last_session_num: n })
         setStudents((prev) =>
-          prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: n } : s))
+          prev.map((x) => (x.id === selected.id ? { ...x, last_session_num: n } : x))
         )
+        try {
+          await loadStudentSessions({ ...selected, last_session_num: n })
+        } catch {
+          /* ignore */
+        }
       }
     })
   }
 
   const selectedPkg = Number(selected?.monthly_sessions) || 0
+  const studentNum = Number(selected?.last_session_num) || 0
+  const mismatch = selected && studentNum !== maxTeacherNum
 
   return (
     <div className="px-4 space-y-3">
@@ -197,6 +249,9 @@ export function SettleShell() {
 
       {!selected && (
         <>
+          <p className="text-[12px] rounded-xl px-3 py-2" style={{ background: '#fff8e8', color: '#6b5a1a' }}>
+            التسوية هنا هي اللي بتزامِن عداد الطالب مع سجل المعلم. تعديل بيانات الطالب لوحده ما بيضيفش ولا بيحذف حصص.
+          </p>
           <input
             type="search"
             value={q}
@@ -223,7 +278,7 @@ export function SettleShell() {
                 >
                   <span className="font-bold block">{s.name}</span>
                   <span className="text-[11px]" style={{ color: '#6f7974' }}>
-                    {s.code} · حصة {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} ·{' '}
+                    {s.code} · عداد {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} ·{' '}
                     <span style={{ color: '#176b52', fontWeight: 700 }}>{packageLabel(s.monthly_sessions)}</span>
                     {' · '}{s.teacher_name}
                   </span>
@@ -248,12 +303,6 @@ export function SettleShell() {
                 <p className="text-[11px]" style={{ color: '#6f7974' }}>
                   {selected.code} · المعلم: {selected.teacher_name}
                 </p>
-                <p className="text-[12px] font-bold mt-1" style={{ color: '#176b52' }}>
-                  {packageLabel(selected.monthly_sessions)}
-                  {' · '}
-                  الحصة الحالية: {selected.last_session_num ?? 0}
-                  {selectedPkg > 0 ? ` / ${selectedPkg}` : ''}
-                </p>
               </div>
               <button
                 type="button"
@@ -268,10 +317,37 @@ export function SettleShell() {
                 تغيير
               </button>
             </div>
+
+            <div
+              className="mt-3 rounded-xl p-3 text-[12px] space-y-1"
+              style={{
+                background: mismatch ? '#fff4e5' : '#e8f7f0',
+                border: `1px solid ${mismatch ? '#f0c070' : '#cde8dc'}`,
+              }}
+            >
+              <p className="font-bold" style={{ color: mismatch ? '#8a5a00' : '#176b52' }}>
+                {mismatch ? 'غير متطابق — محتاج تسوية' : 'متطابق ✓'}
+              </p>
+              <p>
+                عداد الطالب: <b>{studentNum}</b>
+                {selectedPkg > 0 ? ` / ${selectedPkg}` : ''}
+              </p>
+              <p>
+                أعلى رقم في سجل المعلم: <b>{maxTeacherNum}</b>
+              </p>
+              <p>
+                عدد حصص حاضر/متأخر مسجّلة: <b>{teacherPresentCount}</b>
+              </p>
+              <p className="text-[11px]" style={{ color: '#6f7974' }}>
+                مثال: لو العداد 7 والمعلم واصل 2 فقط → اكتب 7 واحفظ، هتتضاف 3 و4 و5 و6 و7 فقط.
+                لو عايز تخليه على واقع المعلم اكتب 2 واحفظ، هيتشال الزائد.
+              </p>
+            </div>
+
             <div className="flex gap-2 mt-3 items-end">
               <div className="flex-1">
                 <label className="text-[11px] font-bold">
-                  رقم آخر حصة{selectedPkg > 0 ? ` (حد أقصى ${selectedPkg})` : ''}
+                  الرقم المستهدف بعد التسوية{selectedPkg > 0 ? ` (حد ${selectedPkg})` : ''}
                 </label>
                 <input
                   type="number"
@@ -284,7 +360,7 @@ export function SettleShell() {
                 />
               </div>
               <button type="button" disabled={pending} onClick={saveLast} className="btn-primary px-4 py-2 text-[12px]">
-                حفظ
+                مزامنة
               </button>
             </div>
           </div>
