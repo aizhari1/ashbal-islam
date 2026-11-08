@@ -65,6 +65,8 @@ export function computeDueReminders(
     let dueDate = ''
     let reason = ''
     let packageDue = false
+    // عدد الباقات المستحقة (الأصل كان بيحسب باقة واحدة بس حتى لو الطالب خلّص أكتر من باقة بدون دفع)
+    let packagesOwed = 1
 
     if (lp) {
       const after = days.filter((d) => d > lp.day)
@@ -79,6 +81,8 @@ export function computeDueReminders(
         const need = pkg * (lp.months || 1)
         if (since >= need) {
           packageDue = true
+          // أول باقة مستحقة عند إكمال المدفوع (need)، وبعدها باقة جديدة كل pkg حصص
+          packagesOwed = Math.max(1, Math.floor((since - need) / pkg) + 1)
           dueDate = after[need - 1] || after[after.length - 1] || s.last_session_date || ''
           reason = `أكمل ${since} حصة بعد آخر دفعة (${lp.day})`
         }
@@ -92,7 +96,7 @@ export function computeDueReminders(
       }
     }
 
-    const price = packageDue ? packagePrice(s) : 0
+    const price = packageDue ? packagePrice(s) * packagesOwed : 0
     const outstanding = price + residual
     if (outstanding <= 0) continue
 
