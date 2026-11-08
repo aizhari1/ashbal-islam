@@ -2,16 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MonthPicker } from './MonthPicker'
+import { fetchAll } from '@/lib/dues-engine'
+import { computeTeacherPayroll } from '@/lib/teacher-payroll'
+import { currentMonthKey } from '@/lib/dues'
 
 const AR_MONTHS = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
 
 function parseMonth(s: string | undefined) {
-  const now = new Date()
-  if (!s || !/^\d{4}-\d{2}$/.test(s)) {
-    return { key: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`, year: now.getFullYear(), month: now.getMonth() + 1 }
-  }
-  const [y, m] = s.split('-').map(Number)
-  return { key: s, year: y, month: m }
+  const valid = !!s && /^\d{4}-(0[1-9]|1[0-2])$/.test(s)
+  const key = valid ? (s as string) : currentMonthKey()
+  const [y, m] = key.split('-').map(Number)
+  return { key, year: y, month: m }
 }
 
 function monthBounds(year: number, month: number) {
@@ -45,8 +46,12 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
     { count: activeStudents },
     { count: newStudents },
   ] = await Promise.all([
-    supabase.from('payments').select('amount, payment_date, student_id, method').gte('payment_date', start).lte('payment_date', end),
-    supabase.from('attendance').select('id, teacher_id, student_id, session_date, status, session_num').gte('session_date', start).lte('session_date', end),
+    fetchAll<any>((from, to) =>
+      supabase.from('payments').select('id, amount, payment_date, student_id, method').gte('payment_date', start).lte('payment_date', end).order('id').range(from, to)
+    ).then((data) => ({ data })),
+    fetchAll<any>((from, to) =>
+      supabase.from('attendance').select('id, teacher_id, student_id, session_date, status, session_num').gte('session_date', start).lte('session_date', end).order('id').range(from, to)
+    ).then((data) => ({ data })),
     supabase.from('teachers').select('id, name, code, is_active'),
     supabase.from('activity_log').select('details, created_at').eq('action', 'cash_expense').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
     supabase.from('activity_log').select('details, created_at').eq('action', 'parent_evaluation').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
@@ -62,23 +67,18 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
   const absent = (attendance ?? []).filter((a) => String(a.status || '').includes('غياب') || a.status === 'غائب')
   const sessionsCount = present.length
 
-  const DEFAULT_RATE = 25
   const nameMap: Record<string, string> = {}
   for (const t of teachers ?? []) {
     nameMap[t.id] = t.name || t.code || '—'
   }
-  const teacherSessions: Record<string, number> = {}
-  for (const a of present) {
-    if (!a.teacher_id) continue
-    teacherSessions[a.teacher_id] = (teacherSessions[a.teacher_id] || 0) + 1
-  }
-  const payrollRows = Object.entries(teacherSessions)
-    .map(([tid, cnt]) => ({
-      id: tid,
-      name: nameMap[tid] || 'معلم',
-      sessions: cnt,
-      rate: DEFAULT_RATE,
-      due: cnt * DEFAULT_RATE,
+  const payroll = await computeTeacherPayroll(supabase, { month: key })
+  const payrollRows = payroll.rows
+    .map((r) => ({
+      id: r.teacherId,
+      name: nameMap[r.teacherId] || 'معلم',
+      sessions: r.sessions,
+      rateParts: r.rateParts,
+      due: r.salary,
     }))
     .sort((a, b) => b.due - a.due)
   const payrollTotal = payrollRows.reduce((s, r) => s + r.due, 0)
@@ -196,7 +196,7 @@ export default async function MonthlySummaryPage({ searchParams }: { searchParam
             <div key={r.id} className="px-3.5 py-2.5 flex justify-between border-b last:border-0" style={{ borderColor: 'rgba(18,61,50,0.06)' }}>
               <div>
                 <p className="text-[13px] font-bold">{r.name}</p>
-                <p className="text-[11px]" style={{ color: '#6f7974' }}>{r.sessions} حصة × {r.rate} ج</p>
+                <p className="text-[11px]" style={{ color: '#6f7974' }}>{r.sessions} حصة · {r.rateParts} ج</p>
               </div>
               <p className="text-[14px] font-bold" style={{ color: '#755b1b' }}>{r.due.toLocaleString('ar-EG')}</p>
             </div>
