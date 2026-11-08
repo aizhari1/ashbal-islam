@@ -49,18 +49,21 @@ export default async function PayrollPage({
     const attendance: any[] = []
     let off = 0
     while (true) {
-      const { data: chunk } = await supabase
+      // نفس تعريف lib/teacher-payroll: حاضر + متأخر، وبترتيب ثابت عشان الصفحات متتكررش
+      const { data: chunk, error: attErr } = await supabase
         .from('attendance')
-        .select('teacher_id, student_id, status, session_date, students(price_per_session)')
+        .select('id, teacher_id, student_id, status, session_date, students(price_per_session)')
         .gte('session_date', monthStart)
         .lte('session_date', monthEnd)
-        .eq('status', 'حاضر')
+        .in('status', ['حاضر', 'متأخر'])
+        .order('session_date', { ascending: true })
+        .order('id', { ascending: true })
         .range(off, off + 999)
+      if (attErr) throw new Error(attErr.message)
       if (!chunk?.length) break
       attendance.push(...chunk)
       if (chunk.length < 1000) break
       off += 1000
-      if (off > 50000) break
     }
 
     const { data: rateLogs } = await supabase
