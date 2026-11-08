@@ -3,6 +3,33 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { cairoToday } from '@/lib/student-tenure'
+import { serviceClient } from '@/lib/supabase/service'
+import { fetchAll } from '@/lib/dues-engine'
+
+/**
+ * الكود الجديد = أكبر رقم موجود فعليًا + 1 (بنفس شكل أحدث كود: بادئة وعدد خانات).
+ * القديم كان بيرتّب الأكواد كنص ويقرأ أول صف بس (مع RLS ممكن يخفي طلاب)،
+ * فكان بيطلع كود موجود → duplicate key students_code_key.
+ */
+async function nextStudentCode(): Promise<string> {
+  const rows = await fetchAll<{ id: string; code: string | null }>((from, to) =>
+    serviceClient().from('students').select('id, code').order('id').range(from, to)
+  )
+  let maxNum = 0
+  let prefix = 'ST-'
+  let width = 4
+  for (const r of rows) {
+    const m = String(r.code || '').match(/^(\D*)(\d+)$/)
+    if (!m) continue
+    const n = parseInt(m[2], 10)
+    if (n >= maxNum) {
+      maxNum = n
+      prefix = m[1]
+      width = m[2].length
+    }
+  }
+  return `${prefix}${String(maxNum + 1).padStart(width, '0')}`
+}
 
 export async function addStudent(formData: FormData) {
   const supabase = await createClient()
@@ -12,20 +39,11 @@ export async function addStudent(formData: FormData) {
   const name = String(formData.get('name') || '').trim()
   if (!name) return { error: 'الاسم مطلوب' }
 
-  const { data: last } = await supabase.from('students').select('code').order('code', { ascending: false }).limit(1)
-  let nextNum = 1
-  if (last?.[0]?.code) {
-    const m = String(last[0].code).match(/(\d+)/)
-    if (m) nextNum = parseInt(m[1], 10) + 1
-  }
-  const code = `ST-${String(nextNum).padStart(4, '0')}`
-
   // تاريخ الانضمام: من النموذج أو اليوم تلقائياً — مش محتاج تدخل كل شهر
   const joinRaw = String(formData.get('join_date') || '').trim()
   const join_date = joinRaw || cairoToday()
 
-  const { data, error } = await supabase.from('students').insert({
-    code,
+  const row = {
     name,
     teacher_id: formData.get('teacher_id') || null,
     phone: formData.get('phone') || null,
@@ -39,7 +57,19 @@ export async function addStudent(formData: FormData) {
     status: formData.get('status') || 'نشط',
     monthly_sessions: formData.get('monthly_sessions') ? Number(formData.get('monthly_sessions')) : 4,
     join_date,
-  }).select().single()
+  }
+
+  // لو اتسجّل طالب تاني في نفس اللحظة والكود اتكرر: نعيد المحاولة بكود جديد
+  let data: any = null
+  let error: { message: string; code?: string } | null = null
+  let code = ''
+  for (let attempt = 0; attempt < 5; attempt++) {
+    code = await nextStudentCode()
+    const res = await serviceClient().from('students').insert({ code, ...row }).select().single()
+    data = res.data
+    error = res.error
+    if (!error || (error as any).code !== '23505') break
+  }
 
   if (error) return { error: error.message }
 

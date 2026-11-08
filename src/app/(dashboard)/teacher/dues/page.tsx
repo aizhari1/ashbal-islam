@@ -91,6 +91,10 @@ export default async function TeacherDuesPage({
           <span style={{ color: '#6f7974' }}>الحصص (حاضر)</span>
           <b>{pay.sessions}</b>
         </div>
+        <div className="flex justify-between text-[13px]">
+          <span style={{ color: '#6f7974' }}>تفاصيل السعر</span>
+          <b>{pay.rateParts} ج</b>
+        </div>
         <hr style={{ borderColor: 'rgba(18,61,50,0.08)' }} />
         <div className="flex justify-between text-[16px]">
           <span className="font-bold">الراتب المستحق</span>
@@ -118,7 +122,9 @@ export default async function TeacherDuesPage({
                   <span className="truncate">
                     {l.session_date} · {l.student_name}
                   </span>
-                  <span style={{ color: '#6f7974' }}>حاضر</span>
+                  <span className="shrink-0 font-bold" style={{ color: '#176b52' }}>
+                    {l.rate.toLocaleString('ar-EG')} ج
+                  </span>
                 </div>
               ))}
           </div>
