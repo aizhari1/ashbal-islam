@@ -59,12 +59,7 @@ export function EditStudentForm({
       if (r?.error) {
         setMsg({ type: 'err', text: `فشل الحفظ: ${r.error}` })
       } else {
-        const text =
-          (r as any)?.message ||
-          ((r as any)?.addedSessions > 0
-            ? `تم الحفظ · أُضيفت ${(r as any).addedSessions} حصة لسجل المعلم ✓`
-            : 'تم حفظ التعديلات بنجاح ✓')
-        setMsg({ type: 'ok', text })
+        setMsg({ type: 'ok', text: (r as any)?.message || 'تم حفظ التعديلات بنجاح ✓' })
         router.refresh()
       }
     })
@@ -183,7 +178,7 @@ export function EditStudentForm({
         </Field>
       </div>
 
-      <Field label="رقم آخر حصة">
+      <Field label="رقم آخر حصة (عداد فقط)">
         <input
           name="last_session_num"
           type="number"
@@ -193,7 +188,8 @@ export function EditStudentForm({
           style={{ ...inputStyle, borderColor: '#176b52', borderWidth: 2 }}
         />
         <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-          بيتزود فقط الفرق: لو كان 2 وخلّيته 4 → تتضاف حصة 3 و 4 بس. مش هيعيد من الأول. لو قلّلت الرقم → الحصص الزيادة تتشال من عند المعلم.
+          الحفظ هنا يغيّر الرقم على ملف الطالب فقط — مش بيضيف ولا بيحذف من سجل المعلم.
+          للمزامنة مع حصص المعلم استخدم «التسوية» أو «تعديل رقم الحصة».
         </p>
       </Field>
 
