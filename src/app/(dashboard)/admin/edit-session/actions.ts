@@ -31,7 +31,7 @@ function revalidateAll() {
 
 /**
  * تعديل رقم آخر حصة:
- * - زيادة → إضافة حصص في سجل المعلم
+ * - زيادة → إضافة الحصص الناقصة فقط (مش من 1 تاني)
  * - تقليل → حذف الحصص الزائدة + تقاريرها من سجل المعلم
  */
 export async function updateSessionNum(formData: FormData) {
@@ -42,7 +42,7 @@ export async function updateSessionNum(formData: FormData) {
   if (!user) return { error: 'غير مسجل' }
 
   const studentId = String(formData.get('student_id') || '')
-  const lastSessionNum = Math.max(0, Number(formData.get('last_session_num') || 0))
+  const rawLast = formData.get('last_session_num')
   const lastSessionDate = String(formData.get('last_session_date') || '') || null
 
   if (!studentId) return { error: 'اختر طالب' }
@@ -56,20 +56,50 @@ export async function updateSessionNum(formData: FormData) {
   if (beforeErr) return { error: beforeErr.message }
   if (!before) return { error: 'الطالب غير موجود' }
 
+  const storedLast = Number(before.last_session_num || 0)
+  const { data: maxRow } = await sb
+    .from('attendance')
+    .select('session_num')
+    .eq('student_id', studentId)
+    .not('session_num', 'is', null)
+    .order('session_num', { ascending: false })
+    .limit(1)
+  const maxAtt = maxRow?.[0]?.session_num != null ? Number(maxRow[0].session_num) : 0
+  const oldLast = Math.max(storedLast, maxAtt)
+  const teacherId = before.teacher_id || null
+
+  // حقل فاضي → متغيّرش الرقم
+  const lastSessionNum =
+    rawLast === null || String(rawLast).trim() === ''
+      ? oldLast
+      : Math.max(0, Math.floor(Number(rawLast) || 0))
+
   const quota = packageSize(before)
   const check = validateSessionWithinPackage(lastSessionNum, quota)
   if (!check.ok) return { error: check.error }
 
-  const oldLast = Number(before.last_session_num || 0)
-  const teacherId = before.teacher_id || null
   const addedSessions: number[] = []
   const removedSessions: number[] = []
-  const removedReports: { session_num: number | null; session_date: string | null; notes: string | null }[] = []
+  const removedReports: { session_num: number | null; session_date: string | null; notes: string | null }[] =
+    []
+
+  const { data: existingRows } = await sb
+    .from('attendance')
+    .select('session_num')
+    .eq('student_id', studentId)
+    .not('session_num', 'is', null)
+    .limit(500)
+  const existingNums = new Set(
+    (existingRows || [])
+      .map((r) => Number(r.session_num))
+      .filter((n) => Number.isFinite(n) && n > 0)
+  )
 
   if (lastSessionNum > oldLast && teacherId) {
     const today = lastSessionDate || todayKey()
     const duration = Number(before.session_duration) || 30
     for (let n = oldLast + 1; n <= lastSessionNum; n++) {
+      if (existingNums.has(n)) continue
       const { error: attErr } = await sb.from('attendance').insert({
         student_id: studentId,
         teacher_id: teacherId,
@@ -79,14 +109,9 @@ export async function updateSessionNum(formData: FormData) {
         session_duration: duration,
         notes: `تعديل إداري — حصة رقم ${n} (أُضيفت من لوحة الإدارة)`,
       })
-      if (!attErr) addedSessions.push(n)
-      else {
-        await sb
-          .from('attendance')
-          .update({ status: 'حاضر', session_num: n, teacher_id: teacherId })
-          .eq('student_id', studentId)
-          .eq('session_num', n)
+      if (!attErr) {
         addedSessions.push(n)
+        existingNums.add(n)
       }
     }
   }
@@ -145,6 +170,8 @@ export async function updateSessionNum(formData: FormData) {
       last_session_num: lastSessionNum,
       last_session_date: lastSessionDate,
       old_last_session_num: oldLast,
+      stored_last: storedLast,
+      max_attendance_num: maxAtt,
       added_session_nums: addedSessions,
       removed_session_nums: removedSessions,
       removed_reports: removedReports.slice(0, 20),
@@ -157,7 +184,9 @@ export async function updateSessionNum(formData: FormData) {
   if (removedSessions.length > 0) {
     message = `تم · اتشالت ${removedSessions.length} حصة وتقريرها من سجل المعلم (${removedSessions.join('، ')})`
   } else if (addedSessions.length > 0) {
-    message = `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم`
+    message = `تم · أُضيفت ${addedSessions.length} حصة ناقصة فقط (${addedSessions.join('، ')})`
+  } else if (lastSessionNum === oldLast) {
+    message = 'تم الحفظ · مفيش حصص اتضافت'
   }
 
   return {
