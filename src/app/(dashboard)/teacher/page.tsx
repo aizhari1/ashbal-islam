@@ -34,7 +34,7 @@ export default async function TeacherDashboard() {
       .from('attendance')
       .select('*', { count: 'exact', head: true })
       .eq('teacher_id', teacher.id)
-      .eq('status', 'حاضر')
+      .in('status', ['حاضر', 'متأخر'])
       .gte('session_date', start)
       .lte('session_date', end)
     const { count: tr } = await supabase
