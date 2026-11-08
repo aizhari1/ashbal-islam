@@ -64,7 +64,20 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
   const paymentDate = (input.payment_date || todayKey()).slice(0, 10)
   const prepaidMonths = Math.max(0, Math.min(24, Math.floor(Number(input.prepaid_months) || 0)))
   const isPrepaid = prepaidMonths >= 1
-  const prepaidUntil = isPrepaid ? computePrepaidUntil(paymentDate, prepaidMonths) : null
+  let existingPrepaidUntil: string | null = null
+  if (isPrepaid) {
+    try {
+      const { data: cur } = await supabase
+        .from('students')
+        .select('prepaid_until')
+        .eq('id', input.student_id)
+        .maybeSingle()
+      existingPrepaidUntil = (cur as any)?.prepaid_until ? String((cur as any).prepaid_until).slice(0, 10) : null
+    } catch {
+      /* العمود ممكن مايكونش موجود قبل migration 008 */
+    }
+  }
+  const prepaidUntil = isPrepaid ? computePrepaidUntil(paymentDate, prepaidMonths, existingPrepaidUntil) : null
   if (isPrepaid && prepaidUntil) {
     const tag = `دفع مقدم ${prepaidMonths} شهر · حتى ${prepaidUntil}`
     notes = notes ? `${notes}\n${tag}` : tag
@@ -159,7 +172,6 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
 
   const { data: pay, error } = await supabase.from('payments').insert(insertRow).select('id').single()
   if (error || !pay) {
-    // جرّب بدون أعمدة اختيارية
     delete insertRow.receipt_url
     delete insertRow.prepaid_months
     const { data: pay2, error: err2 } = await supabase.from('payments').insert(insertRow).select('id').single()
