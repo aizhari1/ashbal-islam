@@ -62,18 +62,22 @@ export async function computeTeacherPayroll(
   while (true) {
     let q = supabase
       .from('attendance')
-      .select('teacher_id, student_id, session_date, status, students(name, price_per_session)')
+      .select('id, teacher_id, student_id, session_date, status, students(name, price_per_session)')
       .in('status', ['حاضر', 'متأخر'])
       .gte('session_date', bounds.start)
       .lte('session_date', bounds.end)
+      // ترتيب ثابت — من غيره الصفحات بتتكرر/تفوت صفوف فالراتب يطلع غلط
+      .order('session_date', { ascending: true })
+      .order('id', { ascending: true })
       .range(off, off + 999)
     if (opts.teacherId) q = q.eq('teacher_id', opts.teacherId)
-    const { data: chunk } = await q
+    const { data: chunk, error: attErr } = await q
+    // قبل كده الخطأ كان بيتبلع والراتب يطلع صفر بدون أي تنبيه
+    if (attErr) throw new Error(`تعذّر جلب الحضور لحساب الراتب: ${attErr.message}`)
     if (!chunk?.length) break
     attendance.push(...chunk)
     if (chunk.length < 1000) break
     off += 1000
-    if (off > 50000) break
   }
 
   const { data: rateLogs } = await supabase
