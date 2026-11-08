@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { computeOneTeacherPay } from '@/lib/teacher-payroll'
+import { resolveTeacherForUser } from '@/lib/resolve-teacher'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,8 @@ export default async function TeacherDuesPage({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: teacher } = await supabase.from('teachers').select('*').eq('profile_id', user.id).maybeSingle()
+  const resolved = await resolveTeacherForUser(supabase, user.id)
+  const teacher = resolved.teacher
   if (!teacher) {
     return (
       <div className="p-6 max-w-lg mx-auto">
@@ -26,6 +28,9 @@ export default async function TeacherDuesPage({
           ← رجوع
         </Link>
         <p className="mt-4">لا يوجد ملف معلم مرتبط بحسابك. تواصل مع الإدارة.</p>
+        <p className="text-[12px] mt-2" style={{ color: '#6f7974' }}>
+          {resolved.message}
+        </p>
       </div>
     )
   }
