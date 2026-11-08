@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { StudentPicker } from './StudentPicker'
 import { EditStudentForm } from './EditStudentForm'
 
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function SupervisorEditStudentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{ id?: string; q?: string }>
 }) {
   const sp = await searchParams
   const supabase = await createClient()
@@ -25,8 +26,9 @@ export default async function SupervisorEditStudentPage({
         'id, code, name, phone, monthly_sessions, session_duration, last_session_num, amount_due, price_per_session, teacher_id, status, join_date, created_at'
       )
       .order('name')
-      .limit(400),
-    supabase.from('teachers').select('id, name').eq('is_active', true).order('name'),
+      .limit(800),
+    // كل المعلمين (نشط وغير نشط) عشان نقدر نربط طالب بمعلم حتى لو is_active=false مؤقتاً
+    supabase.from('teachers').select('id, name, is_active').order('name'),
   ])
 
   const selected = students?.find((s) => s.id === sp.id) || null
@@ -36,6 +38,11 @@ export default async function SupervisorEditStudentPage({
     name: s.name,
     last_session_num: s.last_session_num,
     status: s.status,
+  }))
+
+  const teacherOptions = (teachers ?? []).map((t: any) => ({
+    id: t.id,
+    name: t.is_active === false ? `${t.name} (غير نشط)` : t.name,
   }))
 
   return (
@@ -49,16 +56,18 @@ export default async function SupervisorEditStudentPage({
             تعديل بيانات طالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            ابحث · عدّل رقم الحصة · احفظ
+            ابحث · عدّل · احفظ · غيّر طالب من غير ما تخرج
           </p>
         </div>
       </header>
 
-      <StudentPicker students={pickerList} selectedId={selected?.id} />
+      <Suspense fallback={<p className="px-4 text-[13px]" style={{ color: '#6f7974' }}>جاري التحميل...</p>}>
+        <StudentPicker students={pickerList} selectedId={selected?.id} />
+      </Suspense>
 
       {selected && (
         <div className="px-4">
-          <EditStudentForm student={selected as any} teachers={teachers ?? []} />
+          <EditStudentForm student={selected as any} teachers={teacherOptions} />
         </div>
       )}
 
