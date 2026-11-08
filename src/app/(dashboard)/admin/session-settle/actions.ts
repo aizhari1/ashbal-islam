@@ -115,7 +115,17 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     const check = validateSessionWithinPackage(n, quota)
     if (!check.ok) return { error: check.error }
 
-    const old = Number(before.last_session_num || 0)
+    const stored = Number(before.last_session_num || 0)
+    const { data: maxRow } = await sb
+      .from('attendance')
+      .select('session_num')
+      .eq('student_id', studentId)
+      .not('session_num', 'is', null)
+      .order('session_num', { ascending: false })
+      .limit(1)
+    const maxAtt = maxRow?.[0]?.session_num != null ? Number(maxRow[0].session_num) : 0
+    const old = Math.max(stored, maxAtt)
+
     const { error } = await sb.from('students').update({ last_session_num: n }).eq('id', studentId)
     if (error) return { error: error.message }
 
@@ -124,8 +134,19 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     const teacherId = before.teacher_id
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 
+    const { data: existingRows } = await sb
+      .from('attendance')
+      .select('session_num')
+      .eq('student_id', studentId)
+      .not('session_num', 'is', null)
+      .limit(500)
+    const existingNums = new Set(
+      (existingRows || []).map((r) => Number(r.session_num)).filter((x) => Number.isFinite(x) && x > 0)
+    )
+
     if (n > old && teacherId) {
       for (let i = old + 1; i <= n; i++) {
+        if (existingNums.has(i)) continue
         const { error: insErr } = await sb.from('attendance').insert({
           student_id: studentId,
           teacher_id: teacherId,
@@ -135,7 +156,10 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
           session_duration: before.session_duration || 30,
           notes: `تسوية إدارية — حصة رقم ${i} · ${before.name}`,
         })
-        if (!insErr) added++
+        if (!insErr) {
+          added++
+          existingNums.add(i)
+        }
       }
     }
     if (n < old) {
@@ -187,7 +211,7 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       ok: true,
       message:
         added > 0
-          ? `تم · أُضيفت ${added} حصة عند المعلم`
+          ? `تم · أُضيفت ${added} حصة ناقصة فقط`
           : removed > 0
             ? `تم · اتشالت ${removed} حصة مع تقريرها من سجل المعلم`
             : 'تم تحديث رقم الحصة عند الجميع',
