@@ -24,26 +24,25 @@ export default async function SupervisorEditStudentPage({
   const loadStudents = async () => {
     const r = await supabase
       .from('students')
-      .select(`${STUDENT_COLS}, teacher_session_rate`)
+      .select(`${STUDENT_COLS}, teacher_session_rate, teachers(name)`)
       .order('name')
       .limit(800)
     if (!r.error) return r
-    // لو migration 009 لسه ماتنفّذتش نرجع للأعمدة القديمة بدل ما الصفحة تفضى
-    return supabase.from('students').select(STUDENT_COLS).order('name').limit(800) as any
+    return supabase.from('students').select(`${STUDENT_COLS}, teachers(name)`).order('name').limit(800) as any
   }
   const [{ data: students }, { data: teachers }] = await Promise.all([
     loadStudents(),
-    // كل المعلمين (نشط وغير نشط) عشان نقدر نربط طالب بمعلم حتى لو is_active=false مؤقتاً
     supabase.from('teachers').select('id, name, is_active').order('name'),
   ])
 
   const selected = students?.find((s) => s.id === sp.id) || null
-  const pickerList = (students ?? []).map((s) => ({
+  const pickerList = (students ?? []).map((s: any) => ({
     id: s.id,
     code: s.code,
     name: s.name,
     last_session_num: s.last_session_num,
     status: s.status,
+    teacher_name: s.teachers?.name || null,
   }))
 
   const teacherOptions = (teachers ?? []).map((t: any) => ({
@@ -67,16 +66,26 @@ export default async function SupervisorEditStudentPage({
         </div>
       </header>
 
-      <Suspense fallback={<p className="px-4 text-[13px]" style={{ color: '#6f7974' }}>جاري التحميل...</p>}>
+      <Suspense fallback={<p className="px-4 text-[13px]">جاري التحميل...</p>}>
         <StudentPicker students={pickerList} selectedId={selected?.id} />
       </Suspense>
 
       {selected && (
         <div className="px-4">
-          {/* key: لما الطالب يتغيّر (أو بياناته تتحدّث بعد الحفظ) الفورم يتبني من جديد —
-              الخانات defaultValue ومش بتتحدّث لوحدها، وكانت بتفضل بيانات الطالب اللي قبله */}
           <EditStudentForm
-            key={[selected.id, selected.name, selected.phone, selected.teacher_id, selected.monthly_sessions, selected.session_duration, selected.last_session_num, selected.amount_due, selected.price_per_session, (selected as any).teacher_session_rate, selected.join_date].join('|')}
+            key={[
+              selected.id,
+              selected.name,
+              selected.phone,
+              selected.teacher_id,
+              selected.monthly_sessions,
+              selected.session_duration,
+              selected.last_session_num,
+              selected.amount_due,
+              selected.price_per_session,
+              (selected as any).teacher_session_rate,
+              selected.join_date,
+            ].join('|')}
             student={selected as any}
             teachers={teacherOptions}
           />
@@ -85,7 +94,7 @@ export default async function SupervisorEditStudentPage({
 
       {!selected && (
         <p className="text-center text-[13px] px-4" style={{ color: '#6f7974' }}>
-          ابحث واختر طالب عشان تظهر بياناته ورقم الحصة
+          اكتب في خانة البحث فوق واختار طالب عشان تظهر بياناته
         </p>
       )}
     </div>
