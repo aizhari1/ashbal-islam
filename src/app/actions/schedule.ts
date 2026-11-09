@@ -42,7 +42,46 @@ export async function addFixedSchedule(formData: FormData) {
   if (error) return { error: error.message }
   revalidatePath('/admin/fixed-schedule')
   revalidatePath('/teacher/schedule')
+  revalidatePath('/admin/today')
   return { success: true }
+}
+
+/** إضافة عدة أيام لنفس الطالب/المعلم/الوقت دفعة واحدة */
+export async function addBulkFixedSchedule(formData: FormData) {
+  const supabase = await canManageSchedule()
+  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
+  const student_id = String(formData.get('student_id') || '') || null
+  const teacher_id = String(formData.get('teacher_id') || '') || null
+  const start_time = String(formData.get('start_time') || '') || null
+  const duration_minutes = Number(formData.get('duration_minutes') || 30)
+  const zoom = String(formData.get('zoom_link') || '').trim()
+  const notesBase = String(formData.get('notes') || '').trim()
+  const notes = zoom ? `${notesBase}${notesBase ? ' | ' : ''}ZOOM=${zoom}` : notesBase || null
+
+  if (!student_id) return { error: 'اختَر الطالب' }
+  if (!teacher_id) return { error: 'اختَر المعلم' }
+  if (!start_time) return { error: 'اختَر الوقت' }
+
+  const daysRaw = formData.getAll('day_of_week')
+  const days = [...new Set(daysRaw.map((d) => Number(d)).filter((d) => d >= 0 && d <= 6))]
+  if (days.length === 0) return { error: 'اختَر يوم واحد على الأقل' }
+
+  const rows = days.map((day_of_week) => ({
+    student_id,
+    teacher_id,
+    day_of_week,
+    start_time,
+    duration_minutes,
+    status: 'مجدول',
+    notes,
+  }))
+
+  const { error } = await supabase.from('schedule_entries').insert(rows)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/fixed-schedule')
+  revalidatePath('/admin/today')
+  revalidatePath('/teacher/schedule')
+  return { success: true, message: `تم إضافة ${rows.length} موعد` }
 }
 
 export async function deleteFixedSchedule(formData: FormData) {
@@ -54,6 +93,7 @@ export async function deleteFixedSchedule(formData: FormData) {
   if (error) return { error: error.message }
   revalidatePath('/admin/fixed-schedule')
   revalidatePath('/teacher/schedule')
+  revalidatePath('/admin/today')
   return { success: true }
 }
 
@@ -78,14 +118,10 @@ export async function updateFixedSchedule(formData: FormData) {
   if (error) return { error: error.message }
   revalidatePath('/admin/fixed-schedule')
   revalidatePath('/teacher/schedule')
+  revalidatePath('/admin/today')
   return { success: true }
 }
 
-/**
- * نسخ مواعيد شهر إلى شهر آخر (افتراضي: أكتوبر → نوفمبر 2026)
- * - المواعيد الأسبوعية (day_of_week بدون تاريخ): تتأكد إنها موجودة كقالب ثابت
- * - المواعيد بتاريخ أكتوبر: تُنسخ لتاريخ مقابل في نوفمبر
- */
 export async function copyScheduleMonth(formData?: FormData) {
   const supabase = await canManageSchedule()
   if (!supabase) return { error: 'للإدارة والإشراف فقط' }
@@ -102,7 +138,6 @@ export async function copyScheduleMonth(formData?: FormData) {
   const fromEnd = `${fromMonth}-${String(fromLast).padStart(2, '0')}`
   const toLast = new Date(ty, tm, 0).getDate()
 
-  // كل المواعيد (أسبوعي + بتاريخ)
   const all: any[] = []
   let off = 0
   while (true) {
@@ -117,124 +152,66 @@ export async function copyScheduleMonth(formData?: FormData) {
     if (off > 20000) break
   }
 
-  // مواعيد الهدف الموجودة عشان ما نكررش
-  const toStart = `${toMonth}-01`
-  const toEnd = `${toMonth}-${String(toLast).padStart(2, '0')}`
-  const { data: existingTo } = await supabase
-    .from('schedule_entries')
-    .select('student_id, teacher_id, start_time, session_date, day_of_week')
-    .or(`and(session_date.gte.${toStart},session_date.lte.${toEnd}),session_date.is.null`)
-    .limit(5000)
-
-  const existsKey = new Set(
-    (existingTo ?? []).map(
-      (e) =>
-        `${e.student_id || ''}|${e.teacher_id || ''}|${String(e.start_time || '').slice(0, 5)}|${e.session_date || ''}|${e.day_of_week ?? ''}`
+  const targetDated = all.filter((e) => e.session_date && String(e.session_date).startsWith(toMonth))
+  const targetKeys = new Set(
+    targetDated.map(
+      (e) => `${e.student_id}|${e.teacher_id}|${e.session_date}|${e.start_time}`
     )
   )
 
+  const fromDated = all.filter(
+    (e) => e.session_date && String(e.session_date) >= fromStart && String(e.session_date) <= fromEnd
+  )
+
   const toInsert: any[] = []
-  let weeklyFixed = 0
-  let datedCopied = 0
-
-  for (const e of all) {
-    const time = String(e.start_time || '').slice(0, 8) || null
-    const timeKey = String(e.start_time || '').slice(0, 5)
-
-    // 1) قالب أسبوعي بدون تاريخ → يبقى كما هو (ثابت كل الشهور)
-    if (!e.session_date && e.day_of_week != null) {
-      weeklyFixed += 1
-      continue
-    }
-
-    // 2) موعد بتاريخ في شهر المصدر → نسخة في شهر الهدف
-    if (e.session_date) {
-      const d = String(e.session_date).slice(0, 10)
-      if (d < fromStart || d > fromEnd) continue
-      const dayNum = Number(d.slice(8, 10))
-      const targetDay = Math.min(dayNum, toLast)
-      const newDate = `${toMonth}-${String(targetDay).padStart(2, '0')}`
-      // day_of_week من التاريخ الجديد
-      const dow = new Date(`${newDate}T12:00:00`).getDay()
-
-      const key = `${e.student_id || ''}|${e.teacher_id || ''}|${timeKey}|${newDate}|${dow}`
-      if (existsKey.has(key)) continue
-
-      toInsert.push({
-        student_id: e.student_id,
-        teacher_id: e.teacher_id,
-        day_of_week: e.day_of_week != null ? e.day_of_week : dow,
-        start_time: time,
-        duration_minutes: e.duration_minutes || 30,
-        session_date: newDate,
-        status: e.status || 'مجدول',
-        notes: e.notes,
-      })
-      existsKey.add(key)
-      datedCopied += 1
-      continue
-    }
-
-    // 3) لو فيه day_of_week بس كان مربوط بأكتوبر بشكل غريب — تجاهل
+  for (const e of fromDated) {
+    const day = Number(String(e.session_date).slice(8, 10))
+    const newDay = Math.min(day, toLast)
+    const newDate = `${toMonth}-${String(newDay).padStart(2, '0')}`
+    const key = `${e.student_id}|${e.teacher_id}|${newDate}|${e.start_time}`
+    if (targetKeys.has(key)) continue
+    toInsert.push({
+      student_id: e.student_id,
+      teacher_id: e.teacher_id,
+      day_of_week: e.day_of_week,
+      start_time: e.start_time,
+      duration_minutes: e.duration_minutes,
+      session_date: newDate,
+      status: e.status || 'مجدول',
+      notes: e.notes,
+    })
+    targetKeys.add(key)
   }
 
-  // إدراج على دفعات
-  let inserted = 0
-  for (let i = 0; i < toInsert.length; i += 200) {
-    const batch = toInsert.slice(i, i + 200)
-    const { error, data } = await supabase.from('schedule_entries').insert(batch).select('id')
-    if (error) return { error: error.message, inserted, weeklyFixed, datedCopied }
-    inserted += data?.length || batch.length
-  }
-
-  // تأكد إن المواعيد الأسبوعية من أكتوبر (بتاريخ) ليها أيضًا قالب day_of_week دائم
-  // لأي صف أكتوبر: لو day_of_week فاضي نملأه
-  for (const e of all) {
-    if (!e.session_date) continue
-    const d = String(e.session_date).slice(0, 10)
-    if (d < fromStart || d > fromEnd) continue
-    if (e.day_of_week != null) continue
-    const dow = new Date(`${d}T12:00:00`).getDay()
-    await supabase.from('schedule_entries').update({ day_of_week: dow }).eq('id', e.id)
+  if (toInsert.length) {
+    const { error } = await supabase.from('schedule_entries').insert(toInsert)
+    if (error) return { error: error.message }
   }
 
   revalidatePath('/admin/fixed-schedule')
-  revalidatePath('/teacher/schedule')
-  revalidatePath('/supervisor')
-  revalidatePath('/admin')
-
+  revalidatePath('/admin/today')
   return {
     success: true,
-    fromMonth,
-    toMonth,
-    weekly_templates: weeklyFixed,
-    dated_copied: datedCopied,
-    inserted,
-    message: `تم: ${inserted} موعد منسوخ من ${fromMonth} إلى ${toMonth} · قوالب أسبوعية ثابتة: ${weeklyFixed}`,
+    message: `اتنسخ ${toInsert.length} موعد من ${fromMonth} إلى ${toMonth}`,
   }
 }
 
 export async function addSupervisorEval(formData: FormData) {
-  const supabase = await canManageSchedule()
-  if (!supabase) return { error: 'للإدارة والإشراف فقط' }
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'غير مسجل' }
   const teacher_id = String(formData.get('teacher_id') || '')
-  const teacher_name = String(formData.get('teacher_name') || '')
-  const points = Number(formData.get('points') || 0)
-  const notes = String(formData.get('notes') || '')
-  if (!teacher_id) return { error: 'اختر معلماً' }
-
+  const score = Number(formData.get('score') || 0)
+  const notes = String(formData.get('notes') || '') || null
+  if (!teacher_id) return { error: 'اختر المعلم' }
   const { error } = await supabase.from('activity_log').insert({
-    actor_id: user?.id,
+    actor_id: user.id,
     action: 'supervisor_eval',
     entity_type: 'teacher',
     entity_id: teacher_id,
-    details: {
-      teacher_name,
-      points,
-      notes,
-      month: monthLabelAr(currentMonthKey()),
-    },
+    details: { score, notes, month: currentMonthKey() },
   })
   if (error) return { error: error.message }
   revalidatePath('/admin/supervisor-eval')
