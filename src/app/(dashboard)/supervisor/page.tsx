@@ -49,6 +49,7 @@ export default async function SupervisorDashboard({
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
     { href: '/supervisor/payment', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'إنستا · فودافون · بنكي', color: '#c5a45d' },
     { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: `${scheduleCount ?? 0} موعد ثابت`, color: '#3d665a' },
+    { href: '/admin/session-eval', icon: 'videocam', title: 'تقييم حصة المعلم', desc: 'كاميرا · أداء · جودة', color: '#755b1b' },
     { href: '/admin/finance', icon: 'notifications_active', title: 'تذكير بالمستحقات', desc: 'تقرير المالي وتذكير بالدفع', color: '#ba1a1a' },
     { href: '/supervisor/status', icon: 'check_circle', title: 'تغيير حالة الطالب', desc: 'انسحاب / توقف / رجوع', color: '#176b52' },
     { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'قائمة المنسحبين', desc: 'أرشيف الانسحاب', color: '#6f7974' },
