@@ -140,6 +140,7 @@ export async function updateSession(request: NextRequest) {
             pathname.startsWith('/admin/edit-session') ||
             pathname.startsWith('/admin/trials') ||
             pathname.startsWith('/admin/teacher-absences') ||
+            pathname.startsWith('/admin/today') ||
             pathname.startsWith('/admin/session-settle') ||
             pathname.startsWith('/admin/sessions-detail') ||
             pathname.startsWith('/admin/attended')
