@@ -17,6 +17,7 @@ type Student = {
   last_session_num: number | null
   amount_due: number | null
   price_per_session: number | null
+  teacher_session_rate?: number | null
   teacher_id: string | null
   status: string | null
   join_date?: string | null
@@ -194,13 +195,25 @@ export function EditStudentForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <Field label="سعر الحصة (ج)">
+        <Field label="سعر الحصة على ولي الأمر (ج)">
           <input
             name="price_per_session"
             type="number"
             min={0}
             step="0.5"
             defaultValue={student.price_per_session ?? 25}
+            className={inputCls}
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="سعر الحصة للمعلم (ج)">
+          <input
+            name="teacher_session_rate"
+            type="number"
+            min={0}
+            step="0.5"
+            defaultValue={student.teacher_session_rate ?? ''}
+            placeholder="يُحسب منه راتب المعلم"
             className={inputCls}
             style={inputStyle}
           />
