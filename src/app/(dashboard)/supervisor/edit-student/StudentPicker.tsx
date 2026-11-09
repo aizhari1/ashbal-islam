@@ -9,6 +9,7 @@ type Student = {
   name: string
   last_session_num?: number | null
   status?: string | null
+  teacher_name?: string | null
 }
 
 export function StudentPicker({
@@ -22,22 +23,23 @@ export function StudentPicker({
   const searchParams = useSearchParams()
   const initialQ = searchParams.get('q') || ''
   const [q, setQ] = useState(initialQ)
-  // لما طالب متختار: القائمة مطوية افتراضياً عشان الفورم يبقى ظاهر، والبحث يفضل موجود
   const [listOpen, setListOpen] = useState(!selectedId)
 
   useEffect(() => {
-    // لو اتغيّر الطالب من برا، اطوي القائمة
     if (selectedId) setListOpen(false)
   }, [selectedId])
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase()
-    if (!term) return students
-    return students.filter((s) => {
-      const name = (s.name || '').toLowerCase()
-      const code = (s.code || '').toLowerCase()
-      return name.includes(term) || code.includes(term)
-    })
+    if (!term) return students.slice(0, 80)
+    return students
+      .filter((s) => {
+        const name = (s.name || '').toLowerCase()
+        const code = (s.code || '').toLowerCase()
+        const teacher = (s.teacher_name || '').toLowerCase()
+        return name.includes(term) || code.includes(term) || teacher.includes(term)
+      })
+      .slice(0, 100)
   }, [q, students])
 
   const selected = students.find((s) => s.id === selectedId)
@@ -57,10 +59,10 @@ export function StudentPicker({
 
   return (
     <div className="px-4 mb-3">
-      <div className="sticky top-0 z-10 pt-1 pb-2" style={{ background: '#eefdf6' }}>
+      <div className="sticky top-0 z-20 pt-1 pb-2" style={{ background: '#eefdf6' }}>
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-[12px] font-bold" style={{ color: '#3f4944' }}>
-            ابحث عن طالب
+          <p className="text-[13px] font-extrabold" style={{ color: '#00513c' }}>
+            🔍 ابحث عن طالب
           </p>
           {selectedId && (
             <button
@@ -82,72 +84,72 @@ export function StudentPicker({
           value={q}
           onChange={(e) => onSearchChange(e.target.value)}
           onFocus={() => setListOpen(true)}
-          placeholder="اكتب الاسم أو الكود..."
-          className="w-full rounded-xl border px-3 py-3 text-[14px] mb-2 bg-white shadow-sm"
+          placeholder="اكتب الاسم أو الكود أو المعلم..."
+          className="w-full rounded-xl border-2 px-3 py-3.5 text-[15px] bg-white shadow-sm"
           style={{ borderColor: '#176b52' }}
           autoFocus={!selectedId}
+          autoComplete="off"
         />
-
-        {selected && !listOpen && (
-          <div
-            className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-2"
-            style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}
-          >
-            <div className="min-w-0">
-              <p className="text-[13px] font-bold truncate" style={{ color: '#00513c' }}>
-                {selected.name}
-              </p>
-              <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                {selected.code}
-                {selected.last_session_num != null ? ` · حصة ${selected.last_session_num}` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setListOpen(true)}
-              className="shrink-0 text-[12px] font-bold underline"
-              style={{ color: '#176b52' }}
-            >
-              بحث تاني
-            </button>
-          </div>
-        )}
-
-        {listOpen && (
-          <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-            {filtered.length} من {students.length} طالب · اضغط على الاسم للتعديل
-          </p>
-        )}
+        <p className="text-[11px] mt-1 font-semibold" style={{ color: '#6f7974' }}>
+          {q.trim() ? `${filtered.length} نتيجة` : `اكتب للبحث · ${students.length} طالب`}
+        </p>
       </div>
 
-      {listOpen && (
-        <div className="card p-2 max-h-60 overflow-y-auto space-y-0.5">
-          {filtered.length === 0 && (
-            <p className="text-center text-[12px] py-3" style={{ color: '#6f7974' }}>
-              مفيش نتيجة لـ «{q}»
+      {selected && !listOpen && (
+        <div
+          className="rounded-2xl px-3 py-3 mb-2 flex justify-between items-center"
+          style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}
+        >
+          <div>
+            <p className="font-bold text-[14px]" style={{ color: '#00513c' }}>
+              {selected.name}
             </p>
-          )}
+            <p className="text-[11px]" style={{ color: '#6f7974' }}>
+              {selected.code}
+              {selected.last_session_num != null ? ` · حصة ${selected.last_session_num}` : ''}
+              {selected.status ? ` · ${selected.status}` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="text-[12px] font-bold underline"
+            style={{ color: '#176b52' }}
+            onClick={() => setListOpen(true)}
+          >
+            بحث تاني
+          </button>
+        </div>
+      )}
+
+      {listOpen && (
+        <div
+          className="rounded-2xl border bg-white max-h-72 overflow-y-auto shadow-sm"
+          style={{ borderColor: '#cde8dc' }}
+        >
           {filtered.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => go(s.id)}
-              className="w-full text-right text-[13px] py-2.5 px-2.5 rounded-lg"
+              className="w-full text-right px-3 py-3 border-b last:border-0"
               style={{
-                background: selectedId === s.id ? '#e8f7f0' : 'transparent',
-                color: '#1a1c1b',
-                fontWeight: selectedId === s.id ? 700 : 400,
+                borderColor: '#f0f5f2',
+                background: s.id === selectedId ? '#e8f7f0' : undefined,
               }}
             >
-              <span>{s.name}</span>{' '}
-              <span style={{ color: '#6f7974' }}>({s.code})</span>
-              {s.last_session_num != null && (
-                <span className="text-[11px] mr-1" style={{ color: '#176b52' }}>
-                  · حصة {s.last_session_num}
-                </span>
-              )}
+              <span className="font-bold text-[14px] block">{s.name}</span>
+              <span className="text-[11px]" style={{ color: '#6f7974' }}>
+                {s.code}
+                {s.teacher_name ? ` · ${s.teacher_name}` : ''}
+                {s.last_session_num != null ? ` · حصة ${s.last_session_num}` : ''}
+              </span>
             </button>
           ))}
+          {filtered.length === 0 && (
+            <p className="text-center text-[13px] py-6" style={{ color: '#6f7974' }}>
+              مفيش نتيجة لـ «{q}»
+            </p>
+          )}
         </div>
       )}
     </div>

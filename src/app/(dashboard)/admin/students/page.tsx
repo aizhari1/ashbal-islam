@@ -2,42 +2,61 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { tenureLabel } from '@/lib/student-tenure'
+import { StudentsLiveSearch } from '@/components/StudentsLiveSearch'
+
+export const dynamic = 'force-dynamic'
 
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>
+  searchParams: Promise<{ status?: string }>
 }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const params = await searchParams
   let query = supabase
     .from('students')
-    .select('id, code, name, status, amount_due, currency, join_date, created_at, teachers(name)')
-    .order('code')
+    .select('id, code, name, status, amount_due, currency, join_date, created_at, phone, teachers(name)')
+    .order('name')
 
-  if (params.q) query = query.or(`name.ilike.%${params.q}%,code.ilike.%${params.q}%`)
   if (params.status) query = query.eq('status', params.status)
 
-  const { data: students } = await query.limit(200)
+  const { data: students } = await query.limit(800)
 
-  const statusBadge = (s: string) => {
-    if (s === 'نشط') return 'badge-ok'
-    if (s === 'موقوف' || s === 'تجريبي') return 'badge-warn'
-    return 'badge-err'
-  }
+  const list = (students ?? []).map((s: any) => {
+    const { tenure } = tenureLabel(s)
+    return {
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      status: s.status,
+      amount_due: s.amount_due,
+      join_date: s.join_date,
+      created_at: s.created_at,
+      phone: s.phone,
+      teachers: s.teachers,
+      tenure,
+    }
+  })
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
-      <header className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between backdrop-blur-md" style={{ background: 'rgba(238,253,246,0.92)' }}>
+      <header
+        className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between backdrop-blur-md"
+        style={{ background: 'rgba(238,253,246,0.92)' }}
+      >
         <div className="flex items-center gap-2">
           <Link href="/admin" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
             <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
           </Link>
           <div>
-            <p className="text-[11px]" style={{ color: '#6f7974' }}>قسم التوجيه والقبول</p>
+            <p className="text-[11px]" style={{ color: '#6f7974' }}>
+              قسم التوجيه والقبول
+            </p>
             <h1 className="text-[15px] font-bold">إدارة شؤون الطلاب</h1>
           </div>
         </div>
@@ -48,15 +67,7 @@ export default async function StudentsPage({
       </header>
 
       <main className="px-4">
-        <form className="mb-3">
-          <div className="relative">
-            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[20px]" style={{ color: '#6f7974' }}>search</span>
-            <input name="q" defaultValue={params.q || ''} placeholder="بحث بالاسم أو الكود..."
-              className="input pr-10" />
-          </div>
-        </form>
-
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
           {[
             { label: 'الكل', status: '' },
             { label: 'نشط', status: 'نشط' },
@@ -66,12 +77,15 @@ export default async function StudentsPage({
           ].map((f) => {
             const on = (params.status || '') === f.status
             return (
-              <Link key={f.label}
+              <Link
+                key={f.label}
                 href={f.status ? `/admin/students?status=${encodeURIComponent(f.status)}` : '/admin/students'}
                 className="px-3 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap"
-                style={on
-                  ? { background: '#176b52', color: '#fff' }
-                  : { background: '#fff', color: '#3f4944', border: '1px solid #e5efe8' }}
+                style={
+                  on
+                    ? { background: '#176b52', color: '#fff' }
+                    : { background: '#fff', color: '#3f4944', border: '1px solid #e5efe8' }
+                }
               >
                 {f.label}
               </Link>
@@ -79,41 +93,7 @@ export default async function StudentsPage({
           })}
         </div>
 
-        <p className="text-[12px] mb-2 px-1" style={{ color: '#6f7974' }}>
-          سجلات المتابعة · {students?.length ?? 0} طالب
-        </p>
-
-        <div className="space-y-2">
-          {(students ?? []).map((s: any) => {
-            const { tenure } = tenureLabel(s)
-            return (
-              <Link key={s.id} href={`/admin/students/${s.id}`} className="card flex items-center gap-3 p-3.5">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-[15px]"
-                  style={{ background: '#e8f7f0', color: '#176b52' }}>
-                  {s.name?.charAt(0) || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-bold truncate">{s.name}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#6f7974' }}>
-                    {s.code} · {s.teachers?.name || 'بدون معلم'}
-                  </p>
-                  <p className="text-[11px] mt-0.5 font-medium" style={{ color: '#176b52' }}>
-                    منذ {tenure}
-                  </p>
-                </div>
-                <div className="text-left flex flex-col items-end gap-1">
-                  <span className={statusBadge(s.status)}>{s.status}</span>
-                  {Number(s.amount_due) > 0 && (
-                    <span className="text-[11px] font-bold" style={{ color: '#ba1a1a' }}>{s.amount_due}</span>
-                  )}
-                </div>
-              </Link>
-            )
-          })}
-          {(!students || students.length === 0) && (
-            <div className="card p-8 text-center" style={{ color: '#6f7974' }}>لا يوجد طلاب</div>
-          )}
-        </div>
+        <StudentsLiveSearch students={list} hrefPrefix="/admin/students" />
       </main>
 
       <nav className="bottom-nav">
