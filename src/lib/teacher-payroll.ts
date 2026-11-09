@@ -34,6 +34,75 @@ export function sessionRate(pricePerSession: number | null | undefined, teacherD
   return DEFAULT_SESSION_RATE
 }
 
+export type RateStudent =
+  | { teacher_session_rate?: number | null; price_per_session?: number | null }
+  | null
+  | undefined
+
+/**
+ * سعر حصة الطالب للمعلم:
+ * 1) teacher_session_rate (المحدد صراحةً للمعلم) — بالقيمة اللي اتكتبت من غير حد أدنى
+ * 2) الطلاب القدام اللي ملهمش قيمة: price_per_session ثم سعر المعلم الافتراضي ثم 25 (بحد أدنى 25 زي الأول)
+ */
+export function studentSessionRate(st: RateStudent, teacherDefault?: number): number {
+  const dedicated = Number(st?.teacher_session_rate)
+  if (dedicated > 0) return dedicated
+  return sessionRate(st?.price_per_session, teacherDefault)
+}
+
+const PRESENT_STATUSES = ['حاضر', 'متأخر']
+
+function isMissingRateColumn(err: { message?: string; code?: string } | null | undefined): boolean {
+  return !!err && (err.code === '42703' || /teacher_session_rate/.test(String(err.message || '')))
+}
+
+/**
+ * كل حصص الحضور (حاضر + متأخر) في مدى تاريخ، بالصفحات وبترتيب ثابت.
+ * بتجيب سعر المعلم مع الطالب، ولو العمود لسه ماتضافش (migration 009) بترجع للسلوك القديم بدل ما تقع.
+ */
+export async function fetchPresentAttendance(
+  supabase: SupabaseClient,
+  opts: {
+    start: string
+    end: string
+    teacherId?: string | null
+    columns?: string
+    studentCols?: string
+  }
+): Promise<any[]> {
+  const base = opts.columns ?? 'id, teacher_id, student_id, session_date, status'
+  const stBase = opts.studentCols ?? 'name, price_per_session'
+  let withRate = true
+  const out: any[] = []
+  for (let off = 0; ; off += 1000) {
+    let chunk: any[] | null = null
+    for (;;) {
+      let q = supabase
+        .from('attendance')
+        .select(`${base}, students(${stBase}${withRate ? ', teacher_session_rate' : ''})`)
+        .in('status', PRESENT_STATUSES)
+        .gte('session_date', opts.start)
+        .lte('session_date', opts.end)
+        .order('session_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(off, off + 999)
+      if (opts.teacherId) q = q.eq('teacher_id', opts.teacherId)
+      const res = await q
+      if (res.error && withRate && isMissingRateColumn(res.error)) {
+        withRate = false
+        continue
+      }
+      if (res.error) throw new Error(`تعذّر جلب الحضور لحساب الراتب: ${res.error.message}`)
+      chunk = res.data as any[]
+      break
+    }
+    if (!chunk?.length) break
+    out.push(...chunk)
+    if (chunk.length < 1000) break
+  }
+  return out
+}
+
 export type TeacherPayRow = {
   teacherId: string
   teacherName: string
@@ -57,28 +126,13 @@ export async function computeTeacherPayroll(
 ): Promise<{ rows: TeacherPayRow[]; linesByTeacher: Record<string, SessionLine[]>; bounds: ReturnType<typeof monthBounds> }> {
   const bounds = monthBounds(opts.month == null || opts.month === '' ? currentMonthKey() : opts.month)
 
-  const attendance: any[] = []
-  let off = 0
-  while (true) {
-    let q = supabase
-      .from('attendance')
-      .select('id, teacher_id, student_id, session_date, status, students(name, price_per_session)')
-      .in('status', ['حاضر', 'متأخر'])
-      .gte('session_date', bounds.start)
-      .lte('session_date', bounds.end)
-      // ترتيب ثابت — من غيره الصفحات بتتكرر/تفوت صفوف فالراتب يطلع غلط
-      .order('session_date', { ascending: true })
-      .order('id', { ascending: true })
-      .range(off, off + 999)
-    if (opts.teacherId) q = q.eq('teacher_id', opts.teacherId)
-    const { data: chunk, error: attErr } = await q
-    // قبل كده الخطأ كان بيتبلع والراتب يطلع صفر بدون أي تنبيه
-    if (attErr) throw new Error(`تعذّر جلب الحضور لحساب الراتب: ${attErr.message}`)
-    if (!chunk?.length) break
-    attendance.push(...chunk)
-    if (chunk.length < 1000) break
-    off += 1000
-  }
+  const attendance = await fetchPresentAttendance(supabase, {
+    start: bounds.start,
+    end: bounds.end,
+    teacherId: opts.teacherId,
+    columns: 'id, teacher_id, student_id, session_date, status',
+    studentCols: 'name, price_per_session',
+  })
 
   const { data: rateLogs } = await supabase
     .from('activity_log')
@@ -97,7 +151,7 @@ export async function computeTeacherPayroll(
   for (const a of attendance) {
     if (!a.teacher_id) continue
     const st = a.students as any
-    const rate = sessionRate(st?.price_per_session, teacherDefaultRate[a.teacher_id])
+    const rate = studentSessionRate(st, teacherDefaultRate[a.teacher_id])
     if (!byTeacher[a.teacher_id]) byTeacher[a.teacher_id] = { sessions: 0, salary: 0, rates: {} }
     const agg = byTeacher[a.teacher_id]
     agg.sessions += 1
