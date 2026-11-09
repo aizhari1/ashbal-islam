@@ -125,26 +125,44 @@ export default function TeacherSessionPage() {
     const pad = (n: number) => String(n).padStart(2, '0')
     const line = 'ـــــــــــــــــــــــــــــــــــــــــــــــــــــــــــــ'
     const text = [
-      '*💦أشبال الإسلام💦*', '',
-      '🌺 المعلم : ' + (teacherName || ''), '',
-      '🌺 الطالب : ' + selected.name, '',
+      '*💦أشبال الإسلام💦*',
+      '',
+      '🌺 المعلم : ' + (teacherName || ''),
+      '',
+      '🌺 الطالب : ' + selected.name,
+      '',
       '*التقييم*',
-      '✅️ درجة الحفظ الجديد: ' + sc(scoreNew), '',
-      '✅️ درجة الماضي القريب: ' + sc(scoreRecent), '',
-      '✅️ درجة الماضي البعيد: ' + sc(scoreFar), '',
-      '📚 التربوي: ' + (tarbiya.trim() || '—'), '',
+      '✅️ درجة الحفظ الجديد: ' + sc(scoreNew),
+      '',
+      '✅️ درجة الماضي القريب: ' + sc(scoreRecent),
+      '',
+      '✅️ درجة الماضي البعيد: ' + sc(scoreFar),
+      '',
+      '📚 التربوي: ' + (tarbiya.trim() || '—'),
+      '',
       '📖 الشرعي: ' + (sharii.trim() || '—'),
       line,
       '*الواجب القادم*',
-      '🌱 الحفظ الجديد: ' + (newMem.trim() || '—'), '',
-      '🌱 الماضي القريب: ' + (recentPast.trim() || '—'), '',
-      '🌱 الماضي البعيد: ' + (farPast.trim() || '—'), '', '', '', '',
+      '🌱 الحفظ الجديد: ' + (newMem.trim() || '—'),
+      '',
+      '🌱 الماضي القريب: ' + (recentPast.trim() || '—'),
+      '',
+      '🌱 الماضي البعيد: ' + (farPast.trim() || '—'),
+      '',
+      '',
+      '',
+      '',
       line,
-      '🗓 حلقة يوم: ' + DAYS[now.getDay()], '',
-      '📝 الموافق: ' + `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`, '',
-      '#️⃣ رقم الحلقة: ' + sessionNum, '',
-      '📋 الحضور: ' + attend, '',
-      '⏱️ مدة الحلقة: ' + (duration || '60'), '',
+      '🗓 حلقة يوم: ' + DAYS[now.getDay()],
+      '',
+      '📝 الموافق: ' + `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`,
+      '',
+      '#️⃣ رقم الحلقة: ' + sessionNum,
+      '',
+      '📋 الحضور: ' + attend,
+      '',
+      '⏱️ مدة الحلقة: ' + (duration || '60'),
+      '',
       'وتزودوا فإن خير الزاد التقوى 🌹🌹🌹',
     ].join('\n')
     setPreview(text)
@@ -191,11 +209,14 @@ export default function TeacherSessionPage() {
         setMsg('خطأ: ' + (res as any).error)
         return
       }
-      const finalText = (res as any)?.data?.notes || text
+      const nextNum = (res as any)?.next_session_num
+      let finalText = (res as any)?.data?.notes || text
+      if (typeof nextNum === 'number' && finalText) {
+        finalText = finalText.replace(/رقم الحلقة:\s*\d+/g, `رقم الحلقة: ${nextNum}`)
+      }
       setPreview(finalText)
       setSaved(true)
       setMsg('✓ ' + ((res as any)?.message || 'تم الحفظ'))
-      const nextNum = (res as any)?.next_session_num
       if (typeof nextNum === 'number') {
         setStudents((prev) =>
           prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: nextNum } : s))
@@ -372,7 +393,11 @@ export default function TeacherSessionPage() {
 
             <label className="text-[12px] font-bold block">معاينة</label>
             <textarea className="input min-h-[140px] text-[12px] leading-relaxed mb-2" readOnly value={preview} dir="rtl" />
-            {saved && <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>اتحفظت الحصة. لو عايز تعدّل، ادخل سجل حصصي ← تعديل التقرير.</p>}
+            {saved && (
+              <p className="text-[12px] mb-2" style={{ color: '#6f7974' }}>
+                اتحفظت الحصة. لو عايز تعدّل، ادخل سجل حصصي ← تعديل التقرير.
+              </p>
+            )}
 
             <div className="flex flex-col gap-2">
               {!saved && (
