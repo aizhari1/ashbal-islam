@@ -43,7 +43,7 @@ export async function supervisorEditStudent(formData: FormData) {
   const { data: before, error: beforeErr } = await sb
     .from('students')
     .select(
-      'id, name, code, last_session_num, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type'
+      'id, name, code, last_session_num, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type, package_id'
     )
     .eq('id', studentId)
     .maybeSingle()
@@ -57,8 +57,33 @@ export async function supervisorEditStudent(formData: FormData) {
       ? oldLast
       : Math.max(0, Math.floor(Number(rawLast) || 0))
 
-  const formQuota = Number(formData.get('monthly_sessions') || 0)
-  const quota = formQuota > 0 ? formQuota : packageSize(before)
+  const packageIdRaw = String(formData.get('package_id') || '').trim()
+  let sessions = Number(formData.get('monthly_sessions') || 0) || null
+  let perSession = Number(formData.get('price_per_session') || 0) || null
+  let duration = Number(formData.get('session_duration') || 30) || 30
+  let amountDue = Number(formData.get('amount_due') || 0) || 0
+  let packageId: string | null = packageIdRaw || null
+  let subscriptionType: string | null = null
+
+  if (packageIdRaw) {
+    const { data: pkg, error: pkgErr } = await sb
+      .from('packages')
+      .select('id, name, sessions_count, duration_minutes, price, currency')
+      .eq('id', packageIdRaw)
+      .maybeSingle()
+    if (pkgErr || !pkg) return { error: 'الباقة المختارة غير موجودة' }
+    sessions = Number(pkg.sessions_count) || sessions
+    perSession =
+      Math.round((Number(pkg.price) / Math.max(1, Number(pkg.sessions_count))) * 100) / 100
+    duration = Number(pkg.duration_minutes) || duration
+    amountDue = Number(pkg.price) || amountDue
+    packageId = pkg.id
+    subscriptionType = 'باقة'
+  } else if (formData.has('package_id')) {
+    packageId = null
+  }
+
+  const quota = (sessions && sessions > 0 ? sessions : null) || packageSize(before)
   const check = validateSessionWithinPackage(newLast, quota)
   if (!check.ok) return { error: check.error }
 
@@ -68,15 +93,17 @@ export async function supervisorEditStudent(formData: FormData) {
   const payload: Record<string, unknown> = {
     name: String(formData.get('name') || '').trim() || undefined,
     phone: String(formData.get('phone') || '') || null,
-    monthly_sessions: Number(formData.get('monthly_sessions') || 0) || null,
-    session_duration: Number(formData.get('session_duration') || 30) || 30,
-    price_per_session: Number(formData.get('price_per_session') || 0) || null,
-    amount_due: Number(formData.get('amount_due') || 0) || 0,
+    monthly_sessions: sessions,
+    session_duration: duration,
+    price_per_session: perSession,
+    amount_due: amountDue,
     last_session_num: newLast,
     teacher_id: newTeacherId,
+    package_id: packageId,
   }
+  if (subscriptionType) payload.subscription_type = subscriptionType
   if (joinRaw) payload.join_date = joinRaw.slice(0, 10)
-  // سعر الحصة للمعلم: فاضي = ما نغيّرهوش، رقم أكبر من صفر = نحدّثه
+
   const rawRate = formData.get('teacher_session_rate')
   if (rawRate !== null && String(rawRate).trim() !== '') {
     const r = Number(rawRate)
@@ -87,7 +114,20 @@ export async function supervisorEditStudent(formData: FormData) {
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
 
   const { error } = await sb.from('students').update(payload).eq('id', studentId)
-  if (error) return { error: error.message }
+  if (error) {
+    if (/package_id/.test(error.message)) {
+      delete payload.package_id
+      const { error: e2 } = await sb.from('students').update(payload).eq('id', studentId)
+      if (e2) return { error: e2.message }
+    } else if (/teacher_session_rate/.test(error.message)) {
+      return {
+        error:
+          'عمود سعر المعلم مش موجود — نفّذ migration 009_teacher_session_rate.sql في Supabase ثم جرّب تاني',
+      }
+    } else {
+      return { error: error.message }
+    }
+  }
 
   await sb.from('activity_log').insert({
     actor_id: user.id,
@@ -98,6 +138,8 @@ export async function supervisorEditStudent(formData: FormData) {
       name: payload.name,
       last_session_num: { from: oldLast, to: newLast },
       teacher_id: { from: before.teacher_id, to: newTeacherId },
+      package_id: packageId,
+      price_per_session: perSession,
       teacher_session_rate: payload.teacher_session_rate ?? null,
     },
   })
@@ -108,6 +150,8 @@ export async function supervisorEditStudent(formData: FormData) {
     message:
       newLast !== oldLast
         ? `تم الحفظ · رقم الحصة ${oldLast} → ${newLast}`
-        : 'تم حفظ بيانات الطالب',
+        : packageId
+          ? 'تم حفظ بيانات الطالب والباقة'
+          : 'تم حفظ بيانات الطالب',
   }
 }

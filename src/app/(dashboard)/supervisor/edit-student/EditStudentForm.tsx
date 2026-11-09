@@ -1,11 +1,19 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { supervisorEditStudent } from './actions'
 import { tenureLabel } from '@/lib/student-tenure'
 
 type Teacher = { id: string; name: string }
+type Pkg = {
+  id: string
+  name: string
+  sessions_count: number
+  duration_minutes: number | null
+  price: number
+  currency: string | null
+}
 
 type Student = {
   id: string
@@ -22,10 +30,16 @@ type Student = {
   status: string | null
   join_date?: string | null
   created_at?: string | null
+  package_id?: string | null
 }
 
 const inputCls = 'w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white'
 const inputStyle = { borderColor: '#cde8dc' } as const
+
+const perSession = (p: Pkg) =>
+  Math.round((Number(p.price) / Math.max(1, p.sessions_count)) * 100) / 100
+const money = (n: number) =>
+  Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -41,19 +55,59 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function EditStudentForm({
   student,
   teachers,
+  packages = [],
 }: {
   student: Student
   teachers: Teacher[]
+  packages?: Pkg[]
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const { joinAr, tenure, joinDate } = tenureLabel(student)
 
+  const [packageId, setPackageId] = useState(student.package_id || '')
+  const [monthlySessions, setMonthlySessions] = useState(String(student.monthly_sessions ?? 8))
+  const [sessionDuration, setSessionDuration] = useState(String(student.session_duration ?? 30))
+  const [pricePerSession, setPricePerSession] = useState(String(student.price_per_session ?? 25))
+  const [teacherRate, setTeacherRate] = useState(
+    student.teacher_session_rate != null && student.teacher_session_rate !== undefined
+      ? String(student.teacher_session_rate)
+      : ''
+  )
+  const [amountDue, setAmountDue] = useState(String(student.amount_due ?? 0))
+
+  const pkg = useMemo(
+    () => packages.find((p) => p.id === packageId) || null,
+    [packages, packageId]
+  )
+
+  function choosePackage(id: string) {
+    if (!id) {
+      setPackageId('')
+      return
+    }
+    const p = packages.find((x) => x.id === id)
+    if (!p) return
+    const ps = perSession(p)
+    setPackageId(p.id)
+    setMonthlySessions(String(p.sessions_count))
+    setSessionDuration(String(p.duration_minutes || 30))
+    setPricePerSession(String(ps))
+    setAmountDue(String(Number(p.price) || 0))
+    setTeacherRate((prev) => (prev && Number(prev) > 0 ? prev : String(ps)))
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
     const fd = new FormData(form)
+    fd.set('package_id', packageId)
+    fd.set('monthly_sessions', monthlySessions)
+    fd.set('session_duration', sessionDuration)
+    fd.set('price_per_session', pricePerSession)
+    fd.set('teacher_session_rate', teacherRate)
+    fd.set('amount_due', amountDue)
     setMsg(null)
     startTransition(async () => {
       const r = await supervisorEditStudent(fd)
@@ -156,13 +210,44 @@ export function EditStudentForm({
         </select>
       </Field>
 
+      <Field label="الباقة">
+        <select
+          value={packageId}
+          onChange={(e) => choosePackage(e.target.value)}
+          className={inputCls}
+          style={inputStyle}
+        >
+          <option value="">— بدون باقة / يدوي —</option>
+          {packages.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} · {p.sessions_count} حصة · {money(Number(p.price))} {p.currency || 'EGP'}
+            </option>
+          ))}
+        </select>
+        {pkg && (
+          <div
+            className="mt-2 rounded-xl px-3 py-2 text-[11px] space-y-0.5"
+            style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}
+          >
+            <p>
+              <b>سعر الباقة:</b> {money(Number(pkg.price))} {pkg.currency || 'EGP'}
+            </p>
+            <p>
+              <b>حصص:</b> {pkg.sessions_count} · <b>للحصة على الولي:</b> {money(perSession(pkg))}
+            </p>
+            <p style={{ color: '#6f7974' }}>تم ملء الحقول تحت تلقائيًا — تقدر تعدّل يدوي</p>
+          </div>
+        )}
+      </Field>
+
       <div className="grid grid-cols-2 gap-2.5">
         <Field label="عدد حلقات الباقة">
           <input
             name="monthly_sessions"
             type="number"
             min={0}
-            defaultValue={student.monthly_sessions ?? 8}
+            value={monthlySessions}
+            onChange={(e) => setMonthlySessions(e.target.value)}
             className={inputCls}
             style={inputStyle}
           />
@@ -172,7 +257,8 @@ export function EditStudentForm({
             name="session_duration"
             type="number"
             min={0}
-            defaultValue={student.session_duration ?? 30}
+            value={sessionDuration}
+            onChange={(e) => setSessionDuration(e.target.value)}
             className={inputCls}
             style={inputStyle}
           />
@@ -201,10 +287,14 @@ export function EditStudentForm({
             type="number"
             min={0}
             step="0.5"
-            defaultValue={student.price_per_session ?? 25}
+            value={pricePerSession}
+            onChange={(e) => setPricePerSession(e.target.value)}
             className={inputCls}
             style={inputStyle}
           />
+          <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
+            من الباقة: سعر الباقة ÷ عدد الحصص
+          </p>
         </Field>
         <Field label="سعر الحصة للمعلم (ج)">
           <input
@@ -212,7 +302,8 @@ export function EditStudentForm({
             type="number"
             min={0}
             step="0.5"
-            defaultValue={student.teacher_session_rate ?? ''}
+            value={teacherRate}
+            onChange={(e) => setTeacherRate(e.target.value)}
             placeholder="يُحسب منه راتب المعلم"
             className={inputCls}
             style={inputStyle}
@@ -223,10 +314,14 @@ export function EditStudentForm({
             name="amount_due"
             type="number"
             min={0}
-            defaultValue={student.amount_due ?? 0}
+            value={amountDue}
+            onChange={(e) => setAmountDue(e.target.value)}
             className={inputCls}
             style={inputStyle}
           />
+          <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
+            عند اختيار باقة = سعر الباقة كامل
+          </p>
         </Field>
       </div>
 
