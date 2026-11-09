@@ -19,14 +19,20 @@ export default async function SupervisorEditStudentPage({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: students }, { data: teachers }] = await Promise.all([
-    supabase
+  const STUDENT_COLS =
+    'id, code, name, phone, monthly_sessions, session_duration, last_session_num, amount_due, price_per_session, teacher_id, status, join_date, created_at'
+  const loadStudents = async () => {
+    const r = await supabase
       .from('students')
-      .select(
-        'id, code, name, phone, monthly_sessions, session_duration, last_session_num, amount_due, price_per_session, teacher_id, status, join_date, created_at'
-      )
+      .select(`${STUDENT_COLS}, teacher_session_rate`)
       .order('name')
-      .limit(800),
+      .limit(800)
+    if (!r.error) return r
+    // لو migration 009 لسه ماتنفّذتش نرجع للأعمدة القديمة بدل ما الصفحة تفضى
+    return supabase.from('students').select(STUDENT_COLS).order('name').limit(800) as any
+  }
+  const [{ data: students }, { data: teachers }] = await Promise.all([
+    loadStudents(),
     // كل المعلمين (نشط وغير نشط) عشان نقدر نربط طالب بمعلم حتى لو is_active=false مؤقتاً
     supabase.from('teachers').select('id, name, is_active').order('name'),
   ])
@@ -70,7 +76,7 @@ export default async function SupervisorEditStudentPage({
           {/* key: لما الطالب يتغيّر (أو بياناته تتحدّث بعد الحفظ) الفورم يتبني من جديد —
               الخانات defaultValue ومش بتتحدّث لوحدها، وكانت بتفضل بيانات الطالب اللي قبله */}
           <EditStudentForm
-            key={[selected.id, selected.name, selected.phone, selected.teacher_id, selected.monthly_sessions, selected.session_duration, selected.last_session_num, selected.amount_due, selected.price_per_session, selected.join_date].join('|')}
+            key={[selected.id, selected.name, selected.phone, selected.teacher_id, selected.monthly_sessions, selected.session_duration, selected.last_session_num, selected.amount_due, selected.price_per_session, (selected as any).teacher_session_rate, selected.join_date].join('|')}
             student={selected as any}
             teachers={teacherOptions}
           />
