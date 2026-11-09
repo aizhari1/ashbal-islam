@@ -55,10 +55,9 @@ function tryServiceClient(): Svc | null {
 }
 
 /**
- * رقم آخر حصة "الفعلي" قبل التسجيل.
- * العدّاد المخزّن هو الأصل (الإدارة ممكن تعدّله)، إلا لو كان متأخر عن سجل الحضور:
- * يعني آخر حضور مسجّل بتاريخ أحدث من last_session_date → تحديث عدّاد سابق فشل، فنكمل من رقم الحضور
- * (من غير كده التقرير بيرجع لرقم 1 كل مرة).
+ * رقم آخر حصة قبل التسجيل.
+ * الأصل: عدّاد الطالب (last_session_num) — نفس المصدر اللي المعاينة بتحسب منه.
+ * نستبدل من سجل الحضور فقط لو الحضور أحدث من تاريخ العدّاد ورقم الحضور أكبر (فشل تحديث سابق).
  */
 async function resolvePrevCounter(
   sb: Svc | null,
@@ -79,9 +78,12 @@ async function resolvePrevCounter(
       .limit(1)
     const last = data?.[0]
     if (!last || last.session_num == null) return stored
-    const lastDate = String(last.session_date).slice(0, 10)
+    const attNum = Math.max(0, Number(last.session_num) || 0)
+    const lastDate = String(last.session_date || '').slice(0, 10)
     const counterDate = student?.last_session_date ? String(student.last_session_date).slice(0, 10) : ''
-    if (lastDate > counterDate) return Math.max(0, Number(last.session_num) || 0)
+    if (counterDate && lastDate > counterDate && attNum > stored) {
+      return attNum
+    }
   } catch {
     /* نرجع للعدّاد المخزّن */
   }
@@ -225,7 +227,9 @@ export async function recordAttendance(data: {
   }
 
   const withNum = (t: string | null | undefined, n: number | null | undefined) =>
-    t && n ? t.replace(/(رقم الحلقة: )\d+/, `$1${n}`) : t || null
+    t && n != null && n !== undefined
+      ? t.replace(/رقم الحلقة:\s*\d+/g, `رقم الحلقة: ${n}`)
+      : t || null
 
   const { data: existing } = await supabase
     .from('attendance')
@@ -246,7 +250,6 @@ export async function recordAttendance(data: {
     // غياب/معذور → حاضر/متأخر في نفس اليوم: تقدّم العداد
     if (!wasPresent && willBePresent) {
       const adv = await advanceStudentCounter(tryServiceClient(), supabase, data.student_id, today)
-      // العدّاد ما اتحدّثش → منكمّلش (كان هيتسجّل حضور برقم غلط ويرجع لـ 1 بعدها)
       if (adv.error) return { error: `تعذّر تحديث عدّاد الطالب: ${adv.error} — لم يتم الحفظ، حاول مرة أخرى` }
       sessionNum = adv.nextSession
       dueMsg = adv.dueMsg
@@ -276,9 +279,12 @@ export async function recordAttendance(data: {
     return {
       success: true,
       data: row,
+      next_session_num: willBePresent ? Number(sessionNum) || null : null,
       message: !wasPresent && willBePresent
         ? `اتحدّث لتسجيل حضور — حصة رقم ${sessionNum}${dueMsg}`
-        : 'اتحدّث تقرير اليوم',
+        : willBePresent
+          ? `اتحدّث تقرير اليوم — حصة رقم ${sessionNum}`
+          : 'اتحدّث تقرير اليوم',
     }
   }
 
@@ -328,17 +334,14 @@ export async function recordAttendance(data: {
       const due = dueAfterPackageComplete(student)
       if (due > 0) {
         const prevDue = Number(student.amount_due || 0)
-        // تراكم المستحق لو الباقة خلصت ومفيش دفع — مش استبدال لو في باقي قديم
         patch.amount_due = prevDue > 0 ? prevDue + due : due
         dueMsg = ` · مستحق ${patch.amount_due} ج · الباقة خلصت ويبدأ العد من 1`
       } else {
         dueMsg = ' · الباقة خلصت ويبدأ العد من 1'
       }
     }
-    // service client عشان التحديث يمشي حتى لو RLS يمنع المعلم — ونتأكد إنه نجح فعلًا
     const upErr = await writeStudentPatch(svc, supabase, data.student_id, patch)
     if (upErr) {
-      // نمسح الحصة اللي لسه اتسجّلت عشان متفضلش حصة بدون عدّاد (وإلا الحفظ التاني بيرجع لـ 1)
       await (svc ?? supabase).from('attendance').delete().eq('id', row.id)
       return { error: `تعذّر تحديث عدّاد الطالب: ${upErr} — لم يتم حفظ الحصة، حاول مرة أخرى` }
     }
@@ -519,10 +522,6 @@ export async function updateMySession(
     revalidateTeacherPaths()
     return { success: true, message: 'تم تعديل الحصة عند الجميع', last_session_num: lastSessionNum }
   } catch (e: any) {
-    return { error: e?.message || 'خطأ غير متوقع' }
+    return { error: e?.message || 'خطأ غير متوقع أثناء التعديل' }
   }
-}
-
-export async function updateSessionReport(attendanceId: string, text: string) {
-  return updateMySession(attendanceId, { notes: text })
 }
