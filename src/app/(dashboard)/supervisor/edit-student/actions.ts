@@ -70,17 +70,24 @@ export async function supervisorEditStudent(formData: FormData) {
     phone: String(formData.get('phone') || '') || null,
     monthly_sessions: Number(formData.get('monthly_sessions') || 0) || null,
     session_duration: Number(formData.get('session_duration') || 30) || 30,
+    price_per_session: Number(formData.get('price_per_session') || 0) || null,
+    amount_due: Number(formData.get('amount_due') || 0) || 0,
     last_session_num: newLast,
-    amount_due: Number(formData.get('amount_due') || 0),
-    price_per_session: Number(formData.get('price_per_session') || 25),
     teacher_id: newTeacherId,
   }
   if (joinRaw) payload.join_date = joinRaw.slice(0, 10)
+  // سعر الحصة للمعلم: فاضي = ما نغيّرهوش، رقم أكبر من صفر = نحدّثه
+  const rawRate = formData.get('teacher_session_rate')
+  if (rawRate !== null && String(rawRate).trim() !== '') {
+    const r = Number(rawRate)
+    if (!(r > 0)) return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
+    payload.teacher_session_rate = r
+  }
 
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
 
-  const { error: upErr } = await sb.from('students').update(payload).eq('id', studentId)
-  if (upErr) return { error: upErr.message }
+  const { error } = await sb.from('students').update(payload).eq('id', studentId)
+  if (error) return { error: error.message }
 
   await sb.from('activity_log').insert({
     actor_id: user.id,
@@ -89,27 +96,18 @@ export async function supervisorEditStudent(formData: FormData) {
     entity_id: studentId,
     details: {
       name: payload.name,
-      last_session_num: newLast,
-      old_last_session_num: oldLast,
-      note: 'data_only_no_attendance_sync',
+      last_session_num: { from: oldLast, to: newLast },
+      teacher_id: { from: before.teacher_id, to: newTeacherId },
+      teacher_session_rate: payload.teacher_session_rate ?? null,
     },
   })
 
   revalidateAll()
-
-  let message = 'تم حفظ بيانات الطالب'
-  if (newLast !== oldLast) {
-    message =
-      `تم حفظ الرقم ${newLast} على ملف الطالب فقط. ` +
-      `لم يُمس سجل المعلم. للمزامنة (إضافة/حذف حصص المعلم) استخدم «التسوية» أو «تعديل رقم الحصة».`
-  }
-
   return {
-    ok: true,
-    addedSessions: 0,
-    removedSessions: 0,
-    oldLastSessionNum: oldLast,
-    newLastSessionNum: newLast,
-    message,
+    success: true,
+    message:
+      newLast !== oldLast
+        ? `تم الحفظ · رقم الحصة ${oldLast} → ${newLast}`
+        : 'تم حفظ بيانات الطالب',
   }
 }
