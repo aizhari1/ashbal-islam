@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { StudentPicker } from './StudentPicker'
 import { EditStudentForm } from './EditStudentForm'
+import { DeleteStudentButton } from './DeleteStudentButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,7 +62,7 @@ export default async function SupervisorEditStudentPage({
             تعديل بيانات طالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            ابحث · عدّل · احفظ · غيّر طالب من غير ما تخرج
+            ابحث · عدّل · احفظ · أو احذف نهائيًا
           </p>
         </div>
       </header>
@@ -89,6 +90,7 @@ export default async function SupervisorEditStudentPage({
             student={selected as any}
             teachers={teacherOptions}
           />
+          <DeleteStudentButton studentId={selected.id} studentName={selected.name} />
         </div>
       )}
 
