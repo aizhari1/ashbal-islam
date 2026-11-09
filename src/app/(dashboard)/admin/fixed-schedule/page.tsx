@@ -2,10 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FixedScheduleForm } from './FixedScheduleForm'
-import ScheduleRow from './ScheduleRow'
+import { ScheduleList } from './ScheduleList'
 import { CopyMonthButton } from './CopyMonthButton'
 
-export default async function FixedSchedulePage() {
+export const dynamic = 'force-dynamic'
+
+export default async function FixedSchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ student?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -17,14 +24,14 @@ export default async function FixedSchedulePage() {
     .select('*, students(name, code), teachers(name)')
     .order('day_of_week')
     .order('start_time')
-    .limit(1000)
+    .limit(2000)
 
   const { data: students } = await supabase
     .from('students')
     .select('id, name, code')
-    .eq('status', 'نشط')
+    .in('status', ['نشط', 'تجريبي'])
     .order('name')
-    .limit(200)
+    .limit(800)
 
   const { data: teachers } = await supabase
     .from('teachers')
@@ -41,7 +48,7 @@ export default async function FixedSchedulePage() {
         <div>
           <h1 className="text-[16px] font-bold">المواعيد الثابتة</h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            الجدول الأسبوعي + روابط الحلقات
+            إضافة دفعة · بحث · تعديل
           </p>
         </div>
       </header>
@@ -50,21 +57,16 @@ export default async function FixedSchedulePage() {
         <CopyMonthButton />
 
         <div className="card p-4 mb-4">
-          <h2 className="text-[13px] font-bold mb-3">إضافة موعد</h2>
-          <FixedScheduleForm students={students ?? []} teachers={teachers ?? []} />
+          <h2 className="text-[13px] font-bold mb-3">إضافة مواعيد (دفعة واحدة)</h2>
+          <FixedScheduleForm
+            students={students ?? []}
+            teachers={teachers ?? []}
+            defaultStudentId={sp.student || ''}
+          />
         </div>
 
         <h2 className="text-[13px] font-bold mb-2">الجدول ({entries?.length ?? 0})</h2>
-        <div className="space-y-2">
-          {(entries ?? []).map((e: any) => (
-            <ScheduleRow key={e.id} e={e} teachers={teachers ?? []} />
-          ))}
-          {(!entries || entries.length === 0) && (
-            <p className="card p-6 text-center text-[13px]" style={{ color: '#6f7974' }}>
-              لا مواعيد ثابتة بعد
-            </p>
-          )}
-        </div>
+        <ScheduleList entries={entries ?? []} teachers={teachers ?? []} />
       </main>
     </div>
   )
