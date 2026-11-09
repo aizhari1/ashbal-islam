@@ -8,6 +8,7 @@ import {
   activateUser,
   linkTeacherProfile,
   setTeacherActive,
+  deleteTeacher,
   autoLinkOrphanTeachers,
 } from '@/app/actions/users'
 import { useRouter } from 'next/navigation'
@@ -27,6 +28,7 @@ type Teacher = {
   name?: string | null
   profile_id?: string | null
   is_active?: boolean | null
+  student_count?: number
 }
 
 export function UsersClient({
@@ -40,6 +42,8 @@ export function UsersClient({
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [panel, setPanel] = useState<{ teacherId: string; mode: 'stop' | 'delete' } | null>(null)
+  const [replacement, setReplacement] = useState('')
 
   function run(fn: () => Promise<any>, okMsg?: string) {
     startTransition(async () => {
@@ -47,6 +51,8 @@ export function UsersClient({
       if (r?.error) setMsg(r.error)
       else {
         setMsg(r?.message || okMsg || 'تم')
+        setPanel(null)
+        setReplacement('')
         router.refresh()
       }
     })
@@ -61,6 +67,8 @@ export function UsersClient({
 
   const unlinkedTeachers = teachers.filter((t) => !t.profile_id)
   const linkedCount = teachers.filter((t) => t.profile_id).length
+  const activeOthers = (exceptId: string) =>
+    teachers.filter((t) => t.id !== exceptId && t.is_active !== false)
 
   return (
     <main className="px-4 space-y-4">
@@ -88,68 +96,184 @@ export function UsersClient({
           ملفات المعلمين ({teachers.length})
         </p>
         <div className="space-y-2">
-          {teachers.map((t) => (
-            <div key={t.id} className="card p-3.5">
-              <div className="flex justify-between items-start gap-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-[14px] truncate">{t.name}</p>
-                  <p className="text-[11px]" style={{ color: '#6f7974' }} dir="ltr">
-                    {t.code}
-                  </p>
-                  <p className="text-[11px] mt-1" style={{ color: t.profile_id ? '#176b52' : '#ba1a1a' }}>
-                    {t.profile_id ? `مرتبط: ${profileName(t.profile_id)}` : 'غير مرتبط بحساب دخول'}
-                  </p>
+          {teachers.map((t) => {
+            const sc = t.student_count ?? 0
+            const isPanel = panel?.teacherId === t.id
+            return (
+              <div key={t.id} className="card p-3.5">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-[14px] truncate">{t.name}</p>
+                    <p className="text-[11px]" style={{ color: '#6f7974' }} dir="ltr">
+                      {t.code}
+                    </p>
+                    <p className="text-[11px] mt-1" style={{ color: t.profile_id ? '#176b52' : '#ba1a1a' }}>
+                      {t.profile_id ? `مرتبط: ${profileName(t.profile_id)}` : 'غير مرتبط بحساب دخول'}
+                    </p>
+                    <p className="text-[11px] mt-0.5" style={{ color: '#6f7974' }}>
+                      طلاب مربوطين: <b>{sc}</b>
+                    </p>
+                  </div>
+                  <span className={t.is_active ? 'badge-ok' : 'badge-err'}>{t.is_active ? 'نشط' : 'موقوف'}</span>
                 </div>
-                <span className={t.is_active ? 'badge-ok' : 'badge-err'}>{t.is_active ? 'نشط' : 'موقوف'}</span>
-              </div>
 
-              <form
-                className="mt-3 flex gap-2 items-center"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const fd = new FormData(e.currentTarget)
-                  run(() => linkTeacherProfile(fd), 'تم الربط')
-                }}
-              >
-                <input type="hidden" name="teacher_id" value={t.id} />
-                <select name="profile_id" defaultValue={t.profile_id || ''} className="input text-[12px] flex-1" required>
-                  <option value="">— اختر حساب الدخول —</option>
-                  {teacherProfiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name} ({p.code})
-                    </option>
-                  ))}
-                  {profiles
-                    .filter((p) => p.role !== 'teacher')
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        [دور {p.role}] {p.full_name} ({p.code})
-                      </option>
-                    ))}
-                </select>
-                <button type="submit" disabled={isPending} className="btn-primary px-3 py-2 text-[12px] shrink-0">
-                  ربط
-                </button>
-              </form>
-
-              <div className="mt-2">
-                <button
-                  type="button"
-                  disabled={isPending}
-                  className="text-[12px] font-semibold"
-                  style={{ color: t.is_active ? '#ba1a1a' : '#176b52' }}
-                  onClick={() => {
-                    const fd = new FormData()
-                    fd.set('teacher_id', t.id)
-                    fd.set('is_active', t.is_active ? 'false' : 'true')
-                    run(() => setTeacherActive(fd))
+                <form
+                  className="mt-3 flex gap-2 items-center"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const fd = new FormData(e.currentTarget)
+                    run(() => linkTeacherProfile(fd), 'تم الربط')
                   }}
                 >
-                  {t.is_active ? 'إيقاف المعلم من الرواتب' : 'تفعيل المعلم في الرواتب'}
-                </button>
+                  <input type="hidden" name="teacher_id" value={t.id} />
+                  <select name="profile_id" defaultValue={t.profile_id || ''} className="input text-[12px] flex-1" required>
+                    <option value="">— اختر حساب الدخول —</option>
+                    {teacherProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name} ({p.code})
+                      </option>
+                    ))}
+                    {profiles
+                      .filter((p) => p.role !== 'teacher')
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          [دور {p.role}] {p.full_name} ({p.code})
+                        </option>
+                      ))}
+                  </select>
+                  <button type="submit" disabled={isPending} className="btn-primary px-3 py-2 text-[12px] shrink-0">
+                    ربط
+                  </button>
+                </form>
+
+                {!isPanel && (
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {t.is_active ? (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        className="text-[12px] font-semibold"
+                        style={{ color: '#ba1a1a' }}
+                        onClick={() => {
+                          setPanel({ teacherId: t.id, mode: 'stop' })
+                          setReplacement('')
+                          setMsg('')
+                        }}
+                      >
+                        إيقاف المعلم
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        className="text-[12px] font-semibold"
+                        style={{ color: '#176b52' }}
+                        onClick={() => {
+                          const fd = new FormData()
+                          fd.set('teacher_id', t.id)
+                          fd.set('is_active', 'true')
+                          run(() => setTeacherActive(fd))
+                        }}
+                      >
+                        تفعيل المعلم
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      className="text-[12px] font-semibold"
+                      style={{ color: '#93000a' }}
+                      onClick={() => {
+                        setPanel({ teacherId: t.id, mode: 'delete' })
+                        setReplacement('')
+                        setMsg('')
+                      }}
+                    >
+                      حذف نهائي
+                    </button>
+                  </div>
+                )}
+
+                {isPanel && panel && (
+                  <div
+                    className="mt-3 rounded-xl p-3 space-y-2"
+                    style={{ background: panel.mode === 'delete' ? '#fce8e8' : '#fff8e8' }}
+                  >
+                    <p className="text-[12px] font-bold" style={{ color: panel.mode === 'delete' ? '#93000a' : '#8a5a00' }}>
+                      {panel.mode === 'delete'
+                        ? `حذف «${t.name}» نهائيًا`
+                        : `إيقاف «${t.name}» من الرواتب`}
+                    </p>
+                    {sc > 0 ? (
+                      <>
+                        <p className="text-[11px]" style={{ color: '#3f4944' }}>
+                          عنده <b>{sc}</b> طالب — لازم تختار معلم بديل ينقلوا له تلقائي قبل{' '}
+                          {panel.mode === 'delete' ? 'الحذف' : 'الإيقاف'}.
+                        </p>
+                        <select
+                          className="input text-[12px] w-full"
+                          value={replacement}
+                          onChange={(e) => setReplacement(e.target.value)}
+                          required
+                        >
+                          <option value="">— اختر المعلم البديل —</option>
+                          {activeOthers(t.id).map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.name} ({o.code})
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <p className="text-[11px]" style={{ color: '#6f7974' }}>
+                        مفيش طلاب مربوطين به — تقدر تكمّل مباشرة.
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={isPending || (sc > 0 && !replacement)}
+                        className="flex-1 py-2 rounded-xl text-white text-[12px] font-bold disabled:opacity-50"
+                        style={{ background: panel.mode === 'delete' ? '#ba1a1a' : '#755b1b' }}
+                        onClick={() => {
+                          const fd = new FormData()
+                          fd.set('teacher_id', t.id)
+                          if (replacement) fd.set('replacement_teacher_id', replacement)
+                          if (panel.mode === 'delete') {
+                            if (!confirm(`تأكيد حذف المعلم «${t.name}» نهائيًا؟`)) return
+                            run(() => deleteTeacher(fd))
+                          } else {
+                            fd.set('is_active', 'false')
+                            run(() => setTeacherActive(fd))
+                          }
+                        }}
+                      >
+                        {isPending
+                          ? 'جاري...'
+                          : panel.mode === 'delete'
+                            ? sc > 0
+                              ? 'نقل الطلاب وحذف'
+                              : 'تأكيد الحذف'
+                            : sc > 0
+                              ? 'نقل الطلاب وإيقاف'
+                              : 'تأكيد الإيقاف'}
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-xl text-[12px] font-bold bg-white"
+                        onClick={() => {
+                          setPanel(null)
+                          setReplacement('')
+                        }}
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
           {teachers.length === 0 && (
             <p className="text-center text-[13px] py-4" style={{ color: '#6f7974' }}>
               مفيش صفوف في جدول المعلمين
@@ -193,7 +317,10 @@ export function UsersClient({
       )}
 
       {msg && (
-        <p className="text-[13px] text-center font-bold" style={{ color: '#176b52' }}>
+        <p
+          className="text-[13px] text-center font-bold"
+          style={{ color: msg.includes('فشل') || msg.includes('لازم') ? '#ba1a1a' : '#176b52' }}
+        >
           {msg}
         </p>
       )}
