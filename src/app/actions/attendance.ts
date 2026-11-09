@@ -44,20 +44,82 @@ async function syncStudentLastSession(
   return lastNum
 }
 
+type Svc = ReturnType<typeof serviceClient>
+
+function tryServiceClient(): Svc | null {
+  try {
+    return serviceClient()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * رقم آخر حصة "الفعلي" قبل التسجيل.
+ * العدّاد المخزّن هو الأصل (الإدارة ممكن تعدّله)، إلا لو كان متأخر عن سجل الحضور:
+ * يعني آخر حضور مسجّل بتاريخ أحدث من last_session_date → تحديث عدّاد سابق فشل، فنكمل من رقم الحضور
+ * (من غير كده التقرير بيرجع لرقم 1 كل مرة).
+ */
+async function resolvePrevCounter(
+  sb: Svc | null,
+  studentId: string,
+  student: { last_session_num?: number | null; last_session_date?: string | null } | null
+): Promise<number> {
+  const stored = Math.max(0, Number(student?.last_session_num) || 0)
+  if (!sb) return stored
+  try {
+    const { data } = await sb
+      .from('attendance')
+      .select('session_num, session_date')
+      .eq('student_id', studentId)
+      .in('status', ['حاضر', 'متأخر'])
+      .not('session_num', 'is', null)
+      .order('session_date', { ascending: false })
+      .order('session_num', { ascending: false })
+      .limit(1)
+    const last = data?.[0]
+    if (!last || last.session_num == null) return stored
+    const lastDate = String(last.session_date).slice(0, 10)
+    const counterDate = student?.last_session_date ? String(student.last_session_date).slice(0, 10) : ''
+    if (lastDate > counterDate) return Math.max(0, Number(last.session_num) || 0)
+  } catch {
+    /* نرجع للعدّاد المخزّن */
+  }
+  return stored
+}
+
+/** يكتب تحديث الطالب ويتأكد فعلًا إن صف اتحدّث (تحديث RLS المحجوب بيرجع بدون خطأ وبدون صفوف) */
+async function writeStudentPatch(
+  sb: Svc | null,
+  userClient: Awaited<ReturnType<typeof createClient>>,
+  studentId: string,
+  patch: Record<string, unknown>
+): Promise<string | null> {
+  let lastMsg = 'تعذّر تحديث عدّاد الطالب'
+  for (const client of [sb, userClient]) {
+    if (!client) continue
+    const { data, error } = await client.from('students').update(patch).eq('id', studentId).select('id')
+    if (!error && data && data.length > 0) return null
+    if (error) lastMsg = error.message
+  }
+  return lastMsg
+}
+
 /** تقدّم عدّاد الطالب عند تحويل غياب→حضور في نفس اليوم */
 async function advanceStudentCounter(
-  sb: ReturnType<typeof serviceClient>,
+  sb: Svc | null,
+  userClient: Awaited<ReturnType<typeof createClient>>,
   studentId: string,
   today: string
-): Promise<{ nextSession: number; completedPackage: boolean; dueMsg: string }> {
-  const { data: student } = await sb
+): Promise<{ nextSession: number; completedPackage: boolean; dueMsg: string; error?: string }> {
+  const { data: student } = await (sb ?? userClient)
     .from('students')
-    .select('last_session_num, monthly_sessions, subscription_type, price_per_session, amount_due')
+    .select('last_session_num, last_session_date, monthly_sessions, subscription_type, price_per_session, amount_due')
     .eq('id', studentId)
     .single()
 
   const quota = packageSize(student || {})
-  const prevNum = student?.last_session_num || 0
+  const prevNum = await resolvePrevCounter(sb, studentId, student)
   const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const patch: Record<string, unknown> = {
@@ -75,8 +137,8 @@ async function advanceStudentCounter(
       dueMsg = ' · الباقة خلصت ويبدأ العد من 1'
     }
   }
-  await sb.from('students').update(patch).eq('id', studentId)
-  return { nextSession, completedPackage, dueMsg }
+  const error = await writeStudentPatch(sb, userClient, studentId, patch)
+  return { nextSession, completedPackage, dueMsg, ...(error ? { error } : {}) }
 }
 
 function revalidateTeacherPaths() {
@@ -183,8 +245,9 @@ export async function recordAttendance(data: {
 
     // غياب/معذور → حاضر/متأخر في نفس اليوم: تقدّم العداد
     if (!wasPresent && willBePresent) {
-      const sb = serviceClient()
-      const adv = await advanceStudentCounter(sb, data.student_id, today)
+      const adv = await advanceStudentCounter(tryServiceClient(), supabase, data.student_id, today)
+      // العدّاد ما اتحدّثش → منكمّلش (كان هيتسجّل حضور برقم غلط ويرجع لـ 1 بعدها)
+      if (adv.error) return { error: `تعذّر تحديث عدّاد الطالب: ${adv.error} — لم يتم الحفظ، حاول مرة أخرى` }
       sessionNum = adv.nextSession
       dueMsg = adv.dueMsg
     }
@@ -221,12 +284,13 @@ export async function recordAttendance(data: {
 
   const { data: student } = await supabase
     .from('students')
-    .select('last_session_num, monthly_sessions, subscription_type, price_per_session, amount_due')
+    .select('last_session_num, last_session_date, monthly_sessions, subscription_type, price_per_session, amount_due')
     .eq('id', data.student_id)
     .single()
 
+  const svc = tryServiceClient()
   const quota = packageSize(student || {})
-  const prevNum = student?.last_session_num || 0
+  const prevNum = await resolvePrevCounter(svc, data.student_id, student)
   const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const isPresent = isPresentStatus(data.status)
@@ -271,9 +335,13 @@ export async function recordAttendance(data: {
         dueMsg = ' · الباقة خلصت ويبدأ العد من 1'
       }
     }
-    // service client عشان التحديث يمشي حتى لو RLS يمنع المعلم
-    const sbWrite = serviceClient()
-    await sbWrite.from('students').update(patch).eq('id', data.student_id)
+    // service client عشان التحديث يمشي حتى لو RLS يمنع المعلم — ونتأكد إنه نجح فعلًا
+    const upErr = await writeStudentPatch(svc, supabase, data.student_id, patch)
+    if (upErr) {
+      // نمسح الحصة اللي لسه اتسجّلت عشان متفضلش حصة بدون عدّاد (وإلا الحفظ التاني بيرجع لـ 1)
+      await (svc ?? supabase).from('attendance').delete().eq('id', row.id)
+      return { error: `تعذّر تحديث عدّاد الطالب: ${upErr} — لم يتم حفظ الحصة، حاول مرة أخرى` }
+    }
   }
 
   await supabase.from('activity_log').insert({
