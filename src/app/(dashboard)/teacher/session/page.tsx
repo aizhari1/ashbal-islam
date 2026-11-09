@@ -51,35 +51,84 @@ export default function TeacherSessionPage() {
   const [farPast, setFarPast] = useState('')
   const [arabicLang, setArabicLang] = useState('')
 
-  useEffect(() => {
-    ;(async () => {
+  async function loadRoom() {
+    setLoadErr('')
+    setStudents([])
+    try {
+      let tid: string | null = null
+      let tname = ''
+
       try {
         const ensured = await ensureMyTeacher()
-        if (ensured.error || !ensured.teacher) {
-          setLoadErr(ensured.error || 'لا يوجد ملف معلم مرتبط بحسابك')
-          return
-        }
-        setTeacherId(ensured.teacher.id)
-        setTeacherName(ensured.teacher.name || '')
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from('students')
-          .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
-          .eq('status', 'نشط')
-          .eq('teacher_id', ensured.teacher.id)
-          .order('name')
-        if (error) {
-          setLoadErr(error.message)
-          return
-        }
-        setStudents((data as Student[]) || [])
-        if (!data?.length) {
-          setLoadErr('مفيش طلاب نشطين مربوطين بيك — من الإشراف: تعديل طالب → اختَر هذا المعلم')
+        if (ensured?.teacher?.id) {
+          tid = ensured.teacher.id
+          tname = ensured.teacher.name || ''
+        } else if (ensured?.error) {
+          console.warn('ensureMyTeacher:', ensured.error)
         }
       } catch (e: any) {
-        setLoadErr(e?.message || 'فشل تحميل غرفة التسميع')
+        console.warn('ensureMyTeacher network:', e?.message)
       }
-    })()
+
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        setLoadErr('انتهت الجلسة — سجّل دخول مرة تانية')
+        return
+      }
+
+      if (!tid) {
+        const { data: trow } = await supabase
+          .from('teachers')
+          .select('id, name')
+          .eq('profile_id', user.id)
+          .maybeSingle()
+        if (trow?.id) {
+          tid = trow.id
+          tname = trow.name || ''
+        }
+      }
+
+      if (!tid) {
+        setLoadErr('لا يوجد ملف معلم مرتبط بحسابك — كلّم الإدارة لربط الحساب')
+        return
+      }
+
+      setTeacherId(tid)
+      setTeacherName(tname)
+
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
+        .eq('status', 'نشط')
+        .eq('teacher_id', tid)
+        .order('name')
+      if (error) {
+        setLoadErr(
+          error.message === 'Failed to fetch'
+            ? 'مشكلة شبكة — تأكد من الإنترنت وحاول تاني'
+            : error.message
+        )
+        return
+      }
+      setStudents((data as Student[]) || [])
+      if (!data?.length) {
+        setLoadErr('مفيش طلاب نشطين مربوطين بيك — من الإشراف: تعديل طالب → اختَر هذا المعلم')
+      }
+    } catch (e: any) {
+      const m = String(e?.message || '')
+      if (m.includes('Failed to fetch') || m.includes('NetworkError') || m.includes('fetch')) {
+        setLoadErr('مشكلة شبكة أو السيرفر مش جاهز — انتظر دقيقة واضغط إعادة المحاولة')
+      } else {
+        setLoadErr(m || 'فشل تحميل غرفة التسميع')
+      }
+    }
+  }
+
+  useEffect(() => {
+    loadRoom()
   }, [])
 
   function openReport(s: Student, status: string) {
@@ -289,9 +338,19 @@ export default function TeacherSessionPage() {
           </div>
         ))}
         {loadErr && (
-          <p className="text-center text-[13px] py-4 px-3 rounded-xl font-bold" style={{ background: '#fff8e8', color: '#8a5a00' }}>
-            {loadErr}
-          </p>
+          <div className="text-center py-4 px-3 rounded-xl" style={{ background: '#fff8e8' }}>
+            <p className="text-[13px] font-bold mb-2" style={{ color: '#8a5a00' }}>
+              {loadErr}
+            </p>
+            <button
+              type="button"
+              onClick={() => loadRoom()}
+              className="px-4 py-2 rounded-xl text-[13px] font-bold text-white"
+              style={{ background: '#176b52' }}
+            >
+              إعادة المحاولة
+            </button>
+          </div>
         )}
         {students.length === 0 && !loadErr && (
           <p className="text-center text-[13px] py-10" style={{ color: '#6f7974' }}>
