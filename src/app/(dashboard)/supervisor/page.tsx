@@ -42,13 +42,14 @@ export default async function SupervisorDashboard({
   const duesList = summary.topDues
 
   const menu = [
+    { href: '/admin/today', icon: 'today', title: 'مواعيد حلقات اليوم', desc: 'جدول النهاردة بالوقت', color: '#176b52' },
     { href: '/admin/session-settle', icon: 'rule', title: 'تسوية حصص المعلم', desc: 'حذف حصص غلط · مزامنة الرقم', color: '#ba1a1a' },
     { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'بحث + اسم واشتراك وسعر', color: '#176b52' },
     { href: '/supervisor/edit-session', icon: 'pin', title: 'تعديل رقم الحصة', desc: 'بحث فوري · حفظ مع المزامنة', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
     { href: '/supervisor/payment', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'إنستا · فودافون · بنكي', color: '#c5a45d' },
     { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: `${scheduleCount ?? 0} موعد ثابت`, color: '#3d665a' },
-    { href: '/admin/finance', icon: 'notifications_active', title: 'تذكير بالمستحقات', desc: 'تقرير مالي وتذكير بالدفع', color: '#ba1a1a' },
+    { href: '/admin/finance', icon: 'notifications_active', title: 'تذكير بالمستحقات', desc: 'تقرير المالي وتذكير بالدفع', color: '#ba1a1a' },
     { href: '/supervisor/status', icon: 'check_circle', title: 'تغيير حالة الطالب', desc: 'انسحاب / توقف / رجوع', color: '#176b52' },
     { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'قائمة المنسحبين', desc: 'أرشيف الانسحاب', color: '#6f7974' },
     { href: '/supervisor/my-evals', icon: 'star', title: 'تقييماتي ونقاطي', desc: 'نقاط الشهر وتقييم الإدارة', color: '#c5a45d' },
@@ -150,7 +151,14 @@ export default async function SupervisorDashboard({
         ))}
       </div>
 
-      <div className="px-4 mb-3">
+      <div className="px-4 mb-3 space-y-2">
+        <Link
+          href="/admin/today"
+          className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
+          style={{ background: '#176b52' }}
+        >
+          مواعيد حلقات اليوم
+        </Link>
         <Link
           href="/admin/session-settle"
           className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
