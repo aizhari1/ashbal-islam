@@ -17,6 +17,7 @@ function revalidateTeacherPaths() {
     '/admin/users',
     '/admin/payroll',
     '/admin/session-settle',
+    '/admin/students',
     '/teacher',
     '/teacher/students',
     '/teacher/attendance',
@@ -25,6 +26,44 @@ function revalidateTeacherPaths() {
   ]) {
     revalidatePath(p)
   }
+}
+
+/** ينقل كل طلاب المعلم إلى معلم بديل. يرجع عدد المنقولين. */
+async function transferStudentsAway(
+  admin: ReturnType<typeof service>,
+  fromTeacherId: string,
+  toTeacherId: string | null
+): Promise<{ moved: number; error?: string }> {
+  const { count, error: cErr } = await admin
+    .from('students')
+    .select('*', { count: 'exact', head: true })
+    .eq('teacher_id', fromTeacherId)
+  if (cErr) return { moved: 0, error: cErr.message }
+  const n = count ?? 0
+  if (n === 0) return { moved: 0 }
+
+  if (!toTeacherId) {
+    return { moved: 0, error: `هذا المعلم عنده ${n} طالب — لازم تختار معلم بديل ينقلوا له` }
+  }
+  if (toTeacherId === fromTeacherId) {
+    return { moved: 0, error: 'المعلم البديل لازم يكون مختلف عن المعلم الحالي' }
+  }
+
+  const { data: dest, error: dErr } = await admin
+    .from('teachers')
+    .select('id, name, is_active')
+    .eq('id', toTeacherId)
+    .maybeSingle()
+  if (dErr) return { moved: 0, error: dErr.message }
+  if (!dest) return { moved: 0, error: 'المعلم البديل غير موجود' }
+
+  const { error: upErr } = await admin
+    .from('students')
+    .update({ teacher_id: toTeacherId })
+    .eq('teacher_id', fromTeacherId)
+  if (upErr) return { moved: 0, error: upErr.message }
+
+  return { moved: n }
 }
 
 export async function addUser(formData: FormData) {
@@ -160,7 +199,6 @@ export async function activateUser(formData: FormData) {
   return { success: true }
 }
 
-/** ربط صف معلم موجود بحساب مستخدم (profile) */
 export async function linkTeacherProfile(formData: FormData) {
   const __auth = await requireAdmin()
   if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
@@ -184,21 +222,117 @@ export async function linkTeacherProfile(formData: FormData) {
   return { success: true, message: 'تم ربط الحساب بملف المعلم وتفعيله' }
 }
 
-/** تفعيل/تعطيل صف المعلم في جدول teachers */
+/**
+ * تفعيل/إيقاف معلم.
+ * عند الإيقاف: لو عنده طلاب لازم replacement_teacher_id — بتنقل كل الطلاب تلقائي.
+ */
 export async function setTeacherActive(formData: FormData) {
   const __auth = await requireAdmin()
   if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
   const teacherId = String(formData.get('teacher_id') || '').trim()
   const active = String(formData.get('is_active') || '') === 'true'
+  const replacementId = String(formData.get('replacement_teacher_id') || '').trim() || null
   if (!teacherId) return { error: 'معرّف ناقص' }
+
   const admin = service()
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  let moved = 0
+  if (!active) {
+    const tr = await transferStudentsAway(admin, teacherId, replacementId)
+    if (tr.error) return { error: tr.error }
+    moved = tr.moved
+  }
+
   const { error } = await admin.from('teachers').update({ is_active: active }).eq('id', teacherId)
   if (error) return { error: error.message }
+
+  await admin.from('activity_log').insert({
+    actor_id: user?.id,
+    action: active ? 'teacher_activate' : 'teacher_deactivate',
+    entity_type: 'teacher',
+    entity_id: teacherId,
+    details: {
+      is_active: active,
+      students_moved: moved,
+      replacement_teacher_id: replacementId,
+    },
+  })
+
   revalidateTeacherPaths()
-  return { success: true, message: active ? 'تم تفعيل المعلم' : 'تم إيقاف المعلم' }
+  if (active) return { success: true, message: 'تم تفعيل المعلم في الرواتب' }
+  return {
+    success: true,
+    message:
+      moved > 0
+        ? `تم إيقاف المعلم ونقل ${moved} طالب للمعلم البديل`
+        : 'تم إيقاف المعلم (مفيش طلاب مربوطين به)',
+  }
 }
 
-/** إصلاح تلقائي: اربط كل حساب role=teacher بصف teachers بالاسم أو الكود */
+/**
+ * حذف معلم نهائيًا من جدول teachers.
+ * لو عنده طلاب: replacement_teacher_id إجباري — بتنقل الطلاب ثم تمسح الصف.
+ */
+export async function deleteTeacher(formData: FormData) {
+  const __auth = await requireAdmin()
+  if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
+  const teacherId = String(formData.get('teacher_id') || '').trim()
+  const replacementId = String(formData.get('replacement_teacher_id') || '').trim() || null
+  if (!teacherId) return { error: 'معرّف ناقص' }
+
+  const admin = service()
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  const { data: teacher } = await admin
+    .from('teachers')
+    .select('id, name, code, profile_id')
+    .eq('id', teacherId)
+    .maybeSingle()
+  if (!teacher) return { error: 'المعلم غير موجود' }
+
+  const tr = await transferStudentsAway(admin, teacherId, replacementId)
+  if (tr.error) return { error: tr.error }
+
+  // فك ربط الحضور من المعلم (نسيب السجلات بس teacher_id = null عشان التقارير التاريخية)
+  await admin.from('attendance').update({ teacher_id: null }).eq('teacher_id', teacherId)
+
+  const { error: delErr } = await admin.from('teachers').delete().eq('id', teacherId)
+  if (delErr) return { error: `فشل الحذف: ${delErr.message}` }
+
+  if (teacher.profile_id) {
+    await admin.from('profiles').update({ is_active: false }).eq('id', teacher.profile_id)
+  }
+
+  await admin.from('activity_log').insert({
+    actor_id: user?.id,
+    action: 'teacher_delete',
+    entity_type: 'teacher',
+    entity_id: teacherId,
+    details: {
+      name: teacher.name,
+      code: teacher.code,
+      students_moved: tr.moved,
+      replacement_teacher_id: replacementId,
+    },
+  })
+
+  revalidateTeacherPaths()
+  return {
+    success: true,
+    message:
+      tr.moved > 0
+        ? `اتحذف المعلم «${teacher.name}» واتنقل ${tr.moved} طالب للمعلم البديل`
+        : `اتحذف المعلم «${teacher.name}»`,
+  }
+}
+
 export async function autoLinkOrphanTeachers() {
   const __auth = await requireAdmin()
   if (!__auth.ok) return { error: __auth.error || 'للإدارة فقط' }
