@@ -1,5 +1,6 @@
 'use server'
 
+import { requireStaff } from '@/lib/auth-guards'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { cairoToday } from '@/lib/student-tenure'
@@ -8,8 +9,6 @@ import { fetchAll } from '@/lib/dues-engine'
 
 /**
  * الكود الجديد = أكبر رقم موجود فعليًا + 1 (بنفس شكل أحدث كود: بادئة وعدد خانات).
- * القديم كان بيرتّب الأكواد كنص ويقرأ أول صف بس (مع RLS ممكن يخفي طلاب)،
- * فكان بيطلع كود موجود → duplicate key students_code_key.
  */
 async function nextStudentCode(): Promise<string> {
   const rows = await fetchAll<{ id: string; code: string | null }>((from, to) =>
@@ -35,15 +34,15 @@ export async function addStudent(formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const name = String(formData.get('name') || '').trim()
   if (!name) return { error: 'الاسم مطلوب' }
 
-  // تاريخ الانضمام: من النموذج أو اليوم تلقائياً — مش محتاج تدخل كل شهر
   const joinRaw = String(formData.get('join_date') || '').trim()
   const join_date = joinRaw || cairoToday()
 
-  // الباقة: السيرفر هو اللي يحدد عدد الحصص والسعر منها (مش بنصدّق أرقام الفورم)
   const packageId = String(formData.get('package_id') || '').trim()
   let sessions = formData.get('monthly_sessions') ? Number(formData.get('monthly_sessions')) : 4
   let perSession = formData.get('price_per_session') ? Number(formData.get('price_per_session')) : 60
@@ -59,7 +58,6 @@ export async function addStudent(formData: FormData) {
       .maybeSingle()
     if (pkgErr || !pkg) return { error: 'الباقة المختارة غير موجودة' }
     sessions = Number(pkg.sessions_count) || sessions
-    // سعر الحصة على ولي الأمر = سعر الباقة ÷ عدد الحصص (المستحقات بتضرب عدد الحصص × السعر ده)
     perSession = Math.round((Number(pkg.price) / sessions) * 100) / 100
     subscription = 'باقة'
     currency = pkg.currency || currency
@@ -69,7 +67,6 @@ export async function addStudent(formData: FormData) {
   if (!(sessions > 0)) return { error: 'عدد الحصص غير صالح' }
   if (!(perSession > 0)) return { error: 'سعر الحصة على ولي الأمر غير صالح' }
 
-  // سعر الحصة للمعلم (اللي بيتحسب منه راتبه) — مطلوب ومنفصل عن سعر الباقة
   const teacherRate = Number(formData.get('teacher_session_rate'))
   if (!(teacherRate > 0)) return { error: 'سعر الحصة للمعلم مطلوب (أكبر من صفر)' }
 
@@ -91,7 +88,6 @@ export async function addStudent(formData: FormData) {
     join_date,
   }
 
-  // لو اتسجّل طالب تاني في نفس اللحظة والكود اتكرر: نعيد المحاولة بكود جديد
   let data: any = null
   let error: { message: string; code?: string } | null = null
   let code = ''
@@ -126,6 +122,8 @@ export async function updateStudentStatus(studentId: string, status: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const { error } = await supabase.from('students').update({ status }).eq('id', studentId)
   if (error) return { error: error.message }
@@ -143,6 +141,8 @@ export async function transferStudent(studentId: string, teacherId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const { error } = await supabase.from('students').update({ teacher_id: teacherId || null }).eq('id', studentId)
   if (error) return { error: error.message }
@@ -160,6 +160,8 @@ export async function updateStudent(studentId: string, formData: FormData) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const patch: Record<string, unknown> = {}
   for (const key of ['name', 'phone', 'email', 'country', 'subscription_type', 'currency', 'status']) {

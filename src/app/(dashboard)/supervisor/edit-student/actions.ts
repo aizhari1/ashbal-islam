@@ -1,5 +1,6 @@
 'use server'
 
+import { requireStaff } from '@/lib/auth-guards'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
@@ -35,6 +36,8 @@ export async function supervisorEditStudent(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مسجل' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const studentId = String(formData.get('student_id') || '')
   if (!studentId) return { error: 'اختر طالب' }
