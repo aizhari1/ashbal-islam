@@ -202,7 +202,9 @@ export async function deletePayment(formData: FormData) {
         .from('payments')
         .select('payment_date, prepaid_months, notes')
         .eq('student_id', studentId)
-        .limit(200)
+        .order('payment_date', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(1000)
 
       let prepaidUntil: string | null = null
       for (const r of remaining || []) {
@@ -212,7 +214,8 @@ export async function deletePayment(formData: FormData) {
           months = m ? Number(m[1]) : 0
         }
         if (months > 0 && r.payment_date) {
-          const until = computePrepaidUntil(String(r.payment_date).slice(0, 10), months)
+          // بالترتيب الزمني ونمدّد التغطية الموجودة (زي ما applyPayment بيعمل) بدل ما كل دفعة تتحسب لوحدها
+          const until = computePrepaidUntil(String(r.payment_date).slice(0, 10), months, prepaidUntil)
           if (!prepaidUntil || until > prepaidUntil) prepaidUntil = until
         }
       }
