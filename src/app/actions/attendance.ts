@@ -247,7 +247,6 @@ export async function recordAttendance(data: {
     let sessionNum = existing[0].session_num
     let dueMsg = ''
 
-    // غياب/معذور → حاضر/متأخر في نفس اليوم: تقدّم العداد
     if (!wasPresent && willBePresent) {
       const adv = await advanceStudentCounter(tryServiceClient(), supabase, data.student_id, today)
       if (adv.error) return { error: `تعذّر تحديث عدّاد الطالب: ${adv.error} — لم يتم الحفظ، حاول مرة أخرى` }
@@ -373,6 +372,39 @@ export async function recordAttendance(data: {
       ? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${dueMsg}`
       : 'اتسجل الغياب مع التقرير',
   }
+}
+
+/**
+ * رقم الحلقة اللي هيتسجّل فعلًا — من السيرفر (مش من نسخة الشاشة القديمة).
+ * لو في حصة النهارده بالفعل (حضور) بيرجّع رقمها، وإلا العدّاد الفعلي + 1 بدورة الباقة.
+ */
+export async function getSessionPreview(studentId: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'غير مصرح' }
+  const svc = tryServiceClient()
+  const sb = svc ?? supabase
+  const { data: student } = await sb
+    .from('students')
+    .select('last_session_num, last_session_date, monthly_sessions, subscription_type, price_per_session, amount_due')
+    .eq('id', studentId)
+    .maybeSingle()
+  if (!student) return { error: 'الطالب غير موجود' }
+  const quota = packageSize(student)
+  const { data: today } = await sb
+    .from('attendance')
+    .select('session_num, status')
+    .eq('student_id', studentId)
+    .eq('session_date', todayKey())
+    .limit(1)
+  const row = today?.[0]
+  if (row && isPresentStatus(row.status || '') && row.session_num) {
+    return { sessionNum: Number(row.session_num), quota, alreadyToday: true }
+  }
+  const prev = await resolvePrevCounter(svc, studentId, student)
+  return { sessionNum: nextPackageSessionNum(prev, quota).next, quota, alreadyToday: false }
 }
 
 export async function bulkAttendance(
