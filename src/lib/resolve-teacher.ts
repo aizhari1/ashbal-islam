@@ -3,7 +3,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 function service() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY غير مضبوط')
   return createServiceClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
@@ -73,20 +74,9 @@ export async function resolveTeacherForUser(
     const parts = name.split(/\s+/).filter(Boolean)
     if (parts.length >= 2) {
       const key = parts.slice(0, 2).join(' ')
-      match = (candidates || []).find((t) => String(t.name || '').includes(key)) || null
+      match =
+        (candidates || []).find((t) => String(t.name || '').startsWith(key)) || null
     }
-    if (!match && parts.length >= 1) {
-      match = (candidates || []).find((t) => String(t.name || '').includes(parts[0])) || null
-    }
-  }
-
-  if (!match && name) {
-    const { data: byName } = await sb
-      .from('teachers')
-      .select('id, code, name, profile_id, is_active, rate_percent')
-      .eq('name', name)
-      .limit(3)
-    if (byName && byName.length === 1) match = byName[0]
   }
 
   if (match) {
@@ -95,18 +85,18 @@ export async function resolveTeacherForUser(
       teacher: { ...match, profile_id: userId, is_active: true } as TeacherRow,
       linked: true,
       created: false,
-      message: `تم ربط ملف المعلم: ${match.name}`,
+      message: `تم ربط الحساب بالمعلم: ${match.name}`,
     }
   }
 
   const newCode = tcode || `T-${userId.slice(0, 6).toUpperCase()}`
+  const newName = name || `معلم ${newCode}`
   const { data: created, error } = await sb
     .from('teachers')
     .insert({
       code: newCode,
-      name: name || newCode,
+      name: newName,
       profile_id: userId,
-      rate_percent: 50,
       is_active: true,
     })
     .select('id, code, name, profile_id, is_active, rate_percent')
