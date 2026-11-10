@@ -1,13 +1,14 @@
 'use client'
 
 import { PaymentForm } from '@/components/PaymentForm'
+import { todayKey } from '@/lib/dues'
 import { recordPayment } from '@/app/actions/payments'
 
 const METHODS = [
-  { id: 'انستا_باي', label: 'إنستا باي' },
-  { id: 'فودافون_كاش', label: 'فودافون كاش' },
-  { id: 'تحويل_بنكي', label: 'تحويل بنكي' },
-  { id: 'اخرى', label: 'أخرى' },
+  { value: 'instapay', label: 'إنستا باي' },
+  { value: 'vodafone', label: 'فودافون كاش' },
+  { value: 'bank', label: 'تحويل بنكي' },
+  { value: 'cash', label: 'كاش' },
 ]
 
 export function RecordPaymentForm({
@@ -17,17 +18,13 @@ export function RecordPaymentForm({
   students: { id: string; code: string; name: string; amount_due?: number | null }[]
   defaultDate?: string
 }) {
-  const date = defaultDate || new Date().toISOString().slice(0, 10)
+  const date = defaultDate || todayKey()
   return (
     <PaymentForm
       students={students}
       methods={METHODS}
-      action={async (fd) => {
-        const r = await recordPayment(fd)
-        if (r && 'error' in r && r.error) return { error: String(r.error) }
-        return { success: true }
-      }}
       defaultDate={date}
+      onSubmit={recordPayment}
     />
   )
 }

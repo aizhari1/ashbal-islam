@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/dues-engine'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { FixedScheduleForm } from './FixedScheduleForm'
@@ -19,12 +20,15 @@ export default async function FixedSchedulePage({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: entries } = await supabase
-    .from('schedule_entries')
-    .select('*, students(name, code), teachers(name)')
-    .order('day_of_week')
-    .order('start_time')
-    .limit(2000)
+  const entries = await fetchAll<any>((f, t) =>
+    supabase
+      .from('schedule_entries')
+      .select('*, students(name, code), teachers(name)')
+      .order('day_of_week')
+      .order('start_time')
+      .order('id')
+      .range(f, t)
+  )
 
   const { data: students } = await supabase
     .from('students')
