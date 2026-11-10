@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { recordAttendance } from '@/app/actions/attendance'
+import { recordAttendance, getSessionPreview } from '@/app/actions/attendance'
 import { ensureMyTeacher } from '@/app/actions/ensure-teacher'
 import Link from 'next/link'
 import { normalizePhone } from '@/lib/whatsapp'
@@ -27,6 +27,7 @@ export default function TeacherSessionPage() {
   const [msg, setMsg] = useState('')
   const [loadErr, setLoadErr] = useState('')
   const [preview, setPreview] = useState('')
+  const [serverNum, setServerNum] = useState<number | null>(null)
   const [lastReport, setLastReport] = useState<{ title: string; text: string } | null>(null)
 
   const [hifzFrom, setHifzFrom] = useState('')
@@ -155,6 +156,11 @@ export default function TeacherSessionPage() {
     setPreview('')
     setMsg('')
     setShowForm(true)
+    // رقم الحلقة الحقيقي من السيرفر (نسخة الشاشة ممكن تكون قديمة)
+    setServerNum(null)
+    getSessionPreview(s.id).then((r: any) => {
+      if (typeof r?.sessionNum === 'number') setServerNum(r.sessionNum)
+    })
   }
 
   const DAYS = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
@@ -165,7 +171,9 @@ export default function TeacherSessionPage() {
     const present = attend === 'تم الحضور' || attend === 'متأخر'
     const quota = packageSize(selected)
     let sessionNum = selected.last_session_num || 0
-    if (present) {
+    if (present && serverNum != null) {
+      sessionNum = serverNum
+    } else if (present) {
       sessionNum = nextPackageSessionNum(sessionNum, quota).next
     } else if (sessionNum < 1) {
       sessionNum = 1
@@ -267,6 +275,7 @@ export default function TeacherSessionPage() {
       setSaved(true)
       setMsg('✓ ' + ((res as any)?.message || 'تم الحفظ'))
       if (typeof nextNum === 'number') {
+        setServerNum(nextNum)
         setStudents((prev) =>
           prev.map((s) => (s.id === selected.id ? { ...s, last_session_num: nextNum } : s))
         )
@@ -474,33 +483,21 @@ export default function TeacherSessionPage() {
               </button>
               <button
                 type="button"
-                className="py-2.5 rounded-lg font-bold text-[13px] text-white"
+                className="btn-primary py-2.5"
                 style={{ background: '#25D366' }}
                 onClick={() => waText(saved ? preview : buildPreview(), selected.phone)}
               >
-                إرسال واتساب لولي الأمر
+                واتساب ولي الأمر
               </button>
               <button type="button" className="py-2 text-[13px]" onClick={() => setShowForm(false)}>
-                {saved ? 'تم — إغلاق' : 'إلغاء'}
+                إغلاق
               </button>
             </div>
             {msg && (
-              <p className="text-[13px] font-bold mt-2" style={{ color: '#176b52' }}>
+              <p className="mt-3 text-center text-[13px] font-bold" style={{ color: msg.startsWith('خطأ') ? '#ba1a1a' : '#176b52' }}>
                 {msg}
               </p>
             )}
-          </div>
-        </div>
-      )}
-
-      {lastReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.45)' }}>
-          <div className="bg-white rounded-2xl p-4 max-w-lg w-full max-h-[80dvh] overflow-y-auto">
-            <h3 className="font-bold mb-2">{lastReport.title}</h3>
-            <pre className="text-[12px] whitespace-pre-wrap">{lastReport.text}</pre>
-            <button type="button" className="mt-3 text-[13px] font-bold" onClick={() => setLastReport(null)}>
-              إغلاق
-            </button>
           </div>
         </div>
       )}
