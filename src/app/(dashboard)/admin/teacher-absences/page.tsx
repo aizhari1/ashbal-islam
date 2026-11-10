@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { logTeacherAbsence } from './actions'
+import { todayKey } from '@/lib/dues'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -25,7 +26,7 @@ export default function TeacherAbsencesPage() {
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [pending, startTransition] = useTransition()
   const [teacherId, setTeacherId] = useState('')
-  const [absenceDate, setAbsenceDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [absenceDate, setAbsenceDate] = useState(() => todayKey())
   const [reason, setReason] = useState('')
 
   async function load() {
