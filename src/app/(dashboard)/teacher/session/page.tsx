@@ -496,6 +496,11 @@ export default function TeacherSessionPage() {
                 إغلاق
               </button>
             </div>
+            {msg && (
+              <p className="mt-3 text-center text-[13px] font-bold" style={{ color: msg.startsWith('خطأ') ? '#ba1a1a' : '#176b52' }}>
+                {msg}
+              </p>
+            )}
           </div>
         </div>
       )}
