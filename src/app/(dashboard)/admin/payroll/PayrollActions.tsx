@@ -10,12 +10,14 @@ export function PayrollActions({
   sessionRate,
   academyRate,
   remaining,
+  month,
 }: {
   teacherId: string
   teacherName: string
   sessionRate: number
   academyRate: number
   remaining: number
+  month?: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -55,7 +57,9 @@ export function PayrollActions({
   function settle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData()
+    formData.set('teacher_id', teacherId)
     formData.set('teacher_name', teacherName)
+    formData.set('month', month || '')
     formData.set('amount', amount)
     startTransition(async () => {
       const r = await recordTeacherSettlement(formData)
