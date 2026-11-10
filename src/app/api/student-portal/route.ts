@@ -4,11 +4,10 @@ import { createClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 function serviceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://bmemllsjduxlqmwnpfya.supabase.co'
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtZW1sbHNqZHV4bHFtd25wZnlhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzA4MzY0OCwiZXhwIjoyMTA4NjU5NjQ4fQ.sk-6c3xddEbDTjMwV32usmp69Fm2JAXAUfB7s-LsEUg'
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // مفيش مفتاح مكتوب في الكود — لازم يتضبط في Vercel
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
+  if (!url || !key) throw new Error('إعدادات Supabase ناقصة')
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
@@ -18,13 +17,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'اكتب كود الطالب' }, { status: 400 })
   }
 
-  const supabase = serviceClient()
+  let supabase: ReturnType<typeof serviceClient>
+  try {
+    supabase = serviceClient()
+  } catch {
+    return NextResponse.json({ error: 'الخدمة غير متاحة حالياً' }, { status: 503 })
+  }
   const { data: student, error } = await supabase
     .from('students')
     .select(
       'id, code, name, status, amount_due, subscription_type, monthly_sessions, last_session_num, last_session_date, price_per_session, teacher_id, teachers(name)'
     )
-    .ilike('code', code)
+    .ilike('code', code.replace(/[\\%_]/g, (c) => '\\' + c))
     .limit(1)
     .maybeSingle()
 

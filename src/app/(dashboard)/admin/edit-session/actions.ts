@@ -1,5 +1,6 @@
 'use server'
 
+import { requireStaff } from '@/lib/auth-guards'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
@@ -51,6 +52,8 @@ export async function updateSessionNum(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مسجل' }
+  const __staff = await requireStaff()
+  if (!__staff.ok) return { error: __staff.error }
 
   const studentId = String(formData.get('student_id') || '')
   const rawLast = formData.get('last_session_num')
@@ -100,7 +103,6 @@ export async function updateSessionNum(formData: FormData) {
     []
   let keptReal = 0
 
-  // زيادة من maxAtt الفعلي
   if (lastSessionNum > maxAtt && teacherId) {
     const today = lastSessionDate || todayKey()
     const duration = Number(before.session_duration) || 30
@@ -122,7 +124,6 @@ export async function updateSessionNum(formData: FormData) {
     }
   }
 
-  // تقليل: إداري فقط
   if (lastSessionNum < maxAtt) {
     for (const row of allAtt || []) {
       const num = row.session_num != null ? Number(row.session_num) : NaN
