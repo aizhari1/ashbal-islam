@@ -95,8 +95,37 @@ async function resolvePrevCounter(
 }
 
 /**
- * رقم حصة النهارده.
- * لو فيه تقرير نهارده برقم غلط والعدّاد/السجل أقدم أعلى → نرجّع المتوقع (مثلاً 8 → 9 مش 5).
+ * أعلى رقم حصة حضور فعلي قبل تاريخ معيّن (+ عدّاد الطالب).
+ * المرجع الوحيد لحساب "الحصة التالية".
+ */
+async function maxSessionBefore(
+  client: Svc | Awaited<ReturnType<typeof createClient>>,
+  studentId: string,
+  beforeDate: string,
+  storedCounter: number
+): Promise<number> {
+  let maxAtt = 0
+  try {
+    const { data } = await client
+      .from('attendance')
+      .select('session_num')
+      .eq('student_id', studentId)
+      .lt('session_date', beforeDate)
+      .in('status', ['حاضر', 'متأخر'])
+      .not('session_num', 'is', null)
+      .order('session_num', { ascending: false })
+      .limit(1)
+    maxAtt = Number(data?.[0]?.session_num) || 0
+  } catch {
+    maxAtt = 0
+  }
+  return Math.max(0, storedCounter, maxAtt)
+}
+
+/**
+ * رقم حصة النهارده لو فيه صف موجود.
+ * - لو العدّاد اتعيّن النهارده على رقم ≥ المتوقع من السجل السابق → نثبّته
+ * - لو الصف/العدّاد أقل من المتوقع (تكسّر) → نرجّع المتوقع ونصلّح عند الحفظ
  */
 async function todaySessionNum(
   client: Svc | Awaited<ReturnType<typeof createClient>>,
@@ -124,35 +153,19 @@ async function todaySessionNum(
     const stored = Number(st?.last_session_num) || 0
     const d = st?.last_session_date ? String(st.last_session_date).slice(0, 10) : ''
     const quota = packageSize(st || {})
-
-    let maxBefore = 0
-    try {
-      const { data: before } = await client
-        .from('attendance')
-        .select('session_num')
-        .eq('student_id', studentId)
-        .lt('session_date', today)
-        .in('status', ['حاضر', 'متأخر'])
-        .not('session_num', 'is', null)
-        .order('session_num', { ascending: false })
-        .limit(1)
-      maxBefore = Number(before?.[0]?.session_num) || 0
-    } catch {
-      maxBefore = 0
-    }
-
-    const base = Math.max(stored, maxBefore)
-    const expected = base > 0 ? nextPackageSessionNum(base, quota).next : null
+    const baseBefore = await maxSessionBefore(client, studentId, today, d === today ? 0 : stored)
+    const base = d === today ? Math.max(baseBefore, 0) : Math.max(baseBefore, stored)
+    const expectedNew = nextPackageSessionNum(base, quota).next
 
     if (d === today && stored > 0) {
-      if (expected != null && stored < expected && maxBefore >= stored) {
-        return expected
-      }
-      if (row != null && row < stored) return stored
+      if (stored < expectedNew) return expectedNew
       return stored
     }
 
-    if (expected != null && (row == null || row !== expected)) return expected
+    if (expectedNew > 0) {
+      if (row == null || row < expectedNew) return expectedNew
+      return row
+    }
   } catch {
     /* نرجع لرقم الصف */
   }
@@ -188,7 +201,9 @@ async function advanceStudentCounter(
     .single()
 
   const quota = packageSize(student || {})
-  const prevNum = await resolvePrevCounter(sb, studentId, student)
+  const storedNum = Math.max(0, Number(student?.last_session_num) || 0)
+  const prevFromAtt = await resolvePrevCounter(sb, studentId, student)
+  const prevNum = await maxSessionBefore(sb ?? userClient, studentId, today, Math.max(storedNum, prevFromAtt))
   const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const patch: Record<string, unknown> = {
@@ -375,10 +390,19 @@ export async function recordAttendance(data: {
     }
 
     if (willBePresent && sessionNum != null && Number(sessionNum) > 0) {
+      // لا ننزل بالعدّاد أبدًا عند تعديل تقرير النهارده
+      const { data: curSt } = await (svcLookup ?? supabase)
+        .from('students')
+        .select('last_session_num')
+        .eq('id', data.student_id)
+        .maybeSingle()
+      const curNum = Math.max(0, Number(curSt?.last_session_num) || 0)
+      const finalNum = Math.max(curNum, Number(sessionNum))
       await writeStudentPatch(svcLookup, supabase, data.student_id, {
-        last_session_num: Number(sessionNum),
+        last_session_num: finalNum,
         last_session_date: today,
       })
+      sessionNum = finalNum
     }
 
     revalidateTeacherPaths()
@@ -402,7 +426,9 @@ export async function recordAttendance(data: {
 
   const svc = tryServiceClient()
   const quota = packageSize(student || {})
-  const prevNum = await resolvePrevCounter(svc, data.student_id, student)
+  const storedNum = Math.max(0, Number(student?.last_session_num) || 0)
+  const prevFromAtt = await resolvePrevCounter(svc, data.student_id, student)
+  const prevNum = await maxSessionBefore(svc ?? supabase, data.student_id, today, Math.max(storedNum, prevFromAtt))
   const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const isPresent = isPresentStatus(data.status)
@@ -517,6 +543,8 @@ export async function getSessionPreview(studentId: string) {
   if (!student) return { error: 'الطالب غير موجود' }
   const quota = packageSize(student)
   const today = todayKey()
+  const stored = Math.max(0, Number(student.last_session_num) || 0)
+
   const { data: todayRows } = await sb
     .from('attendance')
     .select('session_num, status')
@@ -524,16 +552,17 @@ export async function getSessionPreview(studentId: string) {
     .eq('session_date', today)
     .limit(20)
   const presentRow = (todayRows || []).find((r: any) => isPresentStatus(r.status || '') && r.session_num)
+
   if (presentRow) {
     const n =
       (await todaySessionNum(sb, studentId, Number(presentRow.session_num), today, student)) ??
       Number(presentRow.session_num)
     return { sessionNum: n, quota, alreadyToday: true }
   }
-  const prev = await resolvePrevCounter(svc, studentId, student)
-  const stored = Math.max(0, Number(student.last_session_num) || 0)
-  const base = Math.max(prev, stored)
-  return { sessionNum: nextPackageSessionNum(base, quota).next, quota, alreadyToday: false }
+
+  const base = await maxSessionBefore(sb, studentId, today, stored)
+  const next = nextPackageSessionNum(base, quota).next
+  return { sessionNum: next, quota, alreadyToday: false }
 }
 
 export async function bulkAttendance(
