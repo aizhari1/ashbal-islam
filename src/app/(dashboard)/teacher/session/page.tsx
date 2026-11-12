@@ -28,6 +28,7 @@ export default function TeacherSessionPage() {
   const [loadErr, setLoadErr] = useState('')
   const [preview, setPreview] = useState('')
   const [serverNum, setServerNum] = useState<number | null>(null)
+  const [todayExisting, setTodayExisting] = useState(false)
   const previewFor = useRef<string | null>(null)
   const [lastReport, setLastReport] = useState<{ title: string; text: string } | null>(null)
 
@@ -182,12 +183,14 @@ export default function TeacherSessionPage() {
     setPreview('')
     setMsg('')
     setShowForm(true)
-    // رقم الحلقة الحقيقي من السيرفر (نسخة الشاشة ممكن تكون قديمة)
     setServerNum(null)
+    setTodayExisting(false)
     previewFor.current = s.id
     getSessionPreview(s.id).then((r: any) => {
-      // ردّ متأخر لطالب قديم (المعلم بدّل الطالب) يتجاهل
-      if (previewFor.current === s.id && typeof r?.sessionNum === 'number') setServerNum(r.sessionNum)
+      if (previewFor.current === s.id && typeof r?.sessionNum === 'number') {
+        setServerNum(r.sessionNum)
+        setTodayExisting(!!r.alreadyToday)
+      }
     })
   }
 
@@ -202,14 +205,12 @@ export default function TeacherSessionPage() {
     let sessionNum = selected.last_session_num || 0
     if (present && serverNum != null) {
       sessionNum = serverNum
+      // حصة جديدة فقط: لا نعرض رقم أقل من التالي المتوقع
+      if (!todayExisting && sessionNum < localNext) sessionNum = localNext
     } else if (present) {
       sessionNum = localNext
     } else if (sessionNum < 1) {
       sessionNum = 1
-    }
-    // لا تسمح برقم أقل من المتوقع من عدّاد الطالب
-    if (present && sessionNum < localNext) {
-      sessionNum = localNext
     }
     const sc = (v: string) => (v === '' ? '—' : `${v} / 10`)
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -263,11 +264,11 @@ export default function TeacherSessionPage() {
     showFormRef.current = showForm
   }, [showForm])
 
-  // المعاينة بتتحدّث لوحدها مع أي تغيير (من غير ما المعلم يدوس تحديث)
+  // المعاينة بتتحدّث لوحدها مع أي تغيير
   useEffect(() => {
     if (selected && showForm && !saved) buildPreview()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, showForm, saved, attend, duration, scoreNew, scoreRecent, scoreFar, tarbiya, sharii, newMem, recentPast, farPast, arabicLang, teacherName, serverNum])
+  }, [selected, showForm, saved, attend, duration, scoreNew, scoreRecent, scoreFar, tarbiya, sharii, newMem, recentPast, farPast, arabicLang, teacherName, serverNum, todayExisting])
 
   function save() {
     if (!selected) return
@@ -365,8 +366,10 @@ export default function TeacherSessionPage() {
             <div className="mb-2">
               <p className="font-bold text-[14px]">{s.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                {s.code} · حصة {displaySessionInPackage(s.last_session_num ?? 0, packageSize(s))}
+                {s.code} · آخر {displaySessionInPackage(s.last_session_num ?? 0, packageSize(s))}
                 {packageSize(s) ? ` / ${packageSize(s)}` : ''}
+                {' · القادمة '}
+                {nextPackageSessionNum(s.last_session_num ?? 0, packageSize(s)).next}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -417,11 +420,17 @@ export default function TeacherSessionPage() {
             <div className="flex justify-between items-center mb-3">
               <h2 className="font-bold text-[15px]" style={{ color: '#00513c' }}>
                 حصة — {selected.name}
+                {serverNum != null ? ` · رقم ${serverNum}` : ''}
               </h2>
               <button type="button" onClick={() => setShowForm(false)} className="material-symbols-outlined">
                 close
               </button>
             </div>
+            {todayExisting && (
+              <p className="text-[12px] font-bold px-3 py-2 rounded-xl mb-2" style={{ background: '#fff4d6', color: '#7a5600' }}>
+                عنده تقرير النهارده بالفعل (حصة {serverNum}) — الحفظ هيعدّل نفس التقرير ومش هيضيف حصة جديدة.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
