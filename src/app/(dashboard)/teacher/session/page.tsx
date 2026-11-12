@@ -61,8 +61,10 @@ export default function TeacherSessionPage() {
         setLoadErr((ensured as any).error)
         return
       }
-      const tid = (ensured as any)?.teacherId || (ensured as any)?.id
-      const tname = (ensured as any)?.name || ''
+      // ensureMyTeacher بترجّع { teacher: { id, name, code } } — الصفحة كانت بتدوّر على id بره الكائن
+      const ensT = (ensured as any)?.teacher
+      const tid = ensT?.id || (ensured as any)?.teacherId || (ensured as any)?.id
+      const tname = ensT?.name || (ensured as any)?.name || ''
       if (!tid) {
         setLoadErr('لا يوجد ملف معلم مرتبط بحسابك')
         return
