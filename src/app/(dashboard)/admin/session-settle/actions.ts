@@ -7,12 +7,13 @@ import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 
 function revalidateTeacherPaths() {
   for (const p of [
-    '/admin/session-settle',
-    '/admin/payroll',
+    '/admin',
     '/admin/attended',
-    '/admin/edit-session',
     '/admin/sessions-detail',
+    '/admin/payroll',
     '/admin/students',
+    '/admin/edit-session',
+    '/admin/session-settle',
     '/teacher',
     '/teacher/attendance',
     '/teacher/dues',
@@ -107,8 +108,9 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
 /**
  * مزامنة رقم الهدف مع سجل المعلم:
  * - المرجع للزيادة/النقص = أعلى رقم فعلي في الحضور (maxAtt) مش العداد المتضخّم
- * - لو الهدف أكبر من maxAtt → أضف الأرقام الناقصة فقط
- * - لو الهدف أصغر → امسح فقط الحصص الإدارية المُفتعلة فوق الهدف، ومتلمسش حصص المعلم الحقيقية
+ * - لو الهدف أكبر من maxAtt → أضف الأرقام الناقصة فقط (بتاريخ أمس مش النهارده)
+ * - لو الهدف أصغر → امسح فقط الحصص الإدارية المُفتعلة فوق الهدف
+ * - بعد التسوية من 5→8: التقرير التالي من غرفة التسميع = 9
  */
 export async function setStudentLastSession(studentId: string, lastSessionNum: number) {
   try {
@@ -128,12 +130,18 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     if (!before) return { error: 'طالب غير موجود' }
 
     const quota = packageSize(before)
-    const check = validateSessionWithinPackage(target, quota)
-    if (!check.ok) return { error: check.error }
+    // التسوية الإدارية تسمح بأي رقم ≥ 0 (العدّاد المطلق)، مش مقيد بدورة الباقة
+    if (!Number.isFinite(target) || target < 0) return { error: 'رقم الحصة غير صالح' }
 
     const stored = Number(before.last_session_num || 0)
     const teacherId = before.teacher_id
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
+    // تاريخ التسوية = أمس (قاهرة) مش النهارده
+    // عشان غرفة التسميع ما تحسبش حصص التسوية كـ «تقرير النهارده» ويبدأ العد من target+1
+    const todayCairo = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
+    const [yy, mm, dd] = todayCairo.split('-').map(Number)
+    const yest = new Date(Date.UTC(yy, mm - 1, dd))
+    yest.setUTCDate(yest.getUTCDate() - 1)
+    const settleDate = yest.toISOString().slice(0, 10)
 
     const { data: allAtt } = await sb
       .from('attendance')
@@ -151,22 +159,18 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       }
     }
 
-    // حدّث عداد الطالب دائمًا للهدف
-    const { error } = await sb.from('students').update({ last_session_num: target }).eq('id', studentId)
-    if (error) return { error: error.message }
-
     let added = 0
     let removed = 0
     let keptReal = 0
 
-    // زيادة حسب سجل المعلم الفعلي — مش العداد المخزون المتضخّم
+    // زيادة: حصص إدارية بتاريخ أمس (مش النهارده)
     if (target > maxAtt && teacherId) {
       for (let i = maxAtt + 1; i <= target; i++) {
         if (existingNums.has(i)) continue
         const { error: insErr } = await sb.from('attendance').insert({
           student_id: studentId,
           teacher_id: teacherId,
-          session_date: today,
+          session_date: settleDate,
           status: 'حاضر',
           session_num: i,
           session_duration: before.session_duration || 30,
@@ -205,33 +209,24 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       }
     }
 
-    if (removed > 0 || added > 0) {
-      const { data: lastAtt } = await sb
-        .from('attendance')
-        .select('session_date')
-        .eq('student_id', studentId)
-        .in('status', ['حاضر', 'متأخر'])
-        .order('session_date', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      await sb
-        .from('students')
-        .update({
-          last_session_date: lastAtt?.session_date
-            ? String(lastAtt.session_date).slice(0, 10)
-            : null,
-        })
-        .eq('id', studentId)
-    }
+    // حدّث العداد + تاريخ آخر حصة دائماً (حتى لو مفيش إضافة/حذف صفوف)
+    const { error } = await sb
+      .from('students')
+      .update({
+        last_session_num: target,
+        last_session_date: settleDate,
+      })
+      .eq('id', studentId)
+    if (error) return { error: error.message }
 
     revalidateTeacherPaths()
 
-    let message = `تم ضبط عداد الطالب على ${target}`
-    if (added > 0) message = `تم · أُضيفت ${added} حصة لسجل المعلم (من ${maxAtt} → ${target})`
+    let message = `تم ضبط عداد الطالب على ${target} — التقرير التالي هيبقى ${target + 1}`
+    if (added > 0) message = `تم · أُضيفت ${added} حصة لسجل المعلم (من ${maxAtt} → ${target}) · التالي ${target + 1}`
     if (removed > 0) message += ` · اتشالت ${removed} حصة إدارية زيادة`
     if (keptReal > 0)
       message += ` · اتفادت ${keptReal} حصة حقيقية للمعلم (اتمسحتش)`
-    if (added === 0 && removed === 0 && stored === target) message = 'تم · مفيش تغيير في السجل'
+    if (added === 0 && removed === 0 && stored === target) message = `تم · العداد على ${target} · التالي ${target + 1}`
 
     return {
       ok: true,
@@ -241,6 +236,7 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       maxAtt,
       target,
       keptReal,
+      next_session: target + 1,
     }
   } catch (e: any) {
     return { error: e?.message || 'فشل التحديث' }
