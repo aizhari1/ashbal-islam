@@ -59,33 +59,46 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    // getUser يجدد التوكن؛ لو فشل نجرب getSession قبل ما نرمي لوجين
+    let user: { id: string } | null = null
+    try {
+      const { data } = await supabase.auth.getUser()
+      user = data.user
+    } catch {
+      user = null
+    }
+    if (!user) {
+      try {
+        const { data } = await supabase.auth.getSession()
+        user = data.session?.user ?? null
+      } catch {
+        user = null
+      }
+    }
+
+    const hasAuthCookie = request.cookies
+      .getAll()
+      .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
+    const roleCookie = request.cookies.get(ROLE_COOKIE)?.value || ''
 
     if (!user && !isPublic) {
-      const hasAuthCookie = request.cookies
-        .getAll()
-        .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
-      if (!hasAuthCookie) {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/login'
-        redirectUrl.search = ''
-        return NextResponse.redirect(redirectUrl)
+      // لو فيه كوكي جلسة أو دور محفوظ — متطردش لوجين (الصفحة/العميل يكمّلوا)
+      if (hasAuthCookie || ['teacher', 'admin', 'supervisor', 'parent'].includes(roleCookie)) {
+        return supabaseResponse
       }
-      return supabaseResponse
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/login'
+      redirectUrl.search = ''
+      return NextResponse.redirect(redirectUrl)
     }
 
     if (user && !isPublic) {
-      let role = request.cookies.get(ROLE_COOKIE)?.value || ''
+      let role = roleCookie
 
+      // حدّث الدور من القاعدة فقط لو مش موجود/غلط — مش في كل تنقل داخل /teacher
       const needsFreshRole =
         !role ||
-        !['admin', 'teacher', 'supervisor', 'parent'].includes(role) ||
-        pathname.startsWith('/admin/session-settle') ||
-        pathname.startsWith('/admin/payroll') ||
-        pathname.startsWith('/teacher') ||
-        pathname.startsWith('/supervisor')
+        !['admin', 'teacher', 'supervisor', 'parent'].includes(role)
 
       if (needsFreshRole) {
         try {
@@ -162,9 +175,6 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (!user && isPublic && request.cookies.get(ROLE_COOKIE)) {
-      const hasAuthCookie = request.cookies
-        .getAll()
-        .some((c) => c.name.includes('auth-token') || c.name.startsWith('sb-'))
       if (!hasAuthCookie) {
         supabaseResponse.cookies.set(ROLE_COOKIE, '', { maxAge: 0, path: '/' })
       }
