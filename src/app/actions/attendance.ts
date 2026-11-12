@@ -95,25 +95,41 @@ async function resolvePrevCounter(
 }
 
 /**
- * رقم حصة النهارده لو الطالب عنده تقرير اتسجل النهارده بالفعل.
- * لو عدّاد الطالب اتحدّث النهارده فهو المرجع.
+ * رقم حصة النهارده.
+ * - لو العدّاد اتحدّث النهارده → هو المرجع.
+ * - لو العدّاد أقدم وفيه صف نهارده برقم غلط (مثلاً عدّاد 8 والتقرير 5) → نرجّع المتوقع (9).
  */
 async function todaySessionNum(
   client: Svc | Awaited<ReturnType<typeof createClient>>,
   studentId: string,
   rowNum: number | null | undefined,
-  today: string
+  today: string,
+  studentHint?: {
+    last_session_num?: number | null
+    last_session_date?: string | null
+    monthly_sessions?: number | null
+    subscription_type?: string | null
+  } | null
 ): Promise<number | null> {
   const row = Number(rowNum) > 0 ? Number(rowNum) : null
   try {
-    const { data: st } = await client
-      .from('students')
-      .select('last_session_num, last_session_date')
-      .eq('id', studentId)
-      .maybeSingle()
+    let st = studentHint
+    if (!st) {
+      const { data } = await client
+        .from('students')
+        .select('last_session_num, last_session_date, monthly_sessions, subscription_type')
+        .eq('id', studentId)
+        .maybeSingle()
+      st = data
+    }
     const stored = Number(st?.last_session_num) || 0
     const d = st?.last_session_date ? String(st.last_session_date).slice(0, 10) : ''
     if (d === today && stored > 0) return stored
+    if (stored > 0 && (!d || d < today)) {
+      const quota = packageSize(st || {})
+      const expected = nextPackageSessionNum(stored, quota).next
+      if (row == null || row !== expected) return expected
+    }
   } catch {
     /* نرجع لرقم الصف */
   }
@@ -335,6 +351,14 @@ export async function recordAttendance(data: {
       await svcLookup.from('attendance').delete().in('id', dupIds)
     }
 
+    // لو اتصحّح رقم الحصة من عدّاد الطالب، حدّث العدّاد لتاريخ النهارده بنفس الرقم
+    if (willBePresent && sessionNum != null && Number(sessionNum) > 0) {
+      await writeStudentPatch(svcLookup, supabase, data.student_id, {
+        last_session_num: Number(sessionNum),
+        last_session_date: today,
+      })
+    }
+
     revalidateTeacherPaths()
     return {
       success: true,
@@ -343,7 +367,7 @@ export async function recordAttendance(data: {
       message: !wasPresent && willBePresent
         ? `اتحدّث لتسجيل حضور — حصة رقم ${sessionNum}${dueMsg}`
         : willBePresent
-          ? `اتحدّث تقرير اليوم (الطالب عنده تقرير النهارده بالفعل، فمتضافتش حصة جديدة) — حصة رقم ${sessionNum}`
+          ? `اتحدّث تقرير اليوم — حصة رقم ${sessionNum}`
           : 'اتحدّث تقرير اليوم',
     }
   }
@@ -478,7 +502,9 @@ export async function getSessionPreview(studentId: string) {
     .limit(20)
   const row = (today || []).find((r: any) => isPresentStatus(r.status || '') && r.session_num)
   if (row) {
-    const n = (await todaySessionNum(sb, studentId, Number(row.session_num), todayKey())) ?? Number(row.session_num)
+    const n =
+      (await todaySessionNum(sb, studentId, Number(row.session_num), todayKey(), student)) ??
+      Number(row.session_num)
     return { sessionNum: n, quota, alreadyToday: true }
   }
   const prev = await resolvePrevCounter(svc, studentId, student)
