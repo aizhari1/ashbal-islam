@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { recordAttendance, getSessionPreview } from '@/app/actions/attendance'
-import { ensureMyTeacher } from '@/app/actions/ensure-teacher'
+import { getMySessionRoom } from '@/app/actions/ensure-teacher'
 import Link from 'next/link'
 import { normalizePhone } from '@/lib/whatsapp'
 import { displaySessionInPackage, nextPackageSessionNum, packageSize } from '@/lib/dues'
@@ -58,67 +58,19 @@ export default function TeacherSessionPage() {
     setLoadErr('')
     setStudents([])
     try {
-      let tid: string | null = null
-      let tname = ''
-
-      try {
-        const ensured = await ensureMyTeacher()
-        if (ensured?.teacher?.id) {
-          tid = ensured.teacher.id
-          tname = ensured.teacher.name || ''
-        } else if (ensured?.error) {
-          console.warn('ensureMyTeacher:', ensured.error)
-        }
-      } catch (e: any) {
-        console.warn('ensureMyTeacher network:', e?.message)
+      const room = await getMySessionRoom()
+      if (room.teacher?.id) {
+        setTeacherId(room.teacher.id)
+        setTeacherName(room.teacher.name || '')
       }
-
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
-        setLoadErr('انتهت الجلسة — سجّل دخول مرة تانية')
+      if (room.error && !(room.students && room.students.length)) {
+        setLoadErr(room.error)
         return
       }
-
-      if (!tid) {
-        const { data: trow } = await supabase
-          .from('teachers')
-          .select('id, name')
-          .eq('profile_id', user.id)
-          .maybeSingle()
-        if (trow?.id) {
-          tid = trow.id
-          tname = trow.name || ''
-        }
-      }
-
-      if (!tid) {
-        setLoadErr('لا يوجد ملف معلم مرتبط بحسابك — كلّم الإدارة لربط الحساب')
-        return
-      }
-
-      setTeacherId(tid)
-      setTeacherName(tname)
-
-      const { data, error } = await supabase
-        .from('students')
-        .select('id, code, name, phone, last_session_num, monthly_sessions, session_duration, subscription_type')
-        .eq('status', 'نشط')
-        .eq('teacher_id', tid)
-        .order('name')
-      if (error) {
-        setLoadErr(
-          error.message === 'Failed to fetch'
-            ? 'مشكلة شبكة — تأكد من الإنترنت وحاول تاني'
-            : error.message
-        )
-        return
-      }
-      setStudents((data as Student[]) || [])
-      if (!data?.length) {
-        setLoadErr('مفيش طلاب نشطين مربوطين بيك — من الإشراف: تعديل طالب → اختَر هذا المعلم')
+      const list = (room.students || []) as Student[]
+      setStudents(list)
+      if (!list.length) {
+        setLoadErr(room.error || 'مفيش طلاب نشطين مربوطين بيك')
       }
     } catch (e: any) {
       const m = String(e?.message || '')
@@ -142,17 +94,13 @@ export default function TeacherSessionPage() {
 
   const showFormRef = useRef(false)
 
-  /** يجيب آخر عدّاد للطالب من السيرفر — الصفحة ممكن تفضل مفتوحة ساعات والإدارة غيّرت الرقم */
   async function freshStudent(id: string) {
     try {
-      const { data } = await createClient()
-        .from('students')
-        .select('id, last_session_num, monthly_sessions, session_duration, subscription_type')
-        .eq('id', id)
-        .maybeSingle()
-      if (!data) return
-      setStudents((prev) => prev.map((x) => (x.id === id ? { ...x, ...(data as any) } : x)))
-      setSelected((cur) => (cur && cur.id === id ? { ...cur, ...(data as any) } : cur))
+      const room = await getMySessionRoom()
+      const row = (room.students || []).find((x: any) => x.id === id)
+      if (!row) return
+      setStudents((prev) => prev.map((x) => (x.id === id ? { ...x, ...(row as any) } : x)))
+      setSelected((cur) => (cur && cur.id === id ? { ...cur, ...(row as any) } : cur))
     } catch {
       /* نكمّل بالبيانات الحالية */
     }
@@ -205,7 +153,6 @@ export default function TeacherSessionPage() {
     let sessionNum = selected.last_session_num || 0
     if (present && serverNum != null) {
       sessionNum = serverNum
-      // حصة جديدة فقط: لا نعرض رقم أقل من التالي المتوقع
       if (!todayExisting && sessionNum < localNext) sessionNum = localNext
     } else if (present) {
       sessionNum = localNext
@@ -264,7 +211,6 @@ export default function TeacherSessionPage() {
     showFormRef.current = showForm
   }, [showForm])
 
-  // المعاينة بتتحدّث لوحدها مع أي تغيير
   useEffect(() => {
     if (selected && showForm && !saved) buildPreview()
     // eslint-disable-next-line react-hooks/exhaustive-deps
