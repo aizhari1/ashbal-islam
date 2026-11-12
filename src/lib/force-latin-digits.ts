@@ -28,10 +28,10 @@ try {
     }
     return new OrigNF(locales as any, options)
   }
-  Intl.NumberFormat.prototype = OrigNF.prototype
   Object.defineProperty(Intl.NumberFormat, 'supportedLocalesOf', {
     value: OrigNF.supportedLocalesOf.bind(OrigNF),
   })
+  ;(Intl.NumberFormat as any).prototype = OrigNF.prototype
 } catch {
   /* ignore */
 }

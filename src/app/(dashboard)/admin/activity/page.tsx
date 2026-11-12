@@ -13,7 +13,7 @@ export default async function ActivityLogPage() {
 
   const { data: logs } = await supabase
     .from('activity_log')
-    .select('id, action, entity_id, details, created_at, user_id')
+    .select('id, action, entity_id, details, created_at, actor_id')
     .order('created_at', { ascending: false })
     .limit(200)
 
@@ -27,6 +27,13 @@ export default async function ActivityLogPage() {
     session_num: 'تعديل رقم حصة',
     trial_add: 'طالب تجريبي',
     teacher_absence: 'غياب معلم',
+    trial_report: 'تقرير حصة تجريبية',
+    deleted_session: 'حذف حصة',
+    teacher_delete_session: 'حذف حصة (معلم)',
+    parent_evaluation: 'تقييم ولي أمر',
+    admin_teacher_eval: 'تقييم الإدارة لمعلم',
+    supervisor_eval: 'نقاط إشراف',
+    cron_daily: 'مهمة يومية تلقائية',
   }
 
   return (

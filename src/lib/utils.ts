@@ -1,8 +1,14 @@
-import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+type ClassValue = string | number | null | false | undefined | ClassValue[]
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+/** دمج أسماء الكلاسات (بدون مكتبات خارجية — clsx/tailwind-merge مش متثبتة) */
+export function cn(...inputs: ClassValue[]): string {
+  const out: string[] = []
+  const walk = (v: ClassValue) => {
+    if (Array.isArray(v)) v.forEach(walk)
+    else if (v) out.push(String(v))
+  }
+  inputs.forEach(walk)
+  return out.join(' ')
 }
 
 /** مبالغ بأرقام إنجليزية */

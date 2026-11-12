@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
+import { resyncStudentCounter } from '@/lib/session-counter'
 import { dueAfterPackageComplete, nextPackageSessionNum, packageSize, todayKey, validateSessionWithinPackage } from '@/lib/dues'
 
 /** حالات الحضور الفعلي (تُحسب في العداد والتقارير) */
@@ -18,31 +19,6 @@ function isPresentStatus(status: string): boolean {
   return PRESENT_STATUSES.has(status) || PRESENT_STATUSES.has(normalizeStatus(status))
 }
 
-/** بعد حذف/تعديل: رقم آخر حصة للطالب = آخر حضور فعلي متبقي */
-async function syncStudentLastSession(
-  sb: ReturnType<typeof serviceClient>,
-  studentId: string
-): Promise<number> {
-  const { data } = await sb
-    .from('attendance')
-    .select('session_num, session_date')
-    .eq('student_id', studentId)
-    .in('status', ['حاضر', 'متأخر'])
-    .order('session_date', { ascending: false })
-    .order('session_num', { ascending: false })
-    .limit(5)
-
-  const last = (data || [])[0]
-  const lastNum = last?.session_num != null ? Number(last.session_num) : 0
-  await sb
-    .from('students')
-    .update({
-      last_session_num: lastNum,
-      last_session_date: last?.session_date || null,
-    })
-    .eq('id', studentId)
-  return lastNum
-}
 
 type Svc = ReturnType<typeof serviceClient>
 
@@ -470,7 +446,7 @@ export async function deleteMySession(attendanceId: string) {
 
     let lastSessionNum: number | null = null
     if (row.student_id) {
-      lastSessionNum = await syncStudentLastSession(sb, row.student_id)
+      lastSessionNum = await resyncStudentCounter(sb, row.student_id, (row as any).session_num)
     }
 
     revalidateTeacherPaths()
@@ -551,7 +527,7 @@ export async function updateMySession(
 
     let lastSessionNum: number | null = null
     if (row.student_id) {
-      lastSessionNum = await syncStudentLastSession(sb, row.student_id)
+      lastSessionNum = await resyncStudentCounter(sb, row.student_id, (row as any).session_num)
     }
 
     await supabase.from('activity_log').insert({

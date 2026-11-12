@@ -46,7 +46,7 @@ export async function supervisorEditStudent(formData: FormData) {
   const { data: before, error: beforeErr } = await sb
     .from('students')
     .select(
-      'id, name, code, last_session_num, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type, package_id'
+      'id, name, code, last_session_num, amount_due, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type, package_id'
     )
     .eq('id', studentId)
     .maybeSingle()
@@ -55,10 +55,14 @@ export async function supervisorEditStudent(formData: FormData) {
 
   const oldLast = Number(before.last_session_num || 0)
   const rawLast = formData.get('last_session_num')
-  const newLast =
+  const submittedLast =
     rawLast === null || String(rawLast).trim() === ''
       ? oldLast
       : Math.max(0, Math.floor(Number(rawLast) || 0))
+  // لو الرقم زي ما كان وقت فتح الفورم → المشرف ما غيّروش: نسيب العدّاد الحالي في الداتا (ممكن المعلم سجّل حصص بعد ما الصفحة اتفتحت)
+  const origLastRaw = formData.get('orig_last_session_num')
+  const lastUnchanged = origLastRaw !== null && String(origLastRaw).trim() !== '' && Number(origLastRaw) === submittedLast
+  const newLast = lastUnchanged ? oldLast : submittedLast
 
   const packageIdRaw = String(formData.get('package_id') || '').trim()
   let sessions = Number(formData.get('monthly_sessions') || 0) || null
@@ -112,6 +116,12 @@ export async function supervisorEditStudent(formData: FormData) {
     const r = Number(rawRate)
     if (!(r > 0)) return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
     payload.teacher_session_rate = r
+  }
+
+  // نفس الحماية للمستحق: لو ما اتغيّرش في الفورم ما نكتبش فوق القيمة الحالية
+  const origDueRaw = formData.get('orig_amount_due')
+  if (origDueRaw !== null && String(origDueRaw).trim() !== '' && Number(origDueRaw) === amountDue) {
+    delete payload.amount_due
   }
 
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])

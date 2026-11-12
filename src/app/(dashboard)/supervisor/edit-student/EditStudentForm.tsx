@@ -123,6 +123,9 @@ export function EditStudentForm({
   return (
     <form onSubmit={onSubmit} className="card p-4 space-y-3">
       <input type="hidden" name="student_id" value={student.id} />
+      {/* القيم وقت فتح الفورم — السيرفر ما يكتبش فوق العدّاد/المستحق لو اتسابوا من غير تعديل (كان بيمسح حصص اتسجّلت بعد فتح الصفحة) */}
+      <input type="hidden" name="orig_last_session_num" value={student.last_session_num ?? 0} />
+      <input type="hidden" name="orig_amount_due" value={student.amount_due ?? 0} />
 
       <div className="flex justify-between items-center text-[12px]">
         <span className="font-bold" style={{ color: '#00513c' }}>

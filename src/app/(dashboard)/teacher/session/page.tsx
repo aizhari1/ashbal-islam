@@ -131,9 +131,34 @@ export default function TeacherSessionPage() {
 
   useEffect(() => {
     loadRoom()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !showFormRef.current) loadRoom()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const showFormRef = useRef(false)
+
+  /** يجيب آخر عدّاد للطالب من السيرفر — الصفحة ممكن تفضل مفتوحة ساعات والإدارة غيّرت الرقم */
+  async function freshStudent(id: string) {
+    try {
+      const { data } = await createClient()
+        .from('students')
+        .select('id, last_session_num, monthly_sessions, session_duration, subscription_type')
+        .eq('id', id)
+        .maybeSingle()
+      if (!data) return
+      setStudents((prev) => prev.map((x) => (x.id === id ? { ...x, ...(data as any) } : x)))
+      setSelected((cur) => (cur && cur.id === id ? { ...cur, ...(data as any) } : cur))
+    } catch {
+      /* نكمّل بالبيانات الحالية */
+    }
+  }
+
   function openReport(s: Student, status: string) {
+    void freshStudent(s.id)
     setSelected(s)
     setAttend(status === 'لم يحضر' ? 'لم يحضر' : 'تم الحضور')
     setDuration(String(s.session_duration || 30))
@@ -228,6 +253,16 @@ export default function TeacherSessionPage() {
     setPreview(text)
     return text
   }
+
+  useEffect(() => {
+    showFormRef.current = showForm
+  }, [showForm])
+
+  // المعاينة بتتحدّث لوحدها مع أي تغيير (من غير ما المعلم يدوس تحديث)
+  useEffect(() => {
+    if (selected && showForm && !saved) buildPreview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, showForm, saved, attend, duration, scoreNew, scoreRecent, scoreFar, tarbiya, sharii, newMem, recentPast, farPast, arabicLang, teacherName])
 
   function save() {
     if (!selected) return

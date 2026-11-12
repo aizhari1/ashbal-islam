@@ -243,7 +243,7 @@ export default function NewStudentPage() {
                   value={form.session_duration}
                   onChange={(e) => set('session_duration', e.target.value)}
                   type="number"
-                  disabled={!!pkg}
+                  
                   className="w-full bg-white border border-[#e5efe8] rounded-xl px-4 py-3 text-[14px] disabled:opacity-60"
                 />
               </div>
