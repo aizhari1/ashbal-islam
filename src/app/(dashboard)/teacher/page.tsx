@@ -14,6 +14,7 @@ export default async function TeacherDashboard() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
+  const role = String(profile?.role || resolvedRoleSafe(profile))
 
   const resolved = await resolveTeacherForUser(supabase, user.id)
   const teacher = resolved.teacher
@@ -22,17 +23,28 @@ export default async function TeacherDashboard() {
     return (
       <div className="min-h-dvh max-w-lg mx-auto p-6" style={{ background: '#eefdf6' }}>
         <p className="font-bold text-[15px]" style={{ color: '#93000a' }}>
-          مفيش ملف معلم مرتبط بحسابك
+          {role === 'admin' || role === 'supervisor' ? 'أنت داخل بحساب الإدارة' : 'مفيش ملف معلم مرتبط بحسابك'}
         </p>
         <p className="text-[13px] mt-2" style={{ color: '#6f7974' }}>
-          {resolved.message || 'تواصل مع الإدارة من «إدارة المستخدمين» واضغط إصلاح تلقائي.'}
+          {resolved.message ||
+            (role === 'admin' || role === 'supervisor'
+              ? 'لوحة المعلم للمعلمين فقط. ادخل من حساب المعلم (مثل مصطفى منيع) للتسميع والطلاب.'
+              : 'تواصل مع الإدارة من «إدارة المستخدمين» واضغط إصلاح تلقائي.')}
         </p>
-        <p className="text-[12px] mt-2" dir="ltr" style={{ color: '#6f7974' }}>
-          user: {user.id.slice(0, 8)}… · role: {profile?.role || '—'} · name: {profile?.full_name || '—'}
-        </p>
-        <Link href="/login" className="inline-block mt-4 text-[13px] font-bold" style={{ color: '#176b52' }}>
-          تسجيل خروج وإعادة دخول
-        </Link>
+        <div className="flex flex-col gap-2 mt-4">
+          {(role === 'admin' || role === 'supervisor') && (
+            <Link
+              href="/admin"
+              className="text-center py-3 rounded-xl text-[14px] font-bold text-white"
+              style={{ background: '#176b52' }}
+            >
+              الرجوع للوحة الإدارة
+            </Link>
+          )}
+          <Link href="/login" className="text-center text-[13px] font-bold" style={{ color: '#176b52' }}>
+            تسجيل خروج والدخول بحساب معلم
+          </Link>
+        </div>
       </div>
     )
   }
@@ -61,6 +73,7 @@ export default async function TeacherDashboard() {
   const active = a ?? 0
   const sessions = s ?? 0
   const trials = tr ?? 0
+  const isStaff = role === 'admin' || role === 'supervisor' || resolved.role === 'admin' || resolved.role === 'supervisor'
 
   const cards = [
     { href: '/teacher/students', icon: 'groups', title: 'طلابي', desc: 'تسجيل حضور بعد كل حصة' },
@@ -109,13 +122,33 @@ export default async function TeacherDashboard() {
       </div>
 
       {active === 0 && (
-        <div className="px-3 -mt-1 mb-2">
+        <div className="px-3 -mt-1 mb-2 space-y-2">
           <p
             className="rounded-xl px-3 py-2 text-[12px] font-bold text-center"
             style={{ background: '#fff8e8', color: '#8a5a00' }}
           >
-            مفيش طلاب مرتبطين بيك حالياً. من الإشراف/الإدارة: تعديل طالب → اختَر المعلم «{teacher.name}».
+            {isStaff
+              ? 'أنت داخل بحساب الإدارة — ملف المعلم «' +
+                (teacher.name || '') +
+                '» فاضي من الطلاب. للتسميع: اخرج وادخل بحساب المعلم (مثل مصطفى منيع).'
+              : 'مفيش طلاب مرتبطين بيك حالياً. من الإشراف/الإدارة: تعديل طالب → اختَر المعلم «' +
+                (teacher.name || '') +
+                '».'}
           </p>
+          {isStaff && (
+            <div className="flex gap-2 justify-center">
+              <Link
+                href="/admin"
+                className="px-4 py-2 rounded-xl text-[12px] font-bold text-white"
+                style={{ background: '#176b52' }}
+              >
+                لوحة الإدارة
+              </Link>
+              <Link href="/login" className="px-4 py-2 rounded-xl text-[12px] font-bold" style={{ background: '#e8f7f0', color: '#176b52' }}>
+                دخول كمعلم
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
@@ -132,4 +165,8 @@ export default async function TeacherDashboard() {
       </main>
     </div>
   )
+}
+
+function resolvedRoleSafe(profile: any) {
+  return String(profile?.role || '')
 }
