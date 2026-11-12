@@ -43,8 +43,8 @@ function isAdminFabricatedNote(notes: string | null | undefined): boolean {
 /**
  * تعديل رقم آخر حصة:
  * المرجع = أعلى رقم في سجل المعلم (maxAtt) وليس العداد المتضخّم
- * زيادة عن maxAtt → أضف الناقص فقط
- * تقليل → امسح الإداري فقط فوق الهدف، حصص المعلم الحقيقية تفضل
+ * زيادة عن maxAtt → أضف الناقص فقط بتاريخ أمس (مش النهارده)
+ * تقليل → امسح الإداري فقط فوق الهدف
  */
 export async function updateSessionNum(formData: FormData) {
   const supabase = await createClient()
@@ -93,9 +93,8 @@ export async function updateSessionNum(formData: FormData) {
       ? Math.max(storedLast, maxAtt)
       : Math.max(0, Math.floor(Number(rawLast) || 0))
 
-  const quota = packageSize(before)
-  const check = validateSessionWithinPackage(lastSessionNum, quota)
-  if (!check.ok) return { error: check.error }
+  // التسوية الإدارية: العدّاد المطلق مش مقيد بدورة الباقة
+  if (!Number.isFinite(lastSessionNum) || lastSessionNum < 0) return { error: 'رقم الحصة غير صالح' }
 
   const addedSessions: number[] = []
   const removedSessions: number[] = []
@@ -104,14 +103,22 @@ export async function updateSessionNum(formData: FormData) {
   let keptReal = 0
 
   if (lastSessionNum > maxAtt && teacherId) {
-    const today = lastSessionDate || todayKey()
+    // لو التاريخ فاضي أو = النهارده → استخدم أمس عشان ما يتسجلش كتقرير نهارده في غرفة التسميع
+    const todayCairo = todayKey()
+    let settleDate = lastSessionDate || ''
+    if (!settleDate || settleDate === todayCairo) {
+      const [yy, mm, dd] = todayCairo.split('-').map(Number)
+      const yest = new Date(Date.UTC(yy, mm - 1, dd))
+      yest.setUTCDate(yest.getUTCDate() - 1)
+      settleDate = yest.toISOString().slice(0, 10)
+    }
     const duration = Number(before.session_duration) || 30
     for (let n = maxAtt + 1; n <= lastSessionNum; n++) {
       if (existingNums.has(n)) continue
       const { error: attErr } = await sb.from('attendance').insert({
         student_id: studentId,
         teacher_id: teacherId,
-        session_date: today,
+        session_date: settleDate,
         status: 'حاضر',
         session_num: n,
         session_duration: duration,
@@ -156,7 +163,12 @@ export async function updateSessionNum(formData: FormData) {
       .maybeSingle()
     resolvedDate = lastAtt?.session_date ? String(lastAtt.session_date).slice(0, 10) : null
   }
-  if (!resolvedDate && addedSessions.length > 0) resolvedDate = todayKey()
+  if (!resolvedDate && addedSessions.length > 0) {
+    const [yy, mm, dd] = todayKey().split('-').map(Number)
+    const yest = new Date(Date.UTC(yy, mm - 1, dd))
+    yest.setUTCDate(yest.getUTCDate() - 1)
+    resolvedDate = yest.toISOString().slice(0, 10)
+  }
 
   const { error } = await sb
     .from('students')
@@ -187,9 +199,9 @@ export async function updateSessionNum(formData: FormData) {
 
   revalidateAll()
 
-  let message = `تم ضبط العداد على ${lastSessionNum}`
+  let message = `تم ضبط العداد على ${lastSessionNum} — التالي ${lastSessionNum + 1}`
   if (addedSessions.length > 0) {
-    message = `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم (${addedSessions.join('، ')})`
+    message = `تم · أُضيفت ${addedSessions.length} حصة لسجل المعلم (${addedSessions.join('، ')}) · التالي ${lastSessionNum + 1}`
   }
   if (removedSessions.length > 0) {
     message += ` · اتشالت ${removedSessions.length} إدارية زيادة`
