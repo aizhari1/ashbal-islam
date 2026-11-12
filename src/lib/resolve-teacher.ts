@@ -19,13 +19,22 @@ export type TeacherRow = {
 
 /**
  * يجيب صف المعلم المرتبط بالحساب.
- * لو مش موجود: يحاول الربط بالاسم/الكود من profiles، أو ينشئ صف جديد.
+ * لو مش موجود: يحاول الربط بالاسم/الكود من profiles، أو ينشئ صف جديد (للمعلمين فقط).
+ * حسابات الإدارة/الإشراف: متتعملش ملف معلم فاضي.
  */
 export async function resolveTeacherForUser(
   _supabase: SupabaseClient,
   userId: string
-): Promise<{ teacher: TeacherRow | null; linked: boolean; created: boolean; message?: string }> {
+): Promise<{ teacher: TeacherRow | null; linked: boolean; created: boolean; message?: string; role?: string }> {
   const sb = service()
+
+  const { data: profile } = await sb
+    .from('profiles')
+    .select('id, code, full_name, role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const role = String(profile?.role || '')
 
   const { data: already } = await sb
     .from('teachers')
@@ -38,20 +47,42 @@ export async function resolveTeacherForUser(
       await sb.from('teachers').update({ is_active: true }).eq('id', already.id)
       already.is_active = true
     }
-    return { teacher: already as TeacherRow, linked: false, created: false }
+    // لو أدمن مربوط بملف معلم فاضي (زي المدير العام) — متخليهوش يبان كمعلم بـ 0 طلاب بدون توضيح
+    if (role === 'admin' || role === 'supervisor') {
+      const { count } = await sb
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+        .eq('teacher_id', already.id)
+      if (!count) {
+        return {
+          teacher: already as TeacherRow,
+          linked: false,
+          created: false,
+          role,
+          message:
+            'أنت داخل بحساب الإدارة/الإشراف. للتسميع والطلاب سجّل دخول بحساب المعلم (مثل مصطفى منيع).',
+        }
+      }
+    }
+    return { teacher: already as TeacherRow, linked: false, created: false, role }
   }
-
-  const { data: profile } = await sb
-    .from('profiles')
-    .select('id, code, full_name, role')
-    .eq('id', userId)
-    .maybeSingle()
 
   if (!profile) {
-    return { teacher: null, linked: false, created: false, message: 'حساب بدون ملف profiles' }
+    return { teacher: null, linked: false, created: false, message: 'حساب بدون ملف profiles', role }
   }
 
-  if (profile.role !== 'teacher' && profile.role !== 'admin') {
+  // ممنوع إنشاء/ربط معلم تلقائي لحساب أدمن أو مشرف
+  if (role === 'admin' || role === 'supervisor') {
+    return {
+      teacher: null,
+      linked: false,
+      created: false,
+      role,
+      message: 'حساب إدارة — سجّل بحساب المعلم لفتح غرفة التسميع وطلابي',
+    }
+  }
+
+  if (role !== 'teacher') {
     await sb.from('profiles').update({ role: 'teacher' }).eq('id', userId)
   }
 
@@ -96,6 +127,7 @@ export async function resolveTeacherForUser(
       teacher: { ...match, profile_id: userId, is_active: true } as TeacherRow,
       linked: true,
       created: false,
+      role: 'teacher',
       message: `تم ربط ملف المعلم: ${match.name}`,
     }
   }
@@ -118,6 +150,7 @@ export async function resolveTeacherForUser(
       teacher: null,
       linked: false,
       created: false,
+      role: 'teacher',
       message: error?.message || 'فشل إنشاء ملف معلم',
     }
   }
@@ -126,6 +159,7 @@ export async function resolveTeacherForUser(
     teacher: created as TeacherRow,
     linked: false,
     created: true,
+    role: 'teacher',
     message: `تم إنشاء ملف معلم: ${created.name}`,
   }
 }
