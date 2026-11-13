@@ -10,6 +10,7 @@ export type SearchStudent = {
   amount_due?: number | null
   teacher_name?: string | null
   last_session_num?: number | null
+  phone?: string | null
 }
 
 type Props = {
@@ -21,7 +22,7 @@ type Props = {
   maxResults?: number
 }
 
-/** بحث واختيار طالب بالاسم أو الكود — مكوّن موحّد */
+/** بحث واختيار طالب بالاسم أو الكود أو المعلم — مكوّن موحّد */
 export default function StudentSearchSelect({
   students,
   selectedId,
@@ -44,7 +45,14 @@ export default function StudentSearchSelect({
       : students.filter((s) => {
           const name = (s.name || '').toLowerCase()
           const code = (s.code || '').toLowerCase()
-          return name.includes(term) || code.includes(term)
+          const teacher = (s.teacher_name || '').toLowerCase()
+          const phone = String(s.phone || '').toLowerCase()
+          return (
+            name.includes(term) ||
+            code.includes(term) ||
+            teacher.includes(term) ||
+            phone.includes(term)
+          )
         })
     return list.slice(0, maxResults)
   }, [q, students, maxResults])
@@ -87,15 +95,23 @@ export default function StudentSearchSelect({
       <label className="block text-[11px] font-bold mb-1" style={{ color: '#3f4944' }}>
         {label}
       </label>
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
-        style={{ borderColor: '#cde8dc' }}
-        autoComplete="off"
-      />
+      <div className="relative">
+        <span
+          className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[20px]"
+          style={{ color: '#176b52' }}
+        >
+          search
+        </span>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-xl border px-3 py-2.5 pr-10 text-[13px] bg-white"
+          style={{ borderColor: '#cde8dc' }}
+          autoComplete="off"
+        />
+      </div>
       <div className="mt-1.5 max-h-48 overflow-y-auto rounded-xl border bg-white" style={{ borderColor: '#e5efe8' }}>
         {filtered.length === 0 && (
           <p className="text-center text-[12px] py-3" style={{ color: '#6f7974' }}>
@@ -119,6 +135,7 @@ export default function StudentSearchSelect({
             <span className="block text-[11px]" style={{ color: '#6f7974' }}>
               {s.code}
               {s.status ? ` · ${s.status}` : ''}
+              {s.teacher_name ? ` · ${s.teacher_name}` : ''}
               {s.amount_due != null && Number(s.amount_due) > 0
                 ? ` · ${Number(s.amount_due).toLocaleString('ar-EG')} ج`
                 : ''}
@@ -127,7 +144,8 @@ export default function StudentSearchSelect({
         ))}
       </div>
       <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-        {filtered.length} نتيجة
+        {q.trim() ? `${filtered.length} نتيجة` : `${Math.min(students.length, maxResults)} من ${students.length}`}
+        {' · '}البحث فوري وأنت بتكتب
       </p>
     </div>
   )
