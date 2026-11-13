@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { StudentActions } from './StudentActions'
 import { tenureLabel } from '@/lib/student-tenure'
+import { displaySessionInPackage } from '@/lib/dues'
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -85,7 +86,12 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             <b>الباقة:</b> {student.monthly_sessions || '—'} حصة · {student.price_per_session || '—'} ج
           </p>
           <p>
-            <b>آخر حصة:</b> {student.last_session_num ?? '—'}
+            <b>آخر حصة:</b>{' '}
+            {student.last_session_num != null
+              ? student.monthly_sessions
+                ? `${displaySessionInPackage(student.last_session_num, student.monthly_sessions)} من ${student.monthly_sessions}`
+                : student.last_session_num
+              : '—'}
           </p>
           <p>
             <b>المستحق:</b>{' '}
