@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { changeStudentStatus } from './actions'
+import StatusForm from './StatusForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,9 +14,19 @@ export default async function SupervisorStatusPage() {
 
   const { data: students } = await supabase
     .from('students')
-    .select('id, code, name, status')
+    .select('id, code, name, status, amount_due, last_session_num, teachers(name)')
     .order('name')
-    .limit(400)
+    .limit(800)
+
+  const list = (students ?? []).map((s: any) => ({
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    status: s.status,
+    amount_due: s.amount_due,
+    last_session_num: s.last_session_num,
+    teacher_name: s.teachers?.name || null,
+  }))
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
@@ -29,51 +39,13 @@ export default async function SupervisorStatusPage() {
             تغيير حالة الطالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            نشط · موقوف · منسحب · تجريبي
+            ابحث بالاسم أو الكود · نشط · موقوف · منسحب · تجريبي
           </p>
         </div>
       </header>
 
       <div className="px-4">
-        <form action={changeStudentStatus} className="card p-4 space-y-3">
-          <select
-            name="student_id"
-            required
-            className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
-            style={{ borderColor: '#cde8dc' }}
-            defaultValue=""
-          >
-            <option value="" disabled>
-              اختر الطالب
-            </option>
-            {(students ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.code}) — {s.status}
-              </option>
-            ))}
-          </select>
-          <select
-            name="status"
-            required
-            className="w-full rounded-xl border px-3 py-2.5 text-[13px] bg-white"
-            style={{ borderColor: '#cde8dc' }}
-            defaultValue="نشط"
-          >
-            <option value="نشط">نشط</option>
-            <option value="موقوف">موقوف مؤقتًا</option>
-            <option value="منسحب">منسحب</option>
-            <option value="تجريبي">تجريبي</option>
-          </select>
-          <input
-            name="note"
-            placeholder="ملاحظة / تاريخ العودة المتوقع"
-            className="w-full rounded-xl border px-3 py-2.5 text-[13px]"
-            style={{ borderColor: '#cde8dc' }}
-          />
-          <button type="submit" className="w-full py-3 rounded-2xl text-white font-bold text-[14px]" style={{ background: '#176b52' }}>
-            حفظ الحالة
-          </button>
-        </form>
+        <StatusForm students={list} />
       </div>
     </div>
   )
