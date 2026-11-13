@@ -11,6 +11,7 @@ export default async function MorePage() {
   if (!user) redirect('/login')
 
   const items = [
+    { href: '/admin/income', icon: 'trending_up', label: 'تحليل الدخل والطلاب' },
     { href: '/admin/today', icon: 'today', label: 'جدول اليوم' },
     { href: '/admin/attended', icon: 'fact_check', label: 'الحصص اللي حضروها' },
     { href: '/admin/cumulative', icon: 'leaderboard', label: 'تقرير وتحليلات تراكمية' },

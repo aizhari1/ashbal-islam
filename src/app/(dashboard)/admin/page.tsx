@@ -50,6 +50,7 @@ export default async function AdminDashboard({
   const dueCount = summary.dueCount
 
   const menu = [
+    { href: '/admin/income', icon: 'trending_up', title: 'تحليل الدخل', desc: 'زاد ولا نقص · تحليل كل طالب بالفترة', color: '#176b52' },
     { href: '/admin/session-settle', icon: 'rule', title: 'تسوية حصص المعلم', desc: 'حذف/مزامنة حصص طالب مع معلم', color: '#ba1a1a' },
     { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × سعر · صرف/تسوية مالية', color: '#755b1b' },
     { href: '/admin/today', icon: 'today', title: 'جدول اليوم', desc: 'حصص النهارده عند كل المعلمين', color: '#176b52' },

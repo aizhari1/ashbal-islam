@@ -100,27 +100,14 @@ async function resolvePrevCounter(
 }
 
 async function maxSessionBefore(
-  client: Svc | Awaited<ReturnType<typeof createClient>>,
-  studentId: string,
-  beforeDate: string,
+  _client: Svc | Awaited<ReturnType<typeof createClient>>,
+  _studentId: string,
+  _beforeDate: string,
   storedCounter: number
 ): Promise<number> {
-  let maxAtt = 0
-  try {
-    const { data } = await client
-      .from('attendance')
-      .select('session_num')
-      .eq('student_id', studentId)
-      .lt('session_date', beforeDate)
-      .in('status', ['حاضر', 'متأخر'])
-      .not('session_num', 'is', null)
-      .order('session_num', { ascending: false })
-      .limit(1)
-    maxAtt = Number(data?.[0]?.session_num) || 0
-  } catch {
-    maxAtt = 0
-  }
-  return Math.max(0, storedCounter, maxAtt)
+  // القاعدة: عدّاد الطالب هو المرجع الوحيد للرقم (مش سجل الحضور).
+  // بعد أي تسوية/تعديل للعدّاد (مثلًا 5 → 8) الحصة الجاية بتكون 9 مهما كانت أرقام السجل القديمة.
+  return Math.max(0, Number(storedCounter) || 0)
 }
 
 async function todaySessionNum(
@@ -198,8 +185,7 @@ async function advanceStudentCounter(
 
   const quota = packageSize(student || {})
   const storedNum = Math.max(0, Number(student?.last_session_num) || 0)
-  const prevFromAtt = await resolvePrevCounter(sb, studentId, student)
-  const prevNum = await maxSessionBefore(sb ?? userClient, studentId, today, Math.max(storedNum, prevFromAtt))
+  const prevNum = storedNum // عدّاد الطالب هو الأساس
   const { next: nextSession, completedPackage } = nextPackageSessionNum(prevNum, quota)
 
   const patch: Record<string, unknown> = {
