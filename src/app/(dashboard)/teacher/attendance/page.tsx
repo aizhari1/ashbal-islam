@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 import SessionActions from './SessionActions'
+import { teacherCountWindow } from '@/lib/teacher-window'
+import { serviceClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,18 +20,36 @@ export default async function TeacherAttendancePage() {
   const key = currentMonthKey()
   const { start, end } = monthBounds(key)
   let rows: any[] = []
+  let settledOn: string | null = null
+  const ordinal = new Map<string, number>()
   if (teacher) {
-    const { data } = await supabase
+    let admin: any = supabase
+    try {
+      admin = serviceClient()
+    } catch {
+      admin = supabase
+    }
+    const w = await teacherCountWindow(admin, { id: teacher.id, name: teacher.name })
+    settledOn = w.settledOn
+    let q = supabase
       .from('attendance')
       .select(
-        'id, session_date, status, notes, session_num, session_duration, score_new, score_recent, score_far, students(name, code, phone)'
+        'id, session_date, status, notes, session_num, session_duration, score_new, score_recent, score_far, created_at, students(name, code, phone)'
       )
       .eq('teacher_id', teacher.id)
-      .gte('session_date', start)
       .lte('session_date', end)
-      .order('session_date', { ascending: false })
-      .limit(80)
-    rows = data ?? []
+    q = settledOn ? q.gt('session_date', settledOn) : q.gte('session_date', start)
+    const { data } = await q
+      .order('session_date', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1000)
+    const asc = data ?? []
+    // ترقيم حصص المعلم ورا بعض من أول الشهر (أو من بعد التسوية) — مش مربوط بباقة الطالب
+    let k = 0
+    for (const r of asc) {
+      if (r.status === 'حاضر' || r.status === 'متأخر') ordinal.set(r.id, ++k)
+    }
+    rows = [...asc].reverse()
   }
 
   return (
@@ -45,6 +65,7 @@ export default async function TeacherAttendancePage() {
       </div>
       <p className="text-[11px] mb-4" style={{ color: '#6f7974' }}>
         عدّل رقم الحصة أو الحالة أو المدة، أو احذف الحصة — العدّاد بيتظبط لوحده
+        {settledOn ? ` · تمت تسوية حصصك السابقة (${settledOn}) والعدّ بدأ من جديد` : ' · العدّ بيبدأ من 1 أول كل شهر'}
       </p>
       <div className="space-y-2">
         {rows.map((r) => (
@@ -54,7 +75,7 @@ export default async function TeacherAttendancePage() {
                 <p className="font-bold">{r.students?.name}</p>
                 <p className="text-[11px]" style={{ color: '#6f7974' }}>
                   {r.session_date}
-                  {r.session_num ? ` · حصة ${r.session_num}` : ''}
+                  {ordinal.get(r.id) ? ` · حصة ${ordinal.get(r.id)} هذا الشهر` : ''}
                   {r.session_duration ? ` · ${r.session_duration} د` : ''}
                   {r.score_new !== null && r.score_new !== undefined ? ` · حفظ ${r.score_new}/10` : ''}
                   {r.score_recent !== null && r.score_recent !== undefined ? ` · قريب ${r.score_recent}/10` : ''}
