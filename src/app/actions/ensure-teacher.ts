@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { resolveTeacherForUser } from '@/lib/resolve-teacher'
 import { serviceClient } from '@/lib/supabase/service'
+import { teacherCountWindow } from '@/lib/teacher-window'
 
 export async function ensureMyTeacher() {
   const supabase = await createClient()
@@ -71,5 +72,24 @@ export async function getMySessionRoom() {
     }
   }
 
-  return { teacher, students, error: null }
+  // حصص كل طالب عند المعلم الشهر ده (بتصفّر أول الشهر وبعد التسوية) — من غير "من 12"
+  const monthCounts: Record<string, number> = {}
+  try {
+    const w = await teacherCountWindow(sb as any, { id: teacher.id, name: teacher.name })
+    let q = (sb as any)
+      .from('attendance')
+      .select('student_id')
+      .eq('teacher_id', teacher.id)
+      .in('status', ['حاضر', 'متأخر'])
+      .lte('session_date', w.end)
+    q = w.settledOn ? q.gt('session_date', w.settledOn) : q.gte('session_date', w.start)
+    const { data: att } = await q.limit(5000)
+    for (const a of att || []) {
+      if (a.student_id) monthCounts[a.student_id] = (monthCounts[a.student_id] || 0) + 1
+    }
+  } catch {
+    /* العدّ مش حرج */
+  }
+
+  return { teacher, students, monthCounts, error: null }
 }
