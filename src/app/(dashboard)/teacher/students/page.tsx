@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import StudentLastReport from './StudentLastReport'
+import { teacherCountWindow } from '@/lib/teacher-window'
+import { serviceClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +24,8 @@ export default async function TeacherStudentsPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: teacher } = await supabase.from('teachers').select('id').eq('profile_id', user.id).maybeSingle()
+  const { data: teacher } = await supabase.from('teachers').select('id, name').eq('profile_id', user.id).maybeSingle()
+  let winStart = '', winAfter: string | null = null
   let students: {
     id: string
     name: string
@@ -32,12 +35,21 @@ export default async function TeacherStudentsPage() {
     last_session_num: number | null
   }[] = []
   const lastByStudent: Record<string, { notes: string; session_date: string; session_num: number | null }> = {}
-  /** إجمالي حضور فعلي مسجّل للمعلم عند الطالب (حاضر/متأخر) */
+  /** حضور الشهر الحالي (أو بعد التسوية) */
   const totalByStudent: Record<string, number> = {}
   /** منها تقارير المعلم الحقيقية (مش تسوية إدارية) */
   const realByStudent: Record<string, number> = {}
 
   if (teacher) {
+    let adminSb: any = supabase
+    try {
+      adminSb = serviceClient()
+    } catch {
+      adminSb = supabase
+    }
+    const w = await teacherCountWindow(adminSb, { id: teacher.id, name: teacher.name })
+    winStart = w.start
+    winAfter = w.settledOn
     const { data } = await supabase
       .from('students')
       .select('id, name, code, status, phone, last_session_num')
@@ -47,7 +59,6 @@ export default async function TeacherStudentsPage() {
 
     const ids = students.map((s) => s.id)
     if (ids.length) {
-      // جلب سجل الحضور للعد + آخر تقرير (حد أعلى كافي لعدد طلاب المعلم)
       const { data: att } = await supabase
         .from('attendance')
         .select('student_id, notes, session_date, session_num, status')
@@ -59,13 +70,15 @@ export default async function TeacherStudentsPage() {
       for (const a of att ?? []) {
         if (!a.student_id) continue
         const present = a.status === 'حاضر' || a.status === 'متأخر' || a.status === 'تم الحضور'
-        if (present) {
+        const d = String(a.session_date || '').slice(0, 10)
+        // العدّ للشهر الحالي (أو بعد التسوية) بس — بيصفّر أول كل شهر
+        const inWindow = winAfter ? d > winAfter : d >= winStart
+        if (present && inWindow) {
           totalByStudent[a.student_id] = (totalByStudent[a.student_id] || 0) + 1
           if (!isAdminNote(a.notes)) {
             realByStudent[a.student_id] = (realByStudent[a.student_id] || 0) + 1
           }
         }
-        // آخر تقرير فيه نص (أول صف بسبب الترتيب تنازلي)
         if (!lastByStudent[a.student_id] && (a.notes || '').trim() && !isAdminNote(a.notes)) {
           lastByStudent[a.student_id] = {
             notes: a.notes || '',
@@ -86,7 +99,7 @@ export default async function TeacherStudentsPage() {
         <div>
           <h1 className="text-[16px] font-bold">طلابي ({students.length})</h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            إجمالي الحصص = كل حضور مسجّل للطالب
+            حصصك مع كل طالب هذا الشهر — بتبدأ من 1 أول كل شهر وبعد تسوية الراتب
           </p>
         </div>
       </header>
@@ -94,7 +107,6 @@ export default async function TeacherStudentsPage() {
         {students.map((s) => {
           const total = totalByStudent[s.id] || 0
           const real = realByStudent[s.id] || 0
-          const counter = Number(s.last_session_num) || 0
           return (
             <div key={s.id} className="bg-white rounded-2xl p-3.5 shadow-sm">
               <div className="flex justify-between gap-2">
@@ -104,17 +116,13 @@ export default async function TeacherStudentsPage() {
                     {s.code} · {s.status}
                   </p>
                   <p className="text-[12px] font-bold mt-1" style={{ color: '#00513c' }}>
-                    إجمالي الحصص: {total}
+                    حصص هذا الشهر: {total}
                     {real !== total ? (
                       <span className="font-normal" style={{ color: '#6f7974' }}>
                         {' '}
                         (منها {real} تقرير معلم)
                       </span>
                     ) : null}
-                  </p>
-                  <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                    عدّاد الحصة: {counter}
-                    {counter > 0 ? ` · الجاية ${counter + 1}` : ''}
                   </p>
                 </div>
                 <div className="text-left shrink-0">
