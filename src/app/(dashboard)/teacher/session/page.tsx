@@ -6,7 +6,7 @@ import { recordAttendance, getSessionPreview } from '@/app/actions/attendance'
 import { getMySessionRoom } from '@/app/actions/ensure-teacher'
 import Link from 'next/link'
 import { normalizePhone } from '@/lib/whatsapp'
-import { nextPackageSessionNum, packageSize } from '@/lib/dues'
+import { displaySessionInPackage, nextPackageSessionNum, packageSize } from '@/lib/dues'
 
 type Student = {
   id: string
@@ -316,7 +316,14 @@ export default function TeacherSessionPage() {
             <div className="mb-2">
               <p className="font-bold text-[14px]">{s.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                {s.code} · حصصي معاه هذا الشهر: {monthCounts[s.id] || 0}
+                {s.code}
+                {' · آخر '}
+                {displaySessionInPackage(s.last_session_num ?? 0, packageSize(s))}
+                {packageSize(s) ? ` / ${packageSize(s)}` : ''}
+                {' · الجاية '}
+                {nextPackageSessionNum(s.last_session_num ?? 0, packageSize(s)).next}
+                {' · هذا الشهر: '}
+                {monthCounts[s.id] || 0}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
