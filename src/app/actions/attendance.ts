@@ -252,7 +252,7 @@ export async function recordAttendance(data: {
       success: true,
       data: row,
       next_session_num: willBePresent ? Number(sessionNum) || null : null,
-      message: !wasPresent && willBePresent ? `اتحدّث لتسجيل حضور — حصة رقم ${sessionNum}${dueMsg}` : willBePresent ? `اتحدّث تقرير اليوم — حصة رقم ${sessionNum}` : 'اتحدّث تقرير اليوم',
+      message: !wasPresent && willBePresent ? `اتحدّث لتسجيل حضور — حصة رقم ${sessionNum}${role === 'teacher' ? dueMsg.replace(/\s*·\s*مستحق\s*[\d.,]+\s*ج/g, '') : dueMsg}` : willBePresent ? `اتحدّث تقرير اليوم — حصة رقم ${sessionNum}` : 'اتحدّث تقرير اليوم',
     }
   }
 
@@ -329,7 +329,7 @@ export async function recordAttendance(data: {
     success: true,
     data: row,
     next_session_num: isPresent ? nextSession : null,
-    message: isPresent ? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${dueMsg}` : 'اتسجل الغياب مع التقرير',
+    message: isPresent ? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${role === 'teacher' ? dueMsg.replace(/\s*·\s*مستحق\s*[\d.,]+\s*ج/g, '') : dueMsg}` : 'اتسجل الغياب مع التقرير',
   }
 }
 
