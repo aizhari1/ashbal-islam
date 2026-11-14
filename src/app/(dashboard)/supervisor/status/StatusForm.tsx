@@ -10,41 +10,62 @@ export default function StatusForm({ students }: { students: SearchStudent[] }) 
   const [selected, setSelected] = useState<SearchStudent | null>(null)
   const [status, setStatus] = useState('نشط')
   const [note, setNote] = useState('')
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [pending, start] = useTransition()
 
   function submit() {
     if (!selected?.id) {
-      setMsg('اختَر الطالب من البحث أولاً')
+      setMsg({ type: 'err', text: 'اختَر الطالب من البحث أولاً' })
       return
     }
-    setMsg('')
+    setMsg(null)
     start(async () => {
       const fd = new FormData()
       fd.set('student_id', selected.id)
       fd.set('status', status)
       if (note.trim()) fd.set('note', note.trim())
-      const r: any = await changeStudentStatus(fd)
-      if (r?.error) {
-        setMsg(r.error)
-        return
+      try {
+        const r: any = await changeStudentStatus(fd)
+        if (r?.error) {
+          setMsg({ type: 'err', text: r.error })
+          return
+        }
+        const text =
+          r?.message ||
+          `تم تغيير حالة «${selected.name}» إلى «${status}»`
+        setMsg({ type: 'ok', text })
+        setSelected((s) => (s ? { ...s, status } : s))
+        setNote('')
+        router.refresh()
+      } catch (e: any) {
+        setMsg({ type: 'err', text: e?.message || 'فشل الحفظ — حاول مرة أخرى' })
       }
-      setMsg('تم حفظ الحالة ✓')
-      setSelected((s) => (s ? { ...s, status } : s))
-      setNote('')
-      router.refresh()
     })
   }
 
   return (
     <div className="card p-4 space-y-3">
+      {msg && (
+        <div
+          className="rounded-xl px-3 py-3 text-[13px] font-bold text-center"
+          style={{
+            background: msg.type === 'ok' ? '#e8f7f0' : '#ffdad6',
+            color: msg.type === 'ok' ? '#176b52' : '#93000a',
+            border: `1px solid ${msg.type === 'ok' ? '#b6e3cf' : '#ffb4ab'}`,
+          }}
+          role="status"
+        >
+          {msg.type === 'ok' ? '✓ ' : '⚠ '}{msg.text}
+        </div>
+      )}
+
       <StudentSearchSelect
         students={students}
         selectedId={selected?.id || null}
         onSelect={(s) => {
           setSelected(s)
           if (s?.status) setStatus(s.status)
-          setMsg('')
+          setMsg(null)
         }}
         label="ابحث عن الطالب"
         placeholder="اسم أو كود الطالب..."
@@ -90,15 +111,6 @@ export default function StatusForm({ students }: { students: SearchStudent[] }) 
       >
         {pending ? 'جاري الحفظ...' : 'حفظ الحالة'}
       </button>
-
-      {msg && (
-        <p
-          className="text-center text-[13px] font-bold"
-          style={{ color: msg.includes('✓') ? '#176b52' : '#93000a' }}
-        >
-          {msg}
-        </p>
-      )}
     </div>
   )
 }
