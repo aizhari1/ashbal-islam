@@ -226,7 +226,8 @@ export async function recordAttendance(data: {
     }
     if (willBePresent && sessionNum != null && Number(sessionNum) > 0) {
       const { data: curSt } = await (svcLookup ?? supabase).from('students').select('last_session_num').eq('id', data.student_id).maybeSingle()
-      const finalNum = Math.max(Math.max(0, Number(curSt?.last_session_num) || 0), Number(sessionNum))
+      void curSt
+      const finalNum = Number(sessionNum)
       await writeStudentPatch(svcLookup, supabase, data.student_id, { last_session_num: finalNum, last_session_date: today })
       sessionNum = finalNum
     }
@@ -274,7 +275,8 @@ export async function recordAttendance(data: {
   if (error) return { error: error.message }
 
   if (teacherId && row && (row as any).teacher_id !== teacherId && svc) {
-    await svc.from('attendance').update({ teacher_id: teacherId }).eq('id', row.id)
+    await svc.from('attendance').update({ teacher_id: teacherId })
+      .eq('id', row.id)
   }
   if (svc && isPresent) {
     const { data: sameDay } = await svc.from('attendance').select('id, notes').eq('student_id', data.student_id).eq('session_date', today).neq('id', row.id)
