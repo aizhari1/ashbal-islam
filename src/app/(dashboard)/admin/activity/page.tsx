@@ -29,6 +29,7 @@ const actionLabel: Record<string, string> = {
   reduce_session_remove_admin_only: 'حذف حصة تسوية إدارية',
   add_payment: 'إضافة دفعة',
   update_payment: 'تعديل دفعة',
+  supervisor_payment: 'دفعة من المشرف',
   create_student: 'إضافة طالب',
   delete_student: 'حذف طالب',
   create_package: 'إنشاء باقة',
@@ -63,7 +64,6 @@ const fieldLabel: Record<string, string> = {
   status: 'الحالة',
   prev_status: 'الحالة السابقة',
   package_size: 'حجم الباقة',
-  attendance_id: 'معرّف الحضور',
   package_complete: 'اكتمال الباقة',
   package_id: 'الباقة',
   teacher_id: 'المعلم',
@@ -76,15 +76,63 @@ const fieldLabel: Record<string, string> = {
   from: 'من',
   to: 'إلى',
   actor: 'بواسطة',
+  new_date: 'التاريخ الجديد',
+  old_date: 'التاريخ القديم',
+  new_amount: 'المبلغ الجديد',
+  old_amount: 'المبلغ السابق',
+  new_due: 'المستحق بعد',
+  prev_due: 'المستحق قبل',
+  partial: 'دفعة جزئية',
+  student_name: 'الطالب',
+  teacher_name: 'المعلم',
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function isUuid(v: unknown): boolean {
-  return typeof v === 'string' && UUID_RE.test(v)
+  return typeof v === 'string' && UUID_RE.test(v.trim())
 }
 
-function fmtValue(v: unknown): string {
+function humanAction(action: string | null | undefined): string {
+  const a = String(action || '').trim()
+  if (!a) return 'إجراء'
+  if (actionLabel[a]) return actionLabel[a]
+  return a
+    .replace(/_/g, ' ')
+    .replace(/\bupdate\b/gi, 'تعديل')
+    .replace(/\bpayment\b/gi, 'دفعة')
+    .replace(/\bsession\b/gi, 'حصة')
+    .replace(/\breport\b/gi, 'تقرير')
+    .replace(/\bstudent\b/gi, 'طالب')
+    .replace(/\bteacher\b/gi, 'معلم')
+    .replace(/\bsupervisor\b/gi, 'مشرف')
+}
+
+function normalizeDetails(details: unknown): Record<string, unknown> {
+  if (!details) return {}
+  if (typeof details === 'object' && !Array.isArray(details)) return details as Record<string, unknown>
+  if (typeof details === 'string') {
+    const t = details.trim()
+    if (!t) return {}
+    try {
+      const parsed = JSON.parse(t)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+    } catch {
+      /* not JSON */
+    }
+    // "key: value · key: value" fallback
+    const out: Record<string, unknown> = {}
+    for (const part of t.split(/\s*[·|]\s*/)) {
+      const m = part.match(/^([^:]+):\s*(.*)$/)
+      if (m) out[m[1].trim()] = m[2].trim()
+    }
+    if (Object.keys(out).length) return out
+    return { note: t }
+  }
+  return {}
+}
+
+function fmtValue(v: unknown, names?: Record<string, string>): string {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'boolean') return v ? 'نعم' : 'لا'
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '—'
@@ -94,65 +142,48 @@ function fmtValue(v: unknown): string {
       const code = o.code != null ? ` (${o.code})` : ''
       return `${String(o.name)}${code}`
     }
-    if ('from' in o && 'to' in o) return `${fmtValue(o.from)} ← ${fmtValue(o.to)}`
+    if ('from' in o && 'to' in o) return `${fmtValue(o.from, names)} ← ${fmtValue(o.to, names)}`
     if ('to' in o && o.to != null) return String(o.to)
-    // never dump raw JSON to the user
-    const bits: string[] = []
-    for (const [k, val] of Object.entries(o)) {
-      if (isUuid(val)) continue
-      if (val == null || val === '') continue
-      if (typeof val === 'object') continue
-      const lab = fieldLabel[k] || k
-      bits.push(`${lab} ${fmtValue(val)}`)
-    }
-    return bits.length ? bits.join(' · ') : '—'
+    return '—'
   }
-  const s = String(v)
-  if (isUuid(s)) return '—'
+  const s = String(v).trim()
+  if (isUuid(s)) return names?.[s] || '—'
   if (s === 'حاضر' || s === 'present') return 'حاضر'
   if (s === 'غائب' || s === 'absent') return 'غائب'
   if (s === 'متأخر') return 'متأخر'
   return s
 }
 
-function humanAction(action: string | null | undefined): string {
-  const a = String(action || '').trim()
-  if (!a) return 'إجراء'
-  if (actionLabel[a]) return actionLabel[a]
-  // soft fallback: underscores → spaces (still better than raw key only)
-  return a.replace(/_/g, ' ')
-}
-
-function formatDetails(details: unknown): string[] {
-  if (!details) return []
-  if (typeof details === 'string') {
-    const t = details.trim()
-    return t ? [t] : []
-  }
-  if (typeof details !== 'object') return [String(details)]
-
-  const d = details as Record<string, unknown>
+function formatDetails(details: unknown, names?: Record<string, string>): string[] {
+  const d = normalizeDetails(details)
   const lines: string[] = []
   const preferred = [
     'name',
+    'student_name',
     'code',
     'status',
     'prev_status',
     'session_num',
     'date',
     'session_date',
+    'payment_date',
     'amount',
+    'new_amount',
+    'old_amount',
     'method',
+    'new_due',
+    'prev_due',
+    'partial',
+    'new_date',
+    'old_date',
     'notes',
     'note',
-    'price_per_session',
-    'teacher_session_rate',
-    'last_session_num',
     'package_size',
     'package_complete',
-    'evaluation',
-    'homework',
-    'report',
+    'last_session_num',
+    'price_per_session',
+    'teacher_session_rate',
+    'teacher_name',
   ]
 
   const seen = new Set<string>()
@@ -161,21 +192,24 @@ function formatDetails(details: unknown): string[] {
     seen.add(k)
     const val = d[k]
     if (val == null || val === '') continue
-    if (isUuid(val)) continue
-    lines.push(`${fieldLabel[k] || k}: ${fmtValue(val)}`)
+    if (isUuid(val) && !(names && names[String(val)])) continue
+    lines.push(`${fieldLabel[k] || k}: ${fmtValue(val, names)}`)
   }
+
+  // student_id → اسم إن وُجد
+  if (d.student_id && isUuid(d.student_id) && names?.[String(d.student_id)]) {
+    if (!seen.has('student_name') && !seen.has('name')) {
+      lines.unshift(`الطالب: ${names[String(d.student_id)]}`)
+    }
+  }
+
   for (const [k, v] of Object.entries(d)) {
     if (seen.has(k)) continue
     if (v == null || v === '') continue
-    if (isUuid(v)) continue
     if (k.endsWith('_id') || k === 'attendance_id' || k === 'entity_id') continue
-    if (typeof v === 'object' && !Array.isArray(v)) {
-      const nested = fmtValue(v)
-      if (nested === '—') continue
-      lines.push(`${fieldLabel[k] || k}: ${nested}`)
-      continue
-    }
-    lines.push(`${fieldLabel[k] || k}: ${fmtValue(v)}`)
+    if (isUuid(v) && !(names && names[String(v)])) continue
+    if (typeof v === 'object') continue
+    lines.push(`${fieldLabel[k] || k}: ${fmtValue(v, names)}`)
   }
   return lines
 }
@@ -196,12 +230,28 @@ export default async function ActivityLogPage() {
   const actorIds = Array.from(
     new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean) as string[])
   )
+
+  const studentIds = new Set<string>()
+  for (const l of logs ?? []) {
+    const d = normalizeDetails(l.details)
+    if (isUuid(d.student_id)) studentIds.add(String(d.student_id))
+    if (l.entity_type === 'student' && isUuid(l.entity_id)) studentIds.add(String(l.entity_id))
+  }
+
+  const names: Record<string, string> = {}
+  if (studentIds.size) {
+    const { data: students } = await supabase
+      .from('students')
+      .select('id, name, code')
+      .in('id', Array.from(studentIds))
+    for (const s of students || []) {
+      names[s.id] = s.code ? `${s.name} (${s.code})` : String(s.name)
+    }
+  }
+
   const actorNames: Record<string, string> = {}
   if (actorIds.length) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, name, email')
-      .in('id', actorIds)
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name, name, email').in('id', actorIds)
     for (const p of profiles || []) {
       const n = (p as any).full_name || (p as any).name || (p as any).email
       if (n) actorNames[p.id] = String(n)
@@ -219,14 +269,14 @@ export default async function ActivityLogPage() {
             سجل النشاط
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            {logs?.length ?? 0} حدث · آخر 200
+            {logs?.length ?? 0} حدث · آخر 200 · عرض مترجم
           </p>
         </div>
       </header>
 
       <div className="px-4 space-y-2">
         {(logs ?? []).map((l) => {
-          const lines = formatDetails(l.details)
+          const lines = formatDetails(l.details, names)
           const actor = l.actor_id ? actorNames[l.actor_id] : null
           return (
             <div key={l.id} className="card p-3">
