@@ -1,5 +1,6 @@
 'use server'
 
+import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
@@ -35,24 +36,6 @@ function tryServiceClient(): Svc | null {
   } catch {
     return null
   }
-}
-
-async function syncStudentLastSession(sb: Svc, studentId: string): Promise<number> {
-  const { data } = await sb
-    .from('attendance')
-    .select('session_num, session_date')
-    .eq('student_id', studentId)
-    .in('status', ['حاضر', 'متأخر'])
-    .order('session_date', { ascending: false })
-    .order('session_num', { ascending: false })
-    .limit(5)
-  const last = (data || [])[0]
-  const lastNum = last?.session_num != null ? Number(last.session_num) : 0
-  await sb
-    .from('students')
-    .update({ last_session_num: lastNum, last_session_date: last?.session_date || null })
-    .eq('id', studentId)
-  return lastNum
 }
 
 async function maxSessionBefore(
@@ -379,7 +362,7 @@ export async function deleteMySession(attendanceId: string) {
   const { error } = await sb.from('attendance').delete().eq('id', attendanceId)
   if (error) return { error: error.message }
   let lastSessionNum: number | null = null
-  if (row.student_id && svc) lastSessionNum = await syncStudentLastSession(svc, row.student_id)
+  if (row.student_id && svc) lastSessionNum = await adjustCounterAfterChange(svc, row.student_id, { status: row.status, session_num: row.session_num }, null)
   revalidateTeacherPaths()
   return { success: true, message: 'تم حذف الحصة', last_session_num: lastSessionNum }
 }
@@ -408,8 +391,13 @@ export async function updateMySession(
     const { error } = await sb.from('attendance').update(update).eq('id', attendanceId)
     if (error) return { error: error.message }
     let lastSessionNum: number | null = null
-    if (row.student_id && svc && (patch.status !== undefined || patch.session_num !== undefined)) {
-      lastSessionNum = await syncStudentLastSession(svc, row.student_id)
+    if (row.student_id && svc && patch.status !== undefined) {
+      lastSessionNum = await adjustCounterAfterChange(
+        svc,
+        row.student_id,
+        { status: row.status, session_num: row.session_num },
+        { status: String(update.status ?? row.status), session_num: row.session_num }
+      )
     }
     revalidateTeacherPaths()
     return { success: true, message: 'تم تعديل الحصة عند الجميع', last_session_num: lastSessionNum }

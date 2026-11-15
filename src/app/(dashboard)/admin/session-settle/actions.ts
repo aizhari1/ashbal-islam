@@ -1,5 +1,6 @@
 'use server'
 
+import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
@@ -73,24 +74,8 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
     const sid = studentId || row.student_id
     let lastSessionNum = 0
     if (sid) {
-      const { data } = await sb
-        .from('attendance')
-        .select('session_num, session_date')
-        .eq('student_id', sid)
-        .in('status', ['حاضر', 'متأخر'])
-        .order('session_date', { ascending: false })
-        .order('session_num', { ascending: false })
-        .limit(1)
-      const last = data?.[0]
-      lastSessionNum = last?.session_num != null ? Number(last.session_num) : 0
-      const { error: syncErr } = await sb
-        .from('students')
-        .update({
-          last_session_num: lastSessionNum,
-          last_session_date: last?.session_date || null,
-        })
-        .eq('id', sid)
-      if (syncErr) return { error: `اتحذفت الحصة لكن فشل تحديث العداد: ${syncErr.message}` }
+      // العدّاد مش بيترجّع لرقم آخر تقرير عند المعلم: بيرجع خطوة بس لو الحصة المحذوفة هي آخر حصة
+      lastSessionNum = await adjustCounterAfterChange(sb, sid, { status: row.status, session_num: row.session_num }, null)
     }
 
     revalidateTeacherPaths()

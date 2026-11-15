@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
-import { resyncStudentCounter } from '@/lib/session-counter'
+import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { requireAdmin } from '@/lib/courses'
 
 
@@ -42,7 +42,7 @@ export async function adminDeleteSession(attendanceId: string) {
 
     let lastSessionNum: number | null = null
     if (row.student_id) {
-      lastSessionNum = await resyncStudentCounter(sb, row.student_id, (row as any).session_num)
+      lastSessionNum = await adjustCounterAfterChange(sb, row.student_id, { status: row.status, session_num: row.session_num }, null)
     }
 
     for (const path of [
