@@ -15,6 +15,8 @@ function revalidateTeacherPaths() {
     '/admin/students',
     '/admin/edit-session',
     '/admin/session-settle',
+    '/admin/finance',
+    '/admin/subscriptions-log',
     '/teacher',
     '/teacher/attendance',
     '/teacher/dues',
@@ -225,5 +227,35 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
     }
   } catch (e: any) {
     return { error: e?.message || 'فشل التحديث' }
+  }
+}
+
+/** يخلّي عدّاد الطالب = رقم آخر حصة حضور مسجّلة عند المعلم (بالتاريخ)، فيتطابق الطالب والمعلم وتذكير الاشتراكات. */
+export async function alignCounterToLatestSession(studentId: string) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'غير مصرح' }
+    const sb = serviceClient()
+    const { data: rows } = await sb
+      .from('attendance')
+      .select('session_num, session_date, created_at')
+      .eq('student_id', studentId)
+      .in('status', ['حاضر', 'متأخر'])
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const latest = rows?.[0]
+    if (!latest || !Number(latest.session_num)) return { error: 'مفيش حصة مسجّلة برقم عند المعلم' }
+    const n = Number(latest.session_num)
+    const { error } = await sb
+      .from('students')
+      .update({ last_session_num: n, last_session_date: String(latest.session_date).slice(0, 10) })
+      .eq('id', studentId)
+    if (error) return { error: error.message }
+    revalidateTeacherPaths()
+    return { success: true, last_session_num: n, message: `اتطابق العدّاد مع آخر حصة عند المعلم (${n}) · التالي ${n + 1}` }
+  } catch (e: any) {
+    return { error: e?.message || 'خطأ غير متوقع' }
   }
 }
