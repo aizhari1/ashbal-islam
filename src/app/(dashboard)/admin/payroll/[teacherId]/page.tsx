@@ -70,7 +70,7 @@ export default async function TeacherPayrollDetailPage({
     off += 1000
   }
 
-  const present = attendance.filter((a) => a.status === 'حاضر')
+  const present = attendance.filter((a) => a.status === 'حاضر' || a.status === 'متأخر')
 
   type Stu = {
     id: string

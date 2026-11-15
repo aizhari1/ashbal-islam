@@ -1,5 +1,6 @@
 'use server'
 
+import { teacherCountWindow } from '@/lib/teacher-window'
 import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
@@ -29,6 +30,25 @@ function isAdminFabricatedNote(notes: string | null | undefined): boolean {
 }
 
 type Svc = ReturnType<typeof serviceClient>
+
+/** عدد حصص المعلم مع الطالب في فترة تصفيته (من أول الشهر أو بعد آخر تسوية) — مش مربوط بباقة الطالب */
+async function teacherCountWithStudent(sb: any, teacherId: string, studentId: string): Promise<number> {
+  try {
+    const w = await teacherCountWindow(sb, { id: teacherId })
+    let q = sb
+      .from('attendance')
+      .select('id', { count: 'exact', head: true })
+      .eq('teacher_id', teacherId)
+      .eq('student_id', studentId)
+      .in('status', ['حاضر', 'متأخر'])
+      .lte('session_date', w.end)
+    q = w.settledOn ? q.gt('session_date', w.settledOn) : q.gte('session_date', w.start)
+    const { count } = await q
+    return count ?? 0
+  } catch {
+    return 0
+  }
+}
 
 function tryServiceClient(): Svc | null {
   try {
@@ -309,12 +329,19 @@ export async function recordAttendance(data: {
     entity_id: data.student_id,
     details: { attendance_id: row.id, status: data.status, session_num: nextSession, date: today, package_complete: completedPackage, package_size: quota },
   })
+  // المعلم بيشوف عدد حصصه هو (من أول الشهر/بعد التسوية) — من غير حد الباقة ولا المستحق
+  let teacherMsg: string | null = null
+  if (role === 'teacher' && isPresent && row?.teacher_id) {
+    const k = await teacherCountWithStudent(svc ?? supabase, row.teacher_id, data.student_id)
+    teacherMsg = `اتسجل حضور — دي حصتك رقم ${k} مع الطالب في الفترة الحالية`
+  }
+
   revalidateTeacherPaths()
   return {
     success: true,
     data: row,
     next_session_num: isPresent ? nextSession : null,
-    message: isPresent ? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${role === 'teacher' ? dueMsg.replace(/\s*·\s*مستحق\s*[\d.,]+\s*ج/g, '') : dueMsg}` : 'اتسجل الغياب مع التقرير',
+    message: isPresent ? teacherMsg ?? `اتسجل حضور — حصة رقم ${nextSession}${quota > 0 ? ` من ${quota}` : ''}${dueMsg}` : 'اتسجل الغياب مع التقرير',
   }
 }
 

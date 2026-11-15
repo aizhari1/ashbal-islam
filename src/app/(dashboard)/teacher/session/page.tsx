@@ -317,13 +317,10 @@ export default function TeacherSessionPage() {
               <p className="font-bold text-[14px]">{s.name}</p>
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
                 {s.code}
-                {' · آخر '}
-                {displaySessionInPackage(s.last_session_num ?? 0, packageSize(s))}
-                {packageSize(s) ? ` / ${packageSize(s)}` : ''}
-                {' · الجاية '}
-                {nextPackageSessionNum(s.last_session_num ?? 0, packageSize(s)).next}
-                {' · هذا الشهر: '}
+                {' · حصصك مع الطالب: '}
                 {monthCounts[s.id] || 0}
+                {' · رقم التقرير الجاي: '}
+                {nextPackageSessionNum(s.last_session_num ?? 0, packageSize(s)).next}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

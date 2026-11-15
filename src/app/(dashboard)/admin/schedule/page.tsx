@@ -56,7 +56,7 @@ export default async function AttendanceArchivePage({
     off += 1000
     if (off > 50000) break
   }
-  const present = allStatuses.filter((s) => s === 'حاضر').length
+  const present = allStatuses.filter((s) => s === 'حاضر' || s === 'متأخر').length
   const absent = allStatuses.filter((s) => s === 'غائب' || s === 'غايب').length
   const total = allStatuses.length
   const totalPages = Math.max(1, Math.ceil((totalCount || 0) / PAGE_SIZE))
