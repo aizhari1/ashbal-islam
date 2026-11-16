@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { StudentPicker } from './StudentPicker'
 import { EditStudentForm } from './EditStudentForm'
-import { DeleteStudentButton } from './DeleteStudentButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,7 +102,6 @@ export default async function SupervisorEditStudentPage({
             teachers={teacherOptions}
             packages={(packages as any) ?? []}
           />
-          <DeleteStudentButton studentId={selected.id} studentName={selected.name} />
         </div>
       )}
 
