@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { alignCounterToLatestSession, deleteAttendanceRow, setStudentLastSession } from './actions'
+import { deleteAttendanceRow, setStudentLastSession } from './actions'
 
 type Student = {
   id: string
@@ -168,12 +168,12 @@ export function SettleShell() {
 
   function del(id: string) {
     if (!selected) return
-    if (!confirm('حذف الحصة دي نهائيًا من عند الإدارة والمعلم؟')) return
+    if (!confirm('حذف الحصة من سجل المعلم؟ عدّاد الطالب ما بيتغيّرش.')) return
     start(async () => {
       const r = await deleteAttendanceRow(id, selected.id)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg(r?.message || 'اتحذفت من عند الجميع ✓')
+        setMsg(r?.message || 'اتحذفت من سجل المعلم ✓')
         if (typeof r?.last_session_num === 'number') {
           const n = r.last_session_num
           setLastNum(String(n))
@@ -199,17 +199,7 @@ export function SettleShell() {
       setMsg(`لا يمكن حفظ رقم ${n} — الباقة ${pkg} حصص فقط`)
       return
     }
-    const studentNum = Number(selected.last_session_num) || 0
-    const teacherMax = maxTeacherNum
-    let confirmMsg = `تأكيد المزامنة على الرقم ${n}؟`
-    if (n > teacherMax) {
-      confirmMsg = `الطالب هيبقى على ${n} والمعلم حالياً أعلى رقم عنده ${teacherMax}.\nهتتضاف الحصص الناقصة فقط (${teacherMax + 1} ← ${n}) لسجل المعلم.\nمتأكد؟`
-    } else if (n < teacherMax) {
-      confirmMsg = `الطالب هيبقى على ${n} والمعلم عنده حصص بأرقام أكبر من ${n}.\nهتتشال الحصص الزيادة من سجل المعلم.\nمتأكد؟`
-    } else if (n === studentNum && n === teacherMax) {
-      confirmMsg = `الرقم ${n} متطابق أصلاً. تحفظ تاني؟`
-    }
-    if (!confirm(confirmMsg)) return
+    if (!confirm(`تغيير عدّاد الطالب إلى ${n}${pkg > 0 ? `/${pkg}` : ''}؟ (حصص المعلم مش هتتغيّر)`)) return
 
     start(async () => {
       const r = await setStudentLastSession(selected.id, n)
@@ -231,7 +221,6 @@ export function SettleShell() {
 
   const selectedPkg = Number(selected?.monthly_sessions) || 0
   const studentNum = Number(selected?.last_session_num) || 0
-  const mismatch = selected && studentNum !== latestTeacherNum
 
   return (
     <div className="px-4 space-y-3">
@@ -323,58 +312,22 @@ export function SettleShell() {
               </button>
             </div>
 
-            <div
-              className="mt-3 rounded-xl p-3 text-[12px] space-y-1"
-              style={{
-                background: mismatch ? '#fff4e5' : '#e8f7f0',
-                border: `1px solid ${mismatch ? '#f0c070' : '#cde8dc'}`,
-              }}
-            >
-              <p className="font-bold" style={{ color: mismatch ? '#8a5a00' : '#176b52' }}>
-                {mismatch ? 'غير متطابق — محتاج تسوية' : 'متطابق ✓'}
+            <div className="mt-3 rounded-xl p-3 text-[12px] space-y-1" style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}>
+              <p className="font-bold" style={{ color: '#176b52' }}>
+                عدّاد الطالب (اللي بيظهر لولي الأمر): <b>{studentNum}{selectedPkg > 0 ? `/${selectedPkg}` : ''}</b>
               </p>
               <p>
-                عداد الطالب: <b>{studentNum}</b>
-                {selectedPkg > 0 ? ` / ${selectedPkg}` : ''}
+                حصص المعلم المسجّلة: <b>{teacherPresentCount}</b> · آخر رقم في تقريره: <b>{latestTeacherNum}</b>
               </p>
-              <p>
-                رقم آخر حصة عند المعلم: <b>{latestTeacherNum}</b> · أعلى رقم: <b>{maxTeacherNum}</b>
-              </p>
-              <p>
-                عدد حصص حاضر/متأخر مسجّلة: <b>{teacherPresentCount}</b>
-              </p>
-              {mismatch && latestTeacherNum > 0 && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  className="mt-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-                  style={{ background: '#176b52' }}
-                  onClick={() =>
-                    start(async () => {
-                      const r = await alignCounterToLatestSession(selected!.id)
-                      if (r?.error) setMsg(r.error)
-                      else {
-                        const n = Number(r.last_session_num) || 0
-                        setMsg(r.message || 'تم ✓')
-                        setSelected({ ...selected!, last_session_num: n })
-                        setStudents((prev) => prev.map((x) => (x.id === selected!.id ? { ...x, last_session_num: n } : x)))
-                      }
-                    })
-                  }
-                >
-                  طابق العدّاد مع آخر حصة عند المعلم ({latestTeacherNum})
-                </button>
-              )}
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                مثال: لو العداد 7 والمعلم واصل 2 فقط → اكتب 7 واحفظ، هتتضاف 3 و4 و5 و6 و7 فقط.
-                لو عايز تخليه على واقع المعلم اكتب 2 واحفظ، هيتشال الزائد.
+                الاتنين مستقلين: تعديل عدّاد الطالب مش بيضيف ولا بيحذف من حصص المعلم، وحذف حصة من سجل المعلم مش بيغيّر عدّاد الطالب. المعلم بيتحاسب بالتاريخ يوم 1.
               </p>
             </div>
 
             <div className="flex gap-2 mt-3 items-end">
               <div className="flex-1">
                 <label className="text-[11px] font-bold">
-                  الرقم المستهدف بعد التسوية{selectedPkg > 0 ? ` (حد ${selectedPkg})` : ''}
+                  عدّاد الطالب{selectedPkg > 0 ? ` (حتى ${selectedPkg})` : ''}
                 </label>
                 <input
                   type="number"
@@ -387,7 +340,7 @@ export function SettleShell() {
                 />
               </div>
               <button type="button" disabled={pending} onClick={saveLast} className="btn-primary px-4 py-2 text-[12px]">
-                مزامنة
+                حفظ العدّاد
               </button>
             </div>
           </div>

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
-import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { requireAdmin } from '@/lib/courses'
 
 
@@ -42,7 +41,9 @@ export async function adminDeleteSession(attendanceId: string) {
 
     let lastSessionNum: number | null = null
     if (row.student_id) {
-      lastSessionNum = await adjustCounterAfterChange(sb, row.student_id, { status: row.status, session_num: row.session_num }, null)
+      // مستقل: حذف الإدارة لحصة من سجل المعلم ما بيغيّرش عدّاد الطالب (التعديل بيتم من شاشة التسوية)
+      const { data: st } = await sb.from('students').select('last_session_num').eq('id', row.student_id).maybeSingle()
+      lastSessionNum = Number(st?.last_session_num) || 0
     }
 
     for (const path of [

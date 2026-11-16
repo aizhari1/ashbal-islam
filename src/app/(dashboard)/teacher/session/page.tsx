@@ -198,7 +198,7 @@ export default function TeacherSessionPage() {
       '',
       '📝 الموافق: ' + `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`,
       '',
-      '#️⃣ رقم الحلقة: ' + sessionNum,
+      '#️⃣ رقم الحلقة: ' + sessionNum + (quota > 0 ? `/${quota}` : ''),
       '',
       '📋 الحضور: ' + attend,
       '',

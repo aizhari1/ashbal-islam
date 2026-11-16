@@ -1,6 +1,5 @@
 'use server'
 
-import { adjustCounterAfterChange } from '@/lib/session-counter'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
@@ -73,17 +72,18 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
     const { error } = await sb.from('attendance').delete().eq('id', id)
     if (error) return { error: error.message }
 
+    // التسوية مستقلة: حذف حصة من سجل المعلم ما بيغيّرش عدّاد الطالب
     const sid = studentId || row.student_id
     let lastSessionNum = 0
     if (sid) {
-      // العدّاد مش بيترجّع لرقم آخر تقرير عند المعلم: بيرجع خطوة بس لو الحصة المحذوفة هي آخر حصة
-      lastSessionNum = await adjustCounterAfterChange(sb, sid, { status: row.status, session_num: row.session_num }, null)
+      const { data: st } = await sb.from('students').select('last_session_num').eq('id', sid).maybeSingle()
+      lastSessionNum = Number(st?.last_session_num) || 0
     }
 
     revalidateTeacherPaths()
     return {
       ok: true,
-      message: 'اتحذفت من عند الجميع',
+      message: 'اتحذفت من سجل المعلم — عدّاد الطالب ما اتغيّرش',
       last_session_num: lastSessionNum,
       deleted_id: id,
     }
@@ -93,11 +93,9 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
 }
 
 /**
- * مزامنة رقم الهدف مع سجل المعلم:
- * - المرجع للزيادة/النقص = أعلى رقم فعلي في الحضور (maxAtt) مش العداد المتضخّم
- * - لو الهدف أكبر من maxAtt → أضف الأرقام الناقصة فقط (بتاريخ أمس مش النهارده)
- * - لو الهدف أصغر → امسح فقط الحصص الإدارية المُفتعلة فوق الهدف
- * - بعد التسوية من 5→8: التقرير التالي من غرفة التسميع = 9
+ * تسوية عدّاد الطالب (5/8 مثلًا) — مستقلة تمامًا عن حصص المعلم:
+ * بتغيّر رقم الطالب بس، ومش بتضيف ولا بتحذف أي حصة من سجل المعلم (المعلم بيتحاسب بالتاريخ يوم 1).
+ * الحصة الجاية من غرفة التسميع بتكمّل من الرقم ده (5 → 6 → 7 ...).
  */
 export async function setStudentLastSession(studentId: string, lastSessionNum: number) {
   try {
@@ -106,156 +104,38 @@ export async function setStudentLastSession(studentId: string, lastSessionNum: n
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) return { error: 'غير مصرح' }
+    const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    if (!['admin', 'supervisor'].includes(String(prof?.role))) return { error: 'للإدارة والإشراف فقط' }
 
-    const target = Math.max(0, Math.floor(Number(lastSessionNum) || 0))
+    const target = Math.floor(Number(lastSessionNum))
+    if (!Number.isFinite(target) || target < 0) return { error: 'رقم الحصة غير صالح' }
     const sb = serviceClient()
     const { data: before } = await sb
       .from('students')
-      .select('last_session_num, teacher_id, name, session_duration, monthly_sessions, subscription_type')
+      .select('last_session_num, monthly_sessions, subscription_type')
       .eq('id', studentId)
       .maybeSingle()
     if (!before) return { error: 'طالب غير موجود' }
-
     const quota = packageSize(before)
-    // التسوية الإدارية تسمح بأي رقم ≥ 0 (العدّاد المطلق)، مش مقيد بدورة الباقة
-    if (!Number.isFinite(target) || target < 0) return { error: 'رقم الحصة غير صالح' }
+    if (quota > 0 && target > quota) return { error: `الحد الأقصى ${quota} (باقة الطالب)` }
 
-    const stored = Number(before.last_session_num || 0)
-    const teacherId = before.teacher_id
-    // تاريخ التسوية = أمس (قاهرة) مش النهارده
-    // عشان غرفة التسميع ما تحسبش حصص التسوية كـ «تقرير النهارده» ويبدأ العد من target+1
-    const todayCairo = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
-    const [yy, mm, dd] = todayCairo.split('-').map(Number)
-    const yest = new Date(Date.UTC(yy, mm - 1, dd))
-    yest.setUTCDate(yest.getUTCDate() - 1)
-    const settleDate = yest.toISOString().slice(0, 10)
-
-    const { data: allAtt } = await sb
-      .from('attendance')
-      .select('id, session_num, notes, session_date, status')
-      .eq('student_id', studentId)
-      .limit(500)
-
-    const existingNums = new Set<number>()
-    let maxAtt = 0
-    for (const row of allAtt || []) {
-      const num = row.session_num != null ? Number(row.session_num) : NaN
-      if (Number.isFinite(num) && num > 0) {
-        existingNums.add(num)
-        if (num > maxAtt) maxAtt = num
-      }
-    }
-
-    let added = 0
-    let removed = 0
-    let keptReal = 0
-
-    // زيادة: حصص إدارية بتاريخ أمس (مش النهارده)
-    if (target > maxAtt && teacherId) {
-      for (let i = maxAtt + 1; i <= target; i++) {
-        if (existingNums.has(i)) continue
-        const { error: insErr } = await sb.from('attendance').insert({
-          student_id: studentId,
-          teacher_id: teacherId,
-          session_date: settleDate,
-          status: 'حاضر',
-          session_num: i,
-          session_duration: before.session_duration || 30,
-          notes: `تسوية إدارية — حصة رقم ${i} · ${before.name}`,
-        })
-        if (!insErr) {
-          added++
-          existingNums.add(i)
-        }
-      }
-    }
-
-    // تقليل: امسح الإداري فقط فوق الهدف — حصص المعلم الحقيقية تفضل
-    if (target < maxAtt) {
-      for (const row of allAtt || []) {
-        const num = row.session_num != null ? Number(row.session_num) : NaN
-        if (!Number.isFinite(num) || num <= target) continue
-        if (!isAdminFabricatedNote(row.notes)) {
-          keptReal++
-          continue
-        }
-        await sb.from('activity_log').insert({
-          actor_id: user.id,
-          action: 'reduce_session_remove_admin_only',
-          entity_type: 'attendance',
-          entity_id: row.id,
-          details: {
-            student_id: studentId,
-            session_num: row.session_num,
-            session_date: row.session_date,
-            report: row.notes,
-          },
-        })
-        const { error: delErr } = await sb.from('attendance').delete().eq('id', row.id)
-        if (!delErr) removed++
-      }
-    }
-
-    // حدّث العداد + تاريخ آخر حصة دائماً (حتى لو مفيش إضافة/حذف صفوف)
-    const { error } = await sb
-      .from('students')
-      .update({
-        last_session_num: target,
-        last_session_date: settleDate,
-      })
-      .eq('id', studentId)
+    const from = Number(before.last_session_num) || 0
+    const { error } = await sb.from('students').update({ last_session_num: target }).eq('id', studentId)
     if (error) return { error: error.message }
-
+    await sb.from('activity_log').insert({
+      actor_id: user.id,
+      action: 'settle_student_counter',
+      entity_type: 'student',
+      entity_id: studentId,
+      details: { from, to: target },
+    })
     revalidateTeacherPaths()
-
-    let message = `تم ضبط عداد الطالب على ${target} — التقرير التالي هيبقى ${target + 1}`
-    if (added > 0) message = `تم · أُضيفت ${added} حصة لسجل المعلم (من ${maxAtt} → ${target}) · التالي ${target + 1}`
-    if (removed > 0) message += ` · اتشالت ${removed} حصة إدارية زيادة`
-    if (keptReal > 0)
-      message += ` · اتفادت ${keptReal} حصة حقيقية للمعلم (اتمسحتش)`
-    if (added === 0 && removed === 0 && stored === target) message = `تم · العداد على ${target} · التالي ${target + 1}`
-
     return {
       ok: true,
-      message,
-      added,
-      removed,
-      maxAtt,
-      target,
-      keptReal,
-      next_session: target + 1,
+      last_session_num: target,
+      message: `تم ✓ عدّاد الطالب ${from} ← ${target}${quota > 0 ? `/${quota}` : ''} — حصص المعلم ما اتغيّرتش، والحصة الجاية رقم ${quota > 0 && target >= quota ? 1 : target + 1}`,
     }
   } catch (e: any) {
-    return { error: e?.message || 'فشل التحديث' }
-  }
-}
-
-/** يخلّي عدّاد الطالب = رقم آخر حصة حضور مسجّلة عند المعلم (بالتاريخ)، فيتطابق الطالب والمعلم وتذكير الاشتراكات. */
-export async function alignCounterToLatestSession(studentId: string) {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'غير مصرح' }
-    const sb = serviceClient()
-    const { data: rows } = await sb
-      .from('attendance')
-      .select('session_num, session_date, created_at')
-      .eq('student_id', studentId)
-      .in('status', ['حاضر', 'متأخر'])
-      .order('session_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(1)
-    const latest = rows?.[0]
-    if (!latest || !Number(latest.session_num)) return { error: 'مفيش حصة مسجّلة برقم عند المعلم' }
-    const n = Number(latest.session_num)
-    const { error } = await sb
-      .from('students')
-      .update({ last_session_num: n, last_session_date: String(latest.session_date).slice(0, 10) })
-      .eq('id', studentId)
-    if (error) return { error: error.message }
-    revalidateTeacherPaths()
-    return { success: true, last_session_num: n, message: `اتطابق العدّاد مع آخر حصة عند المعلم (${n}) · التالي ${n + 1}` }
-  } catch (e: any) {
-    return { error: e?.message || 'خطأ غير متوقع' }
+    return { error: e?.message || 'فشل الحفظ' }
   }
 }

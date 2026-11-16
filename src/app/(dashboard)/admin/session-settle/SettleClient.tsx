@@ -131,7 +131,7 @@ export function SettleClient({
 
             <div className="flex gap-2 mt-3 items-end">
               <div className="flex-1">
-                <label className="text-[11px] font-bold">رقم آخر حصة (مزامنة مع المعلم)</label>
+                <label className="text-[11px] font-bold">عدّاد الطالب (مستقل عن حصص المعلم)</label>
                 <input
                   type="number"
                   min={0}
