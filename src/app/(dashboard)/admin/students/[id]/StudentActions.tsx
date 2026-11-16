@@ -52,12 +52,6 @@ export function StudentActions({
       )
     )
       return
-    const typed = prompt(`للتأكيد اكتب اسم الطالب بالظبط:\n${name}`)
-    if (typed == null) return
-    if (typed.trim() !== name.trim()) {
-      setMsg('الاسم مش مطابق — اتلغى الحذف')
-      return
-    }
     setMsg('')
     startTransition(async () => {
       const res = await deleteStudentCompletely(studentId)
@@ -123,7 +117,7 @@ export function StudentActions({
           حذف نهائي من النظام
         </p>
         <p className="text-[11px] leading-snug" style={{ color: '#6f7974' }}>
-          يمسح الطالب وكل حضوره ودفعاته ومواعيده. مش بيتراجع.
+          للإدارة فقط · يمسح الطالب وكل حضوره ودفعاته ومواعيده · مش بيتراجع
         </p>
         <button
           type="button"
@@ -139,7 +133,12 @@ export function StudentActions({
       {msg && (
         <p
           className="text-[13px] text-center font-medium"
-          style={{ color: msg.includes('فشل') || msg.includes('مش') || msg.includes('غير') ? '#ba1a1a' : '#176b52' }}
+          style={{
+            color:
+              msg.includes('فشل') || msg.includes('مش') || msg.includes('غير') || msg.includes('فقط')
+                ? '#ba1a1a'
+                : '#176b52',
+          }}
         >
           {msg}
         </p>
