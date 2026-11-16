@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache'
 /**
  * حذف نهائي للطالب من النظام كله:
  * حضور · دفعات · مواعيد · أي صف مرتبط · ثم سجل الطالب
- * للإدارة والإشراف فقط
+ * للإدارة فقط
  */
 export async function deleteStudentCompletely(studentId: string) {
   const supabase = await createClient()
@@ -18,8 +18,8 @@ export async function deleteStudentCompletely(studentId: string) {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
   const role = String(profile?.role || '')
-  if (!['admin', 'supervisor'].includes(role)) {
-    return { error: 'الحذف النهائي للإدارة والإشراف فقط' }
+  if (role !== 'admin') {
+    return { error: 'الحذف النهائي للإدارة فقط' }
   }
 
   if (!studentId || !/^[0-9a-f-]{36}$/i.test(studentId)) {
@@ -44,12 +44,10 @@ export async function deleteStudentCompletely(studentId: string) {
   const counts: Record<string, number> = {}
 
   async function wipe(table: string, col = 'student_id') {
-    // حذف على دفعات لو العدد كبير
     let total = 0
     for (let i = 0; i < 50; i++) {
       const { data, error } = await sb.from(table).delete().eq(col, studentId).select('id')
       if (error) {
-        // جدول مش موجود أو عمود مختلف — نتجاهل
         if (/does not exist|42703|42P01/i.test(error.message)) return total
         throw new Error(`${table}: ${error.message}`)
       }
@@ -65,7 +63,6 @@ export async function deleteStudentCompletely(studentId: string) {
     await wipe('attendance')
     await wipe('payments')
     await wipe('schedule_entries')
-    // جداول محتملة إضافية
     await wipe('evaluations').catch(() => 0)
     await wipe('parent_evaluations').catch(() => 0)
     await wipe('student_notes').catch(() => 0)
