@@ -1,8 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { alignCounterToLatestSession, deleteAttendanceRow, setStudentLastSession } from './actions'
+import { addTeacherSession, deleteAttendanceRow } from './actions'
 
 type Student = {
   id: string
@@ -24,17 +25,19 @@ type Session = {
   teacher_name?: string
 }
 
+const isPresent = (s: string) => s === 'حاضر' || s === 'متأخر'
+
 function monthEnd(key: string): string {
   const [y, m] = key.split('-').map(Number)
   const last = new Date(y, m, 0).getDate()
   return `${key}-${String(last).padStart(2, '0')}`
 }
 
-function packageLabel(n: number | null | undefined): string {
-  const q = Number(n) || 0
-  return q > 0 ? `باقة ${q}` : 'باقة غير محددة'
+function cairoToday(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 }
 
+/** تبويب «حصص المعلم عند الطالب»: بيعدّل سجل المعلم بس (حذف / إضافة حصة منسية) ومبيلمسش عدّاد الطالب. */
 export function SettleShell() {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,10 +45,7 @@ export function SettleShell() {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Student | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
-  const [maxTeacherNum, setMaxTeacherNum] = useState(0)
-  const [teacherPresentCount, setTeacherPresentCount] = useState(0)
-  const [latestTeacherNum, setLatestTeacherNum] = useState(0)
-  const [lastNum, setLastNum] = useState('0')
+  const [newDate, setNewDate] = useState(cairoToday)
   const [msg, setMsg] = useState('')
   const [pending, start] = useTransition()
   const [month] = useState(() => {
@@ -103,30 +103,18 @@ export function SettleShell() {
     const startDate = `${month}-01`
     const endDate = monthEnd(month)
 
-    const [monthRes, statsRes] = await Promise.all([
-      supabase
-        .from('attendance')
-        .select('id, session_date, session_num, status, notes, session_duration, teachers(name)')
-        .eq('student_id', s.id)
-        .gte('session_date', startDate)
-        .lte('session_date', endDate)
-        .order('session_date', { ascending: false })
-        .limit(200),
-      supabase
-        .from('attendance')
-        .select('session_num, status, session_date, created_at')
-        .eq('student_id', s.id)
-        .in('status', ['حاضر', 'متأخر'])
-        .order('session_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(500),
-    ])
-
-    if (monthRes.error) throw new Error(monthRes.error.message)
-    if (statsRes.error) throw new Error(statsRes.error.message)
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('id, session_date, session_num, status, notes, session_duration, teachers(name)')
+      .eq('student_id', s.id)
+      .gte('session_date', startDate)
+      .lte('session_date', endDate)
+      .order('session_date', { ascending: false })
+      .limit(200)
+    if (error) throw new Error(error.message)
 
     setSessions(
-      (monthRes.data || []).map((r: any) => {
+      (data || []).map((r: any) => {
         const t = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers
         return {
           id: r.id,
@@ -139,26 +127,13 @@ export function SettleShell() {
         }
       })
     )
-
-    const rows = statsRes.data || []
-    setLatestTeacherNum(Number(rows[0]?.session_num) || 0)
-    setTeacherPresentCount(rows.length)
-    let maxN = 0
-    for (const r of rows) {
-      const n = Number(r.session_num)
-      if (Number.isFinite(n) && n > maxN) maxN = n
-    }
-    setMaxTeacherNum(maxN)
   }
 
   async function pick(s: Student) {
     setSelected(s)
-    setLastNum(String(s.last_session_num ?? 0))
     setMsg('')
     setSessions([])
-    setMaxTeacherNum(0)
-    setLatestTeacherNum(0)
-    setTeacherPresentCount(0)
+    setNewDate(cairoToday())
     try {
       await loadStudentSessions(s)
     } catch (e: any) {
@@ -173,7 +148,7 @@ export function SettleShell() {
       const r = await deleteAttendanceRow(id, selected.id)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg(r?.message || 'اتحذفت من سجل المعلم ✓')
+        setMsg(r?.message || 'اتحذفت ✓')
         try {
           await loadStudentSessions(selected)
         } catch {
@@ -183,27 +158,20 @@ export function SettleShell() {
     })
   }
 
-  function saveLast() {
+  function add() {
     if (!selected) return
-    const n = Number(lastNum) || 0
-    const pkg = Number(selected.monthly_sessions) || 0
-    if (pkg > 0 && n > pkg) {
-      setMsg(`لا يمكن حفظ رقم ${n} — الباقة ${pkg} حصص فقط`)
+    if (!newDate) {
+      setMsg('اختار تاريخ')
       return
     }
-    if (!confirm(`تغيير عدّاد الطالب إلى ${n}${pkg > 0 ? `/${pkg}` : ''}؟ (حصص المعلم مش هتتغيّر)`)) return
-
+    if (!confirm(`إضافة حصة منسية بتاريخ ${newDate} لسجل المعلم؟\nعدّاد الطالب مش هيتغيّر.`)) return
     start(async () => {
-      const r = await setStudentLastSession(selected.id, n)
+      const r = await addTeacherSession(selected.id, newDate)
       if (r?.error) setMsg(r.error)
       else {
-        setMsg(r?.message || 'تم ✓')
-        setSelected({ ...selected, last_session_num: n })
-        setStudents((prev) =>
-          prev.map((x) => (x.id === selected.id ? { ...x, last_session_num: n } : x))
-        )
+        setMsg(r?.message || 'اتضافت ✓')
         try {
-          await loadStudentSessions({ ...selected, last_session_num: n })
+          await loadStudentSessions(selected)
         } catch {
           /* ignore */
         }
@@ -211,9 +179,7 @@ export function SettleShell() {
     })
   }
 
-  const selectedPkg = Number(selected?.monthly_sessions) || 0
-  const studentNum = Number(selected?.last_session_num) || 0
-  const mismatch = !!(selected && studentNum !== latestTeacherNum)
+  const presentCount = sessions.filter((s) => isPresent(s.status)).length
 
   return (
     <div className="px-4 space-y-3">
@@ -221,8 +187,8 @@ export function SettleShell() {
         <p
           className="text-[13px] font-bold text-center rounded-xl py-2"
           style={{
-            background: msg.includes('لا يمكن') || msg.includes('فشل') ? '#ffdad6' : '#e8f7f0',
-            color: msg.includes('لا يمكن') || msg.includes('فشل') ? '#93000a' : '#176b52',
+            background: msg.includes('لا يمكن') || msg.includes('فشل') || msg.includes('غير') ? '#ffdad6' : '#e8f7f0',
+            color: msg.includes('لا يمكن') || msg.includes('فشل') || msg.includes('غير') ? '#93000a' : '#176b52',
           }}
         >
           {msg}
@@ -237,7 +203,7 @@ export function SettleShell() {
       {!selected && (
         <>
           <p className="text-[12px] rounded-xl px-3 py-2" style={{ background: '#fff8e8', color: '#6b5a1a' }}>
-            التسوية هنا هي اللي بتزامِن عداد الطالب مع سجل المعلم. تعديل بيانات الطالب لوحده ما بيضيفش ولا بيحذف حصص.
+            هنا بتعدّل <b>سجل المعلم فقط</b>: حذف حصة غلط أو إضافة حصة منسية. عدّاد الطالب بيتعدّل من «تعديل بيانات طالب».
           </p>
           <input
             type="search"
@@ -265,9 +231,7 @@ export function SettleShell() {
                 >
                   <span className="font-bold block">{s.name}</span>
                   <span className="text-[11px]" style={{ color: '#6f7974' }}>
-                    {s.code} · عداد {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} ·{' '}
-                    <span style={{ color: '#176b52', fontWeight: 700 }}>{packageLabel(s.monthly_sessions)}</span>
-                    {' · '}{s.teacher_name}
+                    {s.code} · عداد {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} · {s.teacher_name}
                   </span>
                 </button>
               ))}
@@ -305,69 +269,43 @@ export function SettleShell() {
               </button>
             </div>
 
-            <div
-              className="mt-3 rounded-xl p-3 text-[12px] space-y-1"
-              style={{
-                background: mismatch ? '#fff4e5' : '#e8f7f0',
-                border: `1px solid ${mismatch ? '#f0c070' : '#cde8dc'}`,
-              }}
-            >
-              <p className="font-bold" style={{ color: mismatch ? '#8a5a00' : '#176b52' }}>
-                عدّاد الطالب (اللي بيظهر لولي الأمر): <b>{studentNum}{selectedPkg > 0 ? `/${selectedPkg}` : ''}</b>
+            <div className="mt-3 rounded-xl p-3 text-[12px] space-y-1" style={{ background: '#e8f7f0', border: '1px solid #cde8dc' }}>
+              <p>
+                عدّاد الطالب (للعرض فقط): <b>{selected.last_session_num ?? 0}</b>
+                {selected.monthly_sessions ? ` / ${selected.monthly_sessions}` : ''}
               </p>
               <p>
-                حصص المعلم المسجّلة: <b>{teacherPresentCount}</b> · آخر رقم في تقريره: <b>{latestTeacherNum}</b>
+                حصص حاضر هذا الشهر في سجل المعلم: <b>{presentCount}</b>
               </p>
-              {mismatch && latestTeacherNum > 0 && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  className="mt-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
-                  style={{ background: '#176b52' }}
-                  onClick={() =>
-                    start(async () => {
-                      const r = await alignCounterToLatestSession(selected!.id)
-                      if (r?.error) setMsg(r.error)
-                      else {
-                        const n = Number(r.last_session_num) || 0
-                        setMsg(r.message || 'تم ✓')
-                        setLastNum(String(n))
-                        setSelected({ ...selected!, last_session_num: n })
-                        setStudents((prev) => prev.map((x) => (x.id === selected!.id ? { ...x, last_session_num: n } : x)))
-                      }
-                    })
-                  }
-                >
-                  طابق العدّاد مع آخر حصة عند المعلم ({latestTeacherNum})
-                </button>
-              )}
               <p className="text-[11px]" style={{ color: '#6f7974' }}>
-                الاتنين مستقلين: تعديل عدّاد الطالب مش بيضيف ولا بيحذف من حصص المعلم، وحذف حصة من سجل المعلم مش بيغيّر عدّاد الطالب. المعلم بيتحاسب بالتاريخ يوم 1.
+                لتعديل العدّاد روح{' '}
+                <Link href={`/supervisor/edit-student?id=${selected.id}`} className="font-bold underline" style={{ color: '#176b52' }}>
+                  تعديل بيانات طالب
+                </Link>
               </p>
             </div>
 
             <div className="flex gap-2 mt-3 items-end">
               <div className="flex-1">
-                <label className="text-[11px] font-bold">
-                  عدّاد الطالب{selectedPkg > 0 ? ` (حتى ${selectedPkg})` : ''}
-                </label>
+                <label className="text-[11px] font-bold">تاريخ حصة منسية</label>
                 <input
-                  type="number"
-                  min={0}
-                  max={selectedPkg > 0 ? selectedPkg : undefined}
-                  value={lastNum}
-                  onChange={(e) => setLastNum(e.target.value)}
+                  type="date"
+                  value={newDate}
+                  max={cairoToday()}
+                  onChange={(e) => setNewDate(e.target.value)}
                   className="w-full rounded-xl border px-3 py-2 text-[13px]"
                   style={{ borderColor: '#176b52' }}
                 />
               </div>
-              <button type="button" disabled={pending} onClick={saveLast} className="btn-primary px-4 py-2 text-[12px]">
-                حفظ العدّاد
+              <button type="button" disabled={pending} onClick={add} className="btn-primary px-4 py-2 text-[12px]">
+                إضافة
               </button>
             </div>
           </div>
 
-          <h3 className="text-[13px] font-bold">حصص {month} ({sessions.length})</h3>
+          <h3 className="text-[13px] font-bold">
+            حصص {month} ({sessions.length})
+          </h3>
           <div className="space-y-2">
             {sessions.map((s) => (
               <div key={s.id} className="card p-3 text-[12px]">
