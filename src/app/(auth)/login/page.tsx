@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { saveSessionBackup, saveRoleBackup } from '@/lib/session-persist'
 import { saveLastRole, type AppRole } from '@/lib/app-prefs'
 import { BRAND_LOGO_SRC, BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand-logo'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 function padPwd(code: string) {
@@ -14,8 +14,14 @@ function padPwd(code: string) {
   return (c + c + c + c + c + c).slice(0, 6)
 }
 
+function homeForRole(role: string) {
+  if (role === 'teacher') return '/teacher'
+  if (role === 'supervisor') return '/supervisor'
+  if (role === 'parent') return '/parent'
+  return '/admin'
+}
+
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const roleHint = searchParams?.get('role') || null
   const roleTitle =
@@ -75,7 +81,7 @@ function LoginForm() {
                 .select('role')
                 .eq('id', data.user!.id)
                 .maybeSingle()
-              if (profile?.role) role = profile.role
+              if (profile?.role) role = String(profile.role)
             } catch {
               /* ignore */
             }
@@ -84,10 +90,9 @@ function LoginForm() {
             saveRoleBackup(role)
             saveLastRole(role as AppRole)
 
-            if (role === 'teacher') router.replace('/teacher')
-            else if (role === 'supervisor') router.replace('/supervisor')
-            else if (role === 'parent') router.replace('/parent')
-            else router.replace('/admin')
+            // انتقال كامل عشان كوكيز السشن تتثبت قبل أي middleware
+            const dest = homeForRole(role)
+            window.location.assign(dest)
             return
           }
           if (err) lastMsg = err.message || lastMsg
