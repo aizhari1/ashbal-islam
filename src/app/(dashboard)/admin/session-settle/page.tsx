@@ -13,10 +13,10 @@ export default function SessionSettlePage() {
         </Link>
         <div>
           <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>
-            تسوية حصص طالب / معلم
+            حصص المعلم عند الطالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            ابحث عن طالب · احذف حصة · عدّل رقم الحصة
+            ابحث عن طالب · احذف حصة غلط · أضف حصة منسية
           </p>
         </div>
       </header>
