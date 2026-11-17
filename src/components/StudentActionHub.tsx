@@ -26,13 +26,10 @@ const ACTIONS = (role: 'admin' | 'supervisor', s: SearchStudent) => {
       desc: 'مالية · طرق الدفع',
     },
     {
-      href:
-        role === 'admin'
-          ? `/admin/edit-session?id=${s.id}`
-          : `/supervisor/edit-student?id=${s.id}`,
+      href: `/supervisor/edit-student?id=${s.id}`,
       icon: 'edit_note',
-      title: 'تعديل رقم الحصة',
-      desc: 'آخر حصة مسجّلة',
+      title: 'تعديل بيانات وعدّاد الطالب',
+      desc: 'عدّاد الحصص · الباقة · السعر',
     },
     {
       href: `/admin/transfer?student=${s.id}`,
