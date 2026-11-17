@@ -43,9 +43,8 @@ export default async function SupervisorDashboard({
 
   const menu = [
     { href: '/admin/today', icon: 'today', title: 'مواعيد حلقات اليوم', desc: 'جدول النهاردة بالوقت', color: '#176b52' },
-    { href: '/admin/session-settle', icon: 'rule', title: 'تسوية حصص المعلم', desc: 'حذف حصص غلط · مزامنة الرقم', color: '#ba1a1a' },
-    { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'بحث + اسم واشتراك وسعر', color: '#176b52' },
-    { href: '/supervisor/edit-session', icon: 'pin', title: 'تعديل رقم الحصة', desc: 'بحث فوري · حفظ مع المزامنة', color: '#176b52' },
+    { href: '/admin/session-settle', icon: 'rule', title: 'حصص المعلم عند طالب', desc: 'تبويب مستقل · حذف غلط · إضافة منسية', color: '#ba1a1a' },
+    { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'اسم · اشتراك · سعر · عدّاد الحصص', color: '#176b52' },
     { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
     { href: '/supervisor/payment', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'إنستا · فودافون · بنكي', color: '#c5a45d' },
     { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: `${scheduleCount ?? 0} موعد ثابت`, color: '#3d665a' },
@@ -165,7 +164,7 @@ export default async function SupervisorDashboard({
           className="block rounded-2xl px-4 py-3 text-center font-bold text-[14px] text-white"
           style={{ background: '#ba1a1a' }}
         >
-          تسوية حصص المعلم
+          حصص المعلم عند طالب
         </Link>
       </div>
 
