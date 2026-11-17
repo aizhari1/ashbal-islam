@@ -256,9 +256,50 @@ export async function deleteTeacher(formData: FormData) {
   if (!teacher) return { error: 'المعلم غير موجود' }
   const tr = await transferStudentsAway(admin, teacherId, replacementId)
   if (tr.error) return { error: tr.error }
-  await admin.from('attendance').update({ teacher_id: null }).eq('teacher_id', teacherId)
+
+  // فك الروابط اللي بتمنع الحذف (مواعيد · حضور · غيابات…)
+  let schedulesRemoved = 0
+  const { data: schedRows, error: schedErr } = await admin
+    .from('schedule_entries')
+    .delete()
+    .eq('teacher_id', teacherId)
+    .select('id')
+  if (schedErr) {
+    console.warn('deleteTeacher schedule_entries', schedErr.message)
+  } else {
+    schedulesRemoved = (schedRows || []).length
+  }
+
+  try {
+    await admin.from('teacher_absences').delete().eq('teacher_id', teacherId)
+  } catch {
+    /* optional table */
+  }
+
+  const { error: attNullErr } = await admin.from('attendance').update({ teacher_id: null }).eq('teacher_id', teacherId)
+  if (attNullErr) {
+    await admin.from('attendance').delete().eq('teacher_id', teacherId)
+  }
+
+  for (const table of ['session_evaluations', 'teacher_evaluations', 'payroll_entries', 'teacher_settlements', 'trial_sessions']) {
+    try {
+      await admin.from(table).delete().eq('teacher_id', teacherId)
+    } catch {
+      /* ignore */
+    }
+  }
+
   const { error: delErr } = await admin.from('teachers').delete().eq('id', teacherId)
-  if (delErr) return { error: `فشل الحذف: ${delErr.message}` }
+  if (delErr) {
+    const msg = delErr.message || ''
+    if (/foreign key|violates/i.test(msg)) {
+      return {
+        error:
+          'فشل الحذف: لسه فيه بيانات مربوطة بالمعلم. جرّب «إيقاف المعلم» بدل الحذف النهائي، أو انقل الطلاب لمعلم بديل الأول.',
+      }
+    }
+    return { error: `فشل الحذف: ${msg}` }
+  }
   if (teacher.profile_id) {
     await admin.from('profiles').update({ is_active: false }).eq('id', teacher.profile_id)
   }
@@ -267,15 +308,19 @@ export async function deleteTeacher(formData: FormData) {
     action: 'teacher_delete',
     entity_type: 'teacher',
     entity_id: teacherId,
-    details: { name: teacher.name, code: teacher.code, students_moved: tr.moved, replacement_teacher_id: replacementId },
+    details: {
+      name: teacher.name,
+      code: teacher.code,
+      students_moved: tr.moved,
+      schedules_removed: schedulesRemoved,
+      replacement_teacher_id: replacementId,
+    },
   })
   revalidateTeacherPaths()
-  return {
-    success: true,
-    message: tr.moved > 0
-      ? `اتحذف المعلم «${teacher.name}» واتنقل ${tr.moved} طالب للمعلم البديل`
-      : `اتحذف المعلم «${teacher.name}»`,
-  }
+  const parts: string[] = [`اتحذف المعلم «${teacher.name}»`]
+  if (tr.moved > 0) parts.push(`اتنقل ${tr.moved} طالب`)
+  if (schedulesRemoved > 0) parts.push(`اتشالت ${schedulesRemoved} موعد`)
+  return { success: true, message: parts.join(' · ') }
 }
 
 export async function autoLinkOrphanTeachers() {
