@@ -1,11 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { addTeacherSession, deleteAttendanceRow } from './actions'
 
-type Student = {
+export type SettleStudent = {
   id: string
   code: string
   name: string
@@ -37,13 +37,15 @@ function cairoToday(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
 }
 
+function norm(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 /** تبويب «حصص المعلم عند الطالب»: بيعدّل سجل المعلم بس (حذف / إضافة حصة منسية) ومبيلمسش عدّاد الطالب. */
-export function SettleShell() {
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState('')
+export function SettleShell({ initialStudents }: { initialStudents: SettleStudent[] }) {
+  const [students] = useState<SettleStudent[]>(initialStudents || [])
   const [q, setQ] = useState('')
-  const [selected, setSelected] = useState<Student | null>(null)
+  const [selected, setSelected] = useState<SettleStudent | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [newDate, setNewDate] = useState(cairoToday)
   const [msg, setMsg] = useState('')
@@ -53,52 +55,20 @@ export function SettleShell() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from('students')
-          .select('id, code, name, last_session_num, monthly_sessions, teacher_id, teachers(name)')
-          .in('status', ['نشط', 'موقوف', 'تجريبي'])
-          .order('name')
-          .limit(800)
-        if (error) throw new Error(error.message)
-        if (cancelled) return
-        const list: Student[] = (data || []).map((s: any) => {
-          const t = Array.isArray(s.teachers) ? s.teachers[0] : s.teachers
-          return {
-            id: s.id,
-            code: s.code,
-            name: s.name,
-            last_session_num: s.last_session_num,
-            monthly_sessions: s.monthly_sessions != null ? Number(s.monthly_sessions) : null,
-            teacher_id: s.teacher_id,
-            teacher_name: t?.name || '—',
-          }
-        })
-        setStudents(list)
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message || 'فشل تحميل الطلاب')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const filtered = useMemo(() => {
-    const t = q.trim().toLowerCase()
-    if (!t) return students.slice(0, 50)
+    const t = norm(q)
+    if (!t) return students.slice(0, 80)
     return students
-      .filter((s) => s.name.toLowerCase().includes(t) || (s.code || '').toLowerCase().includes(t))
-      .slice(0, 60)
+      .filter((s) => {
+        const name = norm(s.name || '')
+        const code = norm(s.code || '')
+        const teacher = norm(s.teacher_name || '')
+        return name.includes(t) || code.includes(t) || teacher.includes(t)
+      })
+      .slice(0, 100)
   }, [q, students])
 
-  async function loadStudentSessions(s: Student) {
+  async function loadStudentSessions(s: SettleStudent) {
     const supabase = createClient()
     const startDate = `${month}-01`
     const endDate = monthEnd(month)
@@ -129,7 +99,7 @@ export function SettleShell() {
     )
   }
 
-  async function pick(s: Student) {
+  async function pick(s: SettleStudent) {
     setSelected(s)
     setMsg('')
     setSessions([])
@@ -194,11 +164,6 @@ export function SettleShell() {
           {msg}
         </p>
       )}
-      {err && (
-        <p className="text-[13px] font-bold text-center rounded-xl py-2" style={{ background: '#ffdad6', color: '#93000a' }}>
-          {err}
-        </p>
-      )}
 
       {!selected && (
         <>
@@ -209,39 +174,35 @@ export function SettleShell() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="ابحث باسم أو كود الطالب..."
+            placeholder="ابحث بالاسم أو الكود أو اسم المعلم..."
             autoFocus
             className="w-full rounded-xl border px-3 py-3 text-[14px] bg-white"
             style={{ borderColor: '#176b52' }}
           />
-          {loading && (
-            <p className="text-center text-[13px] py-6" style={{ color: '#6f7974' }}>
-              جاري تحميل الطلاب...
-            </p>
-          )}
-          {!loading && (
-            <div className="card max-h-[70dvh] overflow-y-auto">
-              {filtered.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => pick(s)}
-                  className="w-full text-right px-3 py-3 border-b text-[13px] active:bg-[#e8f7f0]"
-                  style={{ borderColor: '#f0f5f2' }}
-                >
-                  <span className="font-bold block">{s.name}</span>
-                  <span className="text-[11px]" style={{ color: '#6f7974' }}>
-                    {s.code} · عداد {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} · {s.teacher_name}
-                  </span>
-                </button>
-              ))}
-              {filtered.length === 0 && (
-                <p className="p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
-                  مفيش نتيجة
-                </p>
-              )}
-            </div>
-          )}
+          <p className="text-[11px]" style={{ color: '#6f7974' }}>
+            {q.trim() ? `${filtered.length} نتيجة` : `عرض ${filtered.length} من ${students.length}`}
+          </p>
+          <div className="card max-h-[70dvh] overflow-y-auto">
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => pick(s)}
+                className="w-full text-right px-3 py-3 border-b text-[13px] active:bg-[#e8f7f0]"
+                style={{ borderColor: '#f0f5f2' }}
+              >
+                <span className="font-bold block">{s.name || '—'}</span>
+                <span className="text-[11px]" style={{ color: '#6f7974' }}>
+                  {s.code} · عداد {s.last_session_num ?? 0}/{s.monthly_sessions || '—'} · {s.teacher_name}
+                </span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
+                {students.length === 0 ? 'مفيش طلاب محمّلين' : 'مفيش نتيجة للبحث'}
+              </p>
+            )}
+          </div>
         </>
       )}
 
