@@ -8,6 +8,7 @@ const ADMIN_FEATURES = [
   { href: '/admin/sessions-detail', icon: 'list_alt', title: 'تفاصيل الحصص', desc: 'معلم · طلاب · سعر' },
   { href: '/admin/payments', icon: 'credit_card', title: 'المدفوعات', desc: 'إنستا · فودافون · بنكي' },
   { href: '/admin/activity', icon: 'history', title: 'سجل النشاط', desc: 'تايم لاين' },
+  { href: '/admin/certificates', icon: 'workspace_premium', title: 'شهادات التقدير', desc: 'قوالب متعددة · إرسال واتساب' },
   { href: '/admin/session-settle', icon: 'rule', title: 'حصص المعلم عند طالب', desc: 'حذف · إضافة منسية' },
   { href: '/supervisor/edit-student', icon: 'edit_note', title: 'تعديل عدّاد الطالب', desc: 'آخر حصة · باقة' },
   { href: '/admin/trials', icon: 'science', title: 'الحصص التجريبية', desc: 'طلاب محتملون' },

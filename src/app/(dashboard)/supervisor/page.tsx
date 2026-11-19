@@ -42,6 +42,7 @@ export default async function SupervisorDashboard({
   const duesList = summary.topDues
 
   const menu = [
+    { href: '/admin/certificates', icon: 'workspace_premium', title: 'شهادات التقدير', desc: 'قوالب متعددة · تُرسل للطالب واتساب', color: '#755b1b' },
     { href: '/admin/today', icon: 'today', title: 'مواعيد حلقات اليوم', desc: 'جدول النهاردة بالوقت', color: '#176b52' },
     { href: '/admin/session-settle', icon: 'rule', title: 'حصص المعلم عند طالب', desc: 'تبويب مستقل · حذف غلط · إضافة منسية', color: '#ba1a1a' },
     { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'اسم · اشتراك · سعر · عدّاد الحصص', color: '#176b52' },

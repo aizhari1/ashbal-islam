@@ -42,7 +42,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <h1 className="text-[16px] font-bold truncate">{student.name}</h1>
           <p className="text-[12px] text-[#6f7974]">{student.code}</p>
         </div>
-        <Link href={`/admin/students/${id}/certificate`} className="text-[#c5a45d]">
+        <Link href={`/admin/certificates/new?student=${id}`} className="text-[#c5a45d]">
           <span className="material-symbols-outlined">workspace_premium</span>
         </Link>
       </header>

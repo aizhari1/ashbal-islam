@@ -44,7 +44,7 @@ const ACTIONS = (role: 'admin' | 'supervisor', s: SearchStudent) => {
       desc: 'ملاحظات الإدارة',
     },
     {
-      href: `/admin/students/${s.id}/certificate`,
+      href: `/admin/certificates/new?student=${s.id}`,
       icon: 'workspace_premium',
       title: 'شهادة',
       desc: 'طباعة شهادة',

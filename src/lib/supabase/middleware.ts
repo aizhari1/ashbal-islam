@@ -28,7 +28,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith('/api/student-portal') ||
     pathname.startsWith('/api/student-courses') ||
     pathname.startsWith('/api/course-subscribe') ||
-    pathname.startsWith('/api/cron')
+    pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/certificate/')
 
   if (
     pathname.startsWith('/_next') ||
@@ -157,7 +158,8 @@ export async function updateSession(request: NextRequest) {
             pathname.startsWith('/admin/session-eval') ||
             pathname.startsWith('/admin/session-settle') ||
             pathname.startsWith('/admin/sessions-detail') ||
-            pathname.startsWith('/admin/attended')
+            pathname.startsWith('/admin/attended') ||
+            pathname.startsWith('/admin/certificates')
 
           if (!supervisorAllowed) return deny()
         } else {

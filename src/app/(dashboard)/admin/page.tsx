@@ -53,6 +53,7 @@ export default async function AdminDashboard({
     { href: '/admin/income', icon: 'trending_up', title: 'تحليل الدخل', desc: 'زاد ولا نقص · تحليل كل طالب بالفترة', color: '#176b52' },
     { href: '/admin/session-settle', icon: 'rule', title: 'حصص المعلم عند طالب', desc: 'تبويب مستقل · حذف حصة غلط · إضافة منسية', color: '#ba1a1a' },
     { href: '/admin/payroll', icon: 'account_balance_wallet', title: 'مسير الرواتب', desc: 'حصص × سعر · صرف/تسوية مالية', color: '#755b1b' },
+    { href: '/admin/certificates', icon: 'workspace_premium', title: 'شهادات التقدير', desc: 'قوالب متعددة · تُرسل للطالب واتساب', color: '#755b1b' },
     { href: '/admin/today', icon: 'today', title: 'جدول اليوم', desc: 'حصص النهارده عند كل المعلمين', color: '#176b52' },
     { href: '/admin/cumulative', icon: 'leaderboard', title: 'التقرير التراكمي', desc: 'ترتيب المعلمين بالدرجة المركبة', color: '#176b52' },
     { href: '/admin/courses', icon: 'school', title: 'الكورسات', desc: 'فيديوهات · صور · اشتراكات · تفعيل', color: '#755b1b' },
