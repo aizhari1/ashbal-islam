@@ -1,5 +1,6 @@
 import { serviceClient } from '@/lib/supabase/service'
 import { todayKey } from '@/lib/dues'
+import { sendPushToUser } from '@/lib/push'
 
 export type NotifKind = 'missed_session' | 'today_sessions' | 'admin' | 'system' | 'dues'
 
@@ -15,7 +16,6 @@ export type AppNotification = {
   created_at: string
 }
 
-/** يوم الأسبوع بتوقيت القاهرة (0=أحد … 6=سبت) */
 export function cairoDayOfWeek(d = new Date()): number {
   const cairo = new Date(d.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }))
   return cairo.getDay()
@@ -45,7 +45,7 @@ function parseTimeToMinutes(t: string | null): number | null {
   return Number(m[1]) * 60 + Number(m[2])
 }
 
-/** إنشاء إشعار مع منع التكرار بنفس dedupe_key */
+/** إنشاء إشعار مع منع التكرار + Push خارجي عند الإنشاء */
 export async function createNotification(input: {
   userId: string
   kind: NotifKind | string
@@ -82,20 +82,29 @@ export async function createNotification(input: {
     }
     throw new Error(error.message)
   }
+
+  // إشعار خارجي (VAPID) — للأحداث المهمة فقط
+  if (input.kind === 'missed_session' || input.kind === 'today_sessions' || input.kind === 'admin') {
+    try {
+      await sendPushToUser(input.userId, {
+        title: input.title,
+        body: input.body,
+        url: input.url || '/teacher',
+      })
+    } catch {
+      /* لا نكسر الإنشاء */
+    }
+  }
+
   return { id: data?.id ?? null, created: true }
 }
 
-/**
- * يولّد إشعارات للمعلمين:
- * - ملخص حصص اليوم
- * - بعد مرور موعد الحصة بدون تسجيل: «فاتتك حصة»
- */
 export async function generateTeacherSessionReminders() {
   const sb = serviceClient()
   const today = todayKey()
   const dow = cairoDayOfWeek()
   const { minutesOfDay } = cairoNowParts()
-  const stats = { todaySummaries: 0, missed: 0, teachers: 0 }
+  const stats = { todaySummaries: 0, missed: 0, teachers: 0, pushed: 0 }
 
   const { data: entries, error } = await sb
     .from('schedule_entries')
@@ -108,7 +117,6 @@ export async function generateTeacherSessionReminders() {
 
   const todayEntries = (entries || []).filter((e: any) => {
     if (e.session_date && String(e.session_date).slice(0, 10) === today) return true
-    if (e.day_of_week != null && Number(e.day_of_week) === dow && !e.session_date) return true
     if (e.day_of_week != null && Number(e.day_of_week) === dow) return true
     return false
   })
