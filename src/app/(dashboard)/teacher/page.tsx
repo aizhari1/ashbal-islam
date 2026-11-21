@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 import { resolveTeacherForUser } from '@/lib/resolve-teacher'
+import { NotificationBell } from '@/components/NotificationBell'
 
 export const dynamic = 'force-dynamic'
 
@@ -84,6 +85,7 @@ export default async function TeacherDashboard() {
     { href: '/teacher/trials', icon: 'person_add', title: 'حصصي التجريبية', desc: 'تقرير التجربة والاشتراك' },
     { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: monthLabelAr(monthKey) },
     { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
+    { href: '/teacher/notifications', icon: 'notifications', title: 'الإشعارات', desc: 'حصص فائتة وتنبيهات مهمة' },
     { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },
   ]
 
@@ -91,9 +93,12 @@ export default async function TeacherDashboard() {
     <div className="min-h-dvh max-w-lg mx-auto pb-8 dash-page">
       <div className="px-4 pt-5 pb-6 dash-hero">
         <div className="flex justify-between items-start text-white mb-5">
-          <Link href="/login" className="text-[12px] opacity-80">
-            خروج
-          </Link>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Link href="/login" className="text-[12px] opacity-80">
+              خروج
+            </Link>
+          </div>
           <div className="text-left">
             <h1 className="text-[18px] font-bold text-white">أشبال الإسلام</h1>
             <p className="text-[12px] opacity-85 mt-0.5 text-white">
