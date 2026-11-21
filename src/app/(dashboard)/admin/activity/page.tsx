@@ -1,8 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
+import { serviceClient } from '@/lib/supabase/service'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
+
+/** أحداث الحلقات/الحضور — كتيرة ومش مهمة في السجل الإداري */
+const HIDDEN_ACTIONS = new Set([
+  'session_report',
+  'attendance',
+  'mark_attendance',
+  'teacher_delete_session',
+  'teacher_update_session',
+  'add_teacher_session',
+  'delete_attendance_settle',
+  'reduce_session_remove',
+  'reduce_session_remove_admin_only',
+  'session_num',
+  'session_teacher_eval',
+  'align_counter',
+  'set_last_session',
+  'deleted_session',
+  'whatsapp_report',
+  'cron_daily',
+  'cron_teacher_reminders',
+])
 
 const actionLabel: Record<string, string> = {
   teacher_session_rate: 'تعديل سعر حصة معلم',
@@ -12,38 +34,30 @@ const actionLabel: Record<string, string> = {
   payment_reminder: 'تذكير مالي',
   student_update: 'تعديل بيانات طالب',
   student_status: 'تغيير حالة طالب',
-  session_num: 'تعديل رقم حصة',
+  change_status: 'تغيير حالة طالب',
   trial_add: 'إضافة طالب تجريبي',
   teacher_absence: 'تسجيل غياب معلم',
   trial_report: 'تقرير حصة تجريبية',
-  deleted_session: 'حذف حصة',
-  teacher_delete_session: 'حذف حصة (من المعلم)',
   parent_evaluation: 'تقييم ولي أمر',
   admin_teacher_eval: 'تقييم الإدارة لمعلم',
   supervisor_eval: 'نقاط إشراف',
-  cron_daily: 'مهمة يومية تلقائية',
   delete_payment: 'حذف دفعة',
-  session_report: 'تسجيل حضور / تقرير حصة',
   supervisor_edit_student: 'تعديل طالب (مشرف)',
-  delete_attendance_settle: 'حذف حضور مع تسوية',
-  reduce_session_remove_admin_only: 'حذف حصة تسوية إدارية',
   add_payment: 'إضافة دفعة',
   update_payment: 'تعديل دفعة',
   supervisor_payment: 'دفعة من المشرف',
   create_student: 'إضافة طالب',
+  add_student: 'إضافة طالب',
   delete_student: 'حذف طالب',
   create_package: 'إنشاء باقة',
   update_package: 'تعديل باقة',
   assign_teacher: 'تعيين معلم',
   unassign_teacher: 'إلغاء تعيين معلم',
-  attendance: 'تسجيل حضور',
-  mark_attendance: 'تسجيل حضور',
   settle_salary: 'تسوية راتب',
-  whatsapp_report: 'إرسال تقرير واتساب',
+  finance_expense: 'مصروف مالي',
+  month_archive: 'أرشفة شهر',
   login: 'تسجيل دخول',
   logout: 'تسجيل خروج',
-  align_counter: 'مطابقة عدّاد مع آخر حصة',
-  set_last_session: 'ضبط رقم آخر حصة',
 }
 
 const fieldLabel: Record<string, string> = {
@@ -58,51 +72,40 @@ const fieldLabel: Record<string, string> = {
   prepaid_months: 'أشهر مقدّمة',
   due_after: 'الاستحقاق بعد',
   due_before: 'الاستحقاق قبل',
-  session_num: 'رقم الحصة',
   date: 'التاريخ',
-  session_date: 'تاريخ الحصة',
   status: 'الحالة',
   prev_status: 'الحالة السابقة',
   package_size: 'حجم الباقة',
-  package_complete: 'اكتمال الباقة',
   package_id: 'الباقة',
   teacher_id: 'المعلم',
   last_session_num: 'آخر رقم حصة',
   price_per_session: 'سعر الحصة',
   teacher_session_rate: 'سعر حصة المعلم',
-  report: 'التقرير',
-  evaluation: 'التقييم',
-  homework: 'الواجب',
   from: 'من',
   to: 'إلى',
   actor: 'بواسطة',
   new_date: 'التاريخ الجديد',
-  old_date: 'التاريخ القديم',
+  old_date: 'التاريخ السابق',
   new_amount: 'المبلغ الجديد',
   old_amount: 'المبلغ السابق',
-  new_due: 'المستحق بعد',
-  prev_due: 'المستحق قبل',
-  partial: 'دفعة جزئية',
+  new_due: 'الاستحقاق الجديد',
+  prev_due: 'الاستحقاق السابق',
   student_name: 'الطالب',
   teacher_name: 'المعلم',
+  partial: 'دفعة جزئية',
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUuid(v: unknown): boolean {
-  return typeof v === 'string' && UUID_RE.test(v.trim())
+function isUuid(s: unknown): boolean {
+  return typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)
 }
 
-function humanAction(action: string | null | undefined): string {
-  const a = String(action || '').trim()
-  if (!a) return 'إجراء'
+function humanAction(a: string | null | undefined): string {
+  if (!a) return 'حدث'
   if (actionLabel[a]) return actionLabel[a]
   return a
     .replace(/_/g, ' ')
     .replace(/\bupdate\b/gi, 'تعديل')
     .replace(/\bpayment\b/gi, 'دفعة')
-    .replace(/\bsession\b/gi, 'حصة')
-    .replace(/\breport\b/gi, 'تقرير')
     .replace(/\bstudent\b/gi, 'طالب')
     .replace(/\bteacher\b/gi, 'معلم')
     .replace(/\bsupervisor\b/gi, 'مشرف')
@@ -120,7 +123,6 @@ function normalizeDetails(details: unknown): Record<string, unknown> {
     } catch {
       /* not JSON */
     }
-    // "key: value · key: value" fallback
     const out: Record<string, unknown> = {}
     for (const part of t.split(/\s*[·|]\s*/)) {
       const m = part.match(/^([^:]+):\s*(.*)$/)
@@ -143,14 +145,15 @@ function fmtValue(v: unknown, names?: Record<string, string>): string {
       return `${String(o.name)}${code}`
     }
     if ('from' in o && 'to' in o) return `${fmtValue(o.from, names)} ← ${fmtValue(o.to, names)}`
-    if ('to' in o && o.to != null) return String(o.to)
+    if ('to' in o && o.to != null) {
+      const to = o.to
+      if (isUuid(to)) return names?.[String(to)] || '—'
+      return String(to)
+    }
     return '—'
   }
   const s = String(v).trim()
   if (isUuid(s)) return names?.[s] || '—'
-  if (s === 'حاضر' || s === 'present') return 'حاضر'
-  if (s === 'غائب' || s === 'absent') return 'غائب'
-  if (s === 'متأخر') return 'متأخر'
   return s
 }
 
@@ -163,9 +166,7 @@ function formatDetails(details: unknown, names?: Record<string, string>): string
     'code',
     'status',
     'prev_status',
-    'session_num',
     'date',
-    'session_date',
     'payment_date',
     'amount',
     'new_amount',
@@ -179,36 +180,28 @@ function formatDetails(details: unknown, names?: Record<string, string>): string
     'notes',
     'note',
     'package_size',
-    'package_complete',
+    'package_id',
+    'teacher_id',
+    'teacher_name',
     'last_session_num',
     'price_per_session',
     'teacher_session_rate',
-    'teacher_name',
+    'from',
+    'to',
   ]
-
-  const seen = new Set<string>()
+  const used = new Set<string>()
   for (const k of preferred) {
     if (!(k in d)) continue
-    seen.add(k)
-    const val = d[k]
-    if (val == null || val === '') continue
-    if (isUuid(val) && !(names && names[String(val)])) continue
-    lines.push(`${fieldLabel[k] || k}: ${fmtValue(val, names)}`)
+    used.add(k)
+    const v = d[k]
+    if (v === null || v === undefined || v === '') continue
+    lines.push(`${fieldLabel[k] || k}: ${fmtValue(v, names)}`)
   }
-
-  // student_id → اسم إن وُجد
-  if (d.student_id && isUuid(d.student_id) && names?.[String(d.student_id)]) {
-    if (!seen.has('student_name') && !seen.has('name')) {
-      lines.unshift(`الطالب: ${names[String(d.student_id)]}`)
-    }
-  }
-
   for (const [k, v] of Object.entries(d)) {
-    if (seen.has(k)) continue
-    if (v == null || v === '') continue
-    if (k.endsWith('_id') || k === 'attendance_id' || k === 'entity_id') continue
-    if (isUuid(v) && !(names && names[String(v)])) continue
-    if (typeof v === 'object') continue
+    if (used.has(k)) continue
+    if (k === 'actor' || k === 'at' || k === 'actor_id') continue
+    if (v === null || v === undefined || v === '') continue
+    if (typeof v === 'object' && !('from' in (v as object)) && !('to' in (v as object)) && !('name' in (v as object))) continue
     lines.push(`${fieldLabel[k] || k}: ${fmtValue(v, names)}`)
   }
   return lines
@@ -221,47 +214,82 @@ export default async function ActivityLogPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: logs } = await supabase
+  const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  const role = String(me?.role || '')
+  if (!['admin', 'supervisor'].includes(role)) redirect('/login')
+
+  let sb: any = supabase
+  try {
+    sb = serviceClient()
+  } catch {
+    sb = supabase
+  }
+
+  // نجيب كمية أكبر وبعدين نشيل ضوضاء الحلقات
+  const { data: raw } = await sb
     .from('activity_log')
     .select('id, action, entity_id, entity_type, details, created_at, actor_id')
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(800)
 
-  const actorIds = Array.from(
-    new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean) as string[])
-  )
+  const logs = (raw || []).filter((l: any) => !HIDDEN_ACTIONS.has(String(l.action || ''))).slice(0, 200)
 
-  const studentIds = new Set<string>()
-  for (const l of logs ?? []) {
+  const actorIds = Array.from(new Set(logs.map((l: any) => l.actor_id).filter(Boolean) as string[]))
+
+  const idBag = new Set<string>()
+  for (const l of logs) {
     const d = normalizeDetails(l.details)
-    if (isUuid(d.student_id)) studentIds.add(String(d.student_id))
-    if (l.entity_type === 'student' && isUuid(l.entity_id)) studentIds.add(String(l.entity_id))
+    if (isUuid(d.student_id)) idBag.add(String(d.student_id))
+    if (isUuid(d.teacher_id)) idBag.add(String(d.teacher_id))
+    if (l.entity_type === 'student' && isUuid(l.entity_id)) idBag.add(String(l.entity_id))
+    if (l.entity_type === 'teacher' && isUuid(l.entity_id)) idBag.add(String(l.entity_id))
+    // teacher_id: { from, to }
+    const tid = d.teacher_id as any
+    if (tid && typeof tid === 'object') {
+      if (isUuid(tid.from)) idBag.add(String(tid.from))
+      if (isUuid(tid.to)) idBag.add(String(tid.to))
+    }
   }
 
   const names: Record<string, string> = {}
-  if (studentIds.size) {
-    const { data: students } = await supabase
-      .from('students')
-      .select('id, name, code')
-      .in('id', Array.from(studentIds))
+  if (idBag.size) {
+    const ids = Array.from(idBag)
+    const [{ data: students }, { data: teachers }] = await Promise.all([
+      sb.from('students').select('id, name, code').in('id', ids),
+      sb.from('teachers').select('id, name').in('id', ids),
+    ])
     for (const s of students || []) {
       names[s.id] = s.code ? `${s.name} (${s.code})` : String(s.name)
+    }
+    for (const t of teachers || []) {
+      names[t.id] = String(t.name)
     }
   }
 
   const actorNames: Record<string, string> = {}
+  const actorRoles: Record<string, string> = {}
   if (actorIds.length) {
-    const { data: profiles } = await supabase.from('profiles').select('id, full_name, name, email').in('id', actorIds)
+    const { data: profiles } = await sb
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .in('id', actorIds)
     for (const p of profiles || []) {
-      const n = (p as any).full_name || (p as any).name || (p as any).email
-      if (n) actorNames[p.id] = String(n)
+      const n = p.full_name || p.email || 'مستخدم'
+      actorNames[p.id] = String(n)
+      actorRoles[p.id] = String(p.role || '')
     }
   }
+
+  const roleAr = (r: string) =>
+    r === 'admin' ? 'إدارة' : r === 'supervisor' ? 'إشراف' : r === 'teacher' ? 'معلم' : r || ''
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-24" style={{ background: '#eefdf6' }}>
       <header className="px-4 py-3 flex items-center gap-3">
-        <Link href="/admin" className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm">
+        <Link
+          href={role === 'supervisor' ? '/supervisor' : '/admin'}
+          className="w-9 h-9 rounded-full bg-white flex items-center justify-center shadow-sm"
+        >
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
         <div>
@@ -269,15 +297,16 @@ export default async function ActivityLogPage() {
             سجل النشاط
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            {logs?.length ?? 0} حدث · آخر 200 · عرض مترجم
+            {logs.length} حدث مهم · بدون حلقات الحضور · مين اللي غيّر إيه
           </p>
         </div>
       </header>
 
       <div className="px-4 space-y-2">
-        {(logs ?? []).map((l) => {
+        {logs.map((l: any) => {
           const lines = formatDetails(l.details, names)
           const actor = l.actor_id ? actorNames[l.actor_id] : null
+          const aRole = l.actor_id ? roleAr(actorRoles[l.actor_id] || '') : ''
           return (
             <div key={l.id} className="card p-3">
               <div className="flex justify-between gap-2 items-start">
@@ -294,11 +323,19 @@ export default async function ActivityLogPage() {
                     : '—'}
                 </p>
               </div>
-              {actor && (
-                <p className="text-[11px] mt-0.5" style={{ color: '#176b52' }}>
-                  بواسطة: {actor}
-                </p>
-              )}
+
+              <p className="text-[12px] font-bold mt-1" style={{ color: actor ? '#176b52' : '#9aa5a0' }}>
+                {actor ? (
+                  <>
+                    <span className="material-symbols-outlined text-[14px] align-middle ml-0.5">person</span>
+                    بواسطة: {actor}
+                    {aRole ? ` · ${aRole}` : ''}
+                  </>
+                ) : (
+                  'بواسطة: نظام / غير معروف'
+                )}
+              </p>
+
               {lines.length > 0 ? (
                 <ul className="mt-1.5 space-y-0.5">
                   {lines.map((line, i) => (
@@ -307,17 +344,14 @@ export default async function ActivityLogPage() {
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="text-[11px] mt-1" style={{ color: '#6f7974' }}>
-                  —
-                </p>
-              )}
+              ) : null}
             </div>
           )
         })}
-        {(logs ?? []).length === 0 && (
+
+        {logs.length === 0 && (
           <p className="text-center text-[13px] py-8" style={{ color: '#6f7974' }}>
-            لا أحداث بعد
+            لا أحداث مهمة بعد
           </p>
         )}
       </div>
