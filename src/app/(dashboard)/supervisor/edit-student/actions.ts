@@ -9,86 +9,85 @@ import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
 function revalidateAll() {
   for (const p of [
     '/supervisor/edit-student',
-    '/supervisor/edit-session',
     '/admin/students',
-    '/admin/edit-session',
     '/admin/session-settle',
-    '/admin/sessions-detail',
+    '/admin/income',
     '/admin/payroll',
-    '/teacher',
-    '/teacher/session',
-    '/teacher/attendance',
-    '/teacher/dues',
+    '/admin/finance',
     '/teacher/students',
-    '/supervisor',
+    '/teacher/dues',
   ]) {
     revalidatePath(p)
   }
 }
 
-/**
- * تعديل بيانات الطالب فقط.
- * لا يضيف ولا يحذف حصص من سجل المعلم — المزامنة من صفحة التسوية / تعديل رقم الحصة.
- */
+export async function loadStudentExtraCosts(studentId: string) {
+  try {
+    const sb = serviceClient()
+    const { data } = await sb
+      .from('activity_log')
+      .select('details, created_at')
+      .eq('entity_id', studentId)
+      .eq('action', 'student_extra_costs')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const d = (data?.details || {}) as Record<string, unknown>
+    return {
+      ads_fee: Number(d.ads_fee) || 0,
+      supervision_fee: Number(d.supervision_fee) || 0,
+      other_fee: Number(d.other_fee) || 0,
+    }
+  } catch {
+    return { ads_fee: 0, supervision_fee: 0, other_fee: 0 }
+  }
+}
+
 export async function supervisorEditStudent(formData: FormData) {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return { error: 'غير مسجل' }
-  const __staff = await requireStaff()
-  if (!__staff.ok) return { error: __staff.error }
+  if (!user) return { error: 'غير مصرح' }
+  const staff = await requireStaff()
+  if (!staff.ok) return { error: staff.error }
 
   const studentId = String(formData.get('student_id') || '')
   if (!studentId) return { error: 'اختر طالب' }
 
   const sb = serviceClient()
-  const { data: before, error: beforeErr } = await sb
+  const { data: before } = await sb
     .from('students')
     .select(
       'id, name, code, last_session_num, amount_due, teacher_id, session_duration, price_per_session, monthly_sessions, subscription_type, package_id'
     )
     .eq('id', studentId)
     .maybeSingle()
-  if (beforeErr) return { error: beforeErr.message }
   if (!before) return { error: 'الطالب غير موجود' }
 
   const oldLast = Number(before.last_session_num || 0)
   const rawLast = formData.get('last_session_num')
-  const submittedLast =
+  let newLast =
     rawLast === null || String(rawLast).trim() === ''
       ? oldLast
       : Math.max(0, Math.floor(Number(rawLast) || 0))
-  // لو الرقم زي ما كان وقت فتح الفورم → المشرف ما غيّروش: نسيب العدّاد الحالي في الداتا (ممكن المعلم سجّل حصص بعد ما الصفحة اتفتحت)
   const origLastRaw = formData.get('orig_last_session_num')
-  const lastUnchanged = origLastRaw !== null && String(origLastRaw).trim() !== '' && Number(origLastRaw) === submittedLast
-  const newLast = lastUnchanged ? oldLast : submittedLast
-
-  const packageIdRaw = String(formData.get('package_id') || '').trim()
-  let sessions = Number(formData.get('monthly_sessions') || 0) || null
-  let perSession = Number(formData.get('price_per_session') || 0) || null
-  let duration = Number(formData.get('session_duration') || 30) || 30
-  let amountDue = Number(formData.get('amount_due') || 0) || 0
-  let packageId: string | null = packageIdRaw || null
-  let subscriptionType: string | null = null
-
-  if (packageIdRaw) {
-    const { data: pkg, error: pkgErr } = await sb
-      .from('packages')
-      .select('id, name, sessions_count, duration_minutes, price, currency')
-      .eq('id', packageIdRaw)
-      .maybeSingle()
-    if (pkgErr || !pkg) return { error: 'الباقة المختارة غير موجودة' }
-    sessions = Number(pkg.sessions_count) || sessions
-    perSession =
-      Math.round((Number(pkg.price) / Math.max(1, Number(pkg.sessions_count))) * 100) / 100
-    duration = Number(pkg.duration_minutes) || duration
-    amountDue = Number(pkg.price) || amountDue
-    packageId = pkg.id
-    subscriptionType = 'باقة'
-  } else if (formData.has('package_id')) {
-    packageId = null
+  if (origLastRaw !== null && String(origLastRaw).trim() !== '' && Number(origLastRaw) === newLast) {
+    const { data: fresh } = await sb.from('students').select('last_session_num').eq('id', studentId).maybeSingle()
+    if (fresh && Number(fresh.last_session_num) !== oldLast) {
+      newLast = Number(fresh.last_session_num) || newLast
+    }
   }
+
+  const sessions = formData.get('monthly_sessions') ? Number(formData.get('monthly_sessions')) : null
+  const duration = formData.get('session_duration') ? Number(formData.get('session_duration')) : null
+  let perSession = Number(formData.get('price_per_session') || 0) || null
+  if (perSession != null && perSession < 0) return { error: 'سعر الحصة غير صالح' }
+  if (perSession != null) perSession = Math.round(perSession * 100) / 100
+
+  const amountDue = Number(formData.get('amount_due') || 0)
+  const packageId = String(formData.get('package_id') || '').trim() || null
+  const subscriptionType = packageId ? 'باقة' : String(formData.get('subscription_type') || '') || null
 
   const quota = (sessions && sessions > 0 ? sessions : null) || packageSize(before)
   const check = validateSessionWithinPackage(newLast, quota)
@@ -113,12 +112,11 @@ export async function supervisorEditStudent(formData: FormData) {
 
   const rawRate = formData.get('teacher_session_rate')
   if (rawRate !== null && String(rawRate).trim() !== '') {
-    const r = Number(rawRate)
+    const r = Math.round((Number(rawRate) || 0) * 100) / 100
     if (!(r > 0)) return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
     payload.teacher_session_rate = r
   }
 
-  // نفس الحماية للمستحق: لو ما اتغيّرش في الفورم ما نكتبش فوق القيمة الحالية
   const origDueRaw = formData.get('orig_amount_due')
   if (origDueRaw !== null && String(origDueRaw).trim() !== '' && Number(origDueRaw) === amountDue) {
     delete payload.amount_due
@@ -142,6 +140,28 @@ export async function supervisorEditStudent(formData: FormData) {
     }
   }
 
+  const adsFee = Math.max(0, Math.round((Number(formData.get('ads_fee') || 0) || 0) * 100) / 100)
+  const supervisionFee = Math.max(
+    0,
+    Math.round((Number(formData.get('supervision_fee') || 0) || 0) * 100) / 100
+  )
+  const otherFee = Math.max(0, Math.round((Number(formData.get('other_fee') || 0) || 0) * 100) / 100)
+
+  await sb.from('activity_log').insert({
+    actor_id: user.id,
+    action: 'student_extra_costs',
+    entity_type: 'student',
+    entity_id: studentId,
+    details: {
+      ads_fee: adsFee,
+      supervision_fee: supervisionFee,
+      other_fee: otherFee,
+      price_per_session: perSession,
+      teacher_session_rate: payload.teacher_session_rate ?? null,
+      monthly_sessions: sessions,
+    },
+  })
+
   await sb.from('activity_log').insert({
     actor_id: user.id,
     action: 'supervisor_edit_student',
@@ -154,17 +174,31 @@ export async function supervisorEditStudent(formData: FormData) {
       package_id: packageId,
       price_per_session: perSession,
       teacher_session_rate: payload.teacher_session_rate ?? null,
+      ads_fee: adsFee,
+      supervision_fee: supervisionFee,
+      other_fee: otherFee,
     },
   })
 
   revalidateAll()
+  const sess = sessions && sessions > 0 ? sessions : Number(before.monthly_sessions) || 0
+  const parent = Number(perSession) || 0
+  const teacher = Number(payload.teacher_session_rate) || 0
+  const income = parent * sess
+  const cost = teacher * sess + adsFee + supervisionFee + otherFee
+  const profit = income - cost
+  const profitNote =
+    sess > 0
+      ? ` · ربح تقريبي ${Math.round(profit * 100) / 100} ج (${profit >= 0 ? 'مكسب' : 'خسارة'})`
+      : ''
+
   return {
     success: true,
     message:
-      newLast !== oldLast
+      (newLast !== oldLast
         ? `تم الحفظ · رقم الحصة ${oldLast} → ${newLast}`
         : packageId
           ? 'تم حفظ بيانات الطالب والباقة'
-          : 'تم حفظ بيانات الطالب',
+          : 'تم حفظ بيانات الطالب') + profitNote,
   }
 }
