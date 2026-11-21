@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { StudentPicker } from './StudentPicker'
 import { EditStudentForm } from './EditStudentForm'
+import { loadStudentExtraCosts } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,16 @@ export default async function SupervisorEditStudentPage({
   ])
 
   const selected = students?.find((s) => s.id === sp.id) || null
+  const costs = selected ? await loadStudentExtraCosts(selected.id) : null
+  const selectedWithCosts = selected
+    ? {
+        ...selected,
+        ads_fee: costs?.ads_fee ?? 0,
+        supervision_fee: costs?.supervision_fee ?? 0,
+        other_fee: costs?.other_fee ?? 0,
+      }
+    : null
+
   const pickerList = (students ?? []).map((s: any) => ({
     id: s.id,
     code: s.code,
@@ -72,44 +83,28 @@ export default async function SupervisorEditStudentPage({
             تعديل بيانات طالب
           </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
-            ابحث · باقة · عدّل · احفظ
+            باقة · أسعار · مصاريف · عدّاد · ربح تقريبي
           </p>
         </div>
       </header>
 
-      <Suspense fallback={<p className="px-4 text-[13px]">جاري التحميل...</p>}>
-        <StudentPicker students={pickerList} selectedId={selected?.id} />
-      </Suspense>
+      <div className="px-4 space-y-3">
+        <Suspense fallback={<p className="text-center text-[13px] py-4">جاري التحميل...</p>}>
+          <StudentPicker students={pickerList} selectedId={sp.id || ''} />
+        </Suspense>
 
-      {selected && (
-        <div className="px-4">
+        {selectedWithCosts ? (
           <EditStudentForm
-            key={[
-              selected.id,
-              selected.name,
-              selected.phone,
-              selected.teacher_id,
-              selected.monthly_sessions,
-              selected.session_duration,
-              selected.last_session_num,
-              selected.amount_due,
-              selected.price_per_session,
-              (selected as any).teacher_session_rate,
-              (selected as any).package_id,
-              selected.join_date,
-            ].join('|')}
-            student={selected as any}
+            student={selectedWithCosts as any}
             teachers={teacherOptions}
-            packages={(packages as any) ?? []}
+            packages={(packages as any) || []}
           />
-        </div>
-      )}
-
-      {!selected && (
-        <p className="text-center text-[13px] px-4" style={{ color: '#6f7974' }}>
-          اكتب في خانة البحث فوق واختار طالب عشان تظهر بياناته
-        </p>
-      )}
+        ) : (
+          <p className="card p-4 text-center text-[13px]" style={{ color: '#6f7974' }}>
+            اختار طالب من البحث فوق عشان تعدّل بياناته
+          </p>
+        )}
+      </div>
     </div>
   )
 }
