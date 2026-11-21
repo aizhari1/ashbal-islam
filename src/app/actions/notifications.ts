@@ -15,6 +15,14 @@ export async function getMyNotifications() {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'غير مصرح', items: [], unread: 0 }
+
+  // حدّث تذكيرات الحصص عند فتح الجرس (خفيف + آمن للتكرار)
+  try {
+    await generateTeacherSessionReminders()
+  } catch {
+    /* لا نكسر التحميل */
+  }
+
   try {
     const [items, unread] = await Promise.all([
       listUserNotifications(user.id, 50),
