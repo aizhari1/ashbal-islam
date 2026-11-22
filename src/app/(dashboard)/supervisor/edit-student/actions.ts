@@ -1,7 +1,6 @@
 'use server'
 
 import { requireStaff } from '@/lib/auth-guards'
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { serviceClient } from '@/lib/supabase/service'
 import { packageSize, validateSessionWithinPackage } from '@/lib/dues'
@@ -44,13 +43,9 @@ export async function loadStudentExtraCosts(studentId: string) {
 }
 
 export async function supervisorEditStudent(formData: FormData) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'غير مصرح' }
   const staff = await requireStaff()
-  if (!staff.ok) return { error: staff.error }
+  if (!staff.ok) return { error: staff.error || 'غير مصرح' }
+  const user = { id: staff.userId! }
 
   const studentId = String(formData.get('student_id') || '')
   if (!studentId) return { error: 'اختر طالب' }
@@ -74,55 +69,63 @@ export async function supervisorEditStudent(formData: FormData) {
   const origLastRaw = formData.get('orig_last_session_num')
   if (origLastRaw !== null && String(origLastRaw).trim() !== '' && Number(origLastRaw) === newLast) {
     const { data: fresh } = await sb.from('students').select('last_session_num').eq('id', studentId).maybeSingle()
-    if (fresh && Number(fresh.last_session_num) !== oldLast) {
-      newLast = Number(fresh.last_session_num) || newLast
+    if (fresh && Number(fresh.last_session_num || 0) !== newLast) {
+      newLast = Number(fresh.last_session_num || 0)
     }
   }
 
-  const sessions = formData.get('monthly_sessions') ? Number(formData.get('monthly_sessions')) : null
-  const duration = formData.get('session_duration') ? Number(formData.get('session_duration')) : null
-  let perSession = Number(formData.get('price_per_session') || 0) || null
-  if (perSession != null && perSession < 0) return { error: 'سعر الحصة غير صالح' }
-  if (perSession != null) perSession = Math.round(perSession * 100) / 100
+  const name = String(formData.get('name') || '').trim()
+  if (!name) return { error: 'الاسم مطلوب' }
 
-  const amountDue = Number(formData.get('amount_due') || 0)
+  const phone = String(formData.get('phone') || '').trim() || null
+  const status = String(formData.get('status') || '').trim() || null
+  const newTeacherId = String(formData.get('teacher_id') || '').trim() || null
   const packageId = String(formData.get('package_id') || '').trim() || null
-  const subscriptionType = packageId ? 'باقة' : String(formData.get('subscription_type') || '') || null
 
-  const quota = (sessions && sessions > 0 ? sessions : null) || packageSize(before)
-  const check = validateSessionWithinPackage(newLast, quota)
-  if (!check.ok) return { error: check.error }
-
-  const newTeacherId = String(formData.get('teacher_id') || '') || null
-  const joinRaw = String(formData.get('join_date') || '').trim()
-
-  const payload: Record<string, unknown> = {
-    name: String(formData.get('name') || '').trim() || undefined,
-    phone: String(formData.get('phone') || '') || null,
-    monthly_sessions: sessions,
-    session_duration: duration,
-    price_per_session: perSession,
-    amount_due: amountDue,
-    last_session_num: newLast,
-    teacher_id: newTeacherId,
-    package_id: packageId,
+  let sessions: number | null = null
+  const rawSessions = formData.get('monthly_sessions')
+  if (rawSessions !== null && String(rawSessions).trim() !== '') {
+    sessions = Math.max(0, Math.floor(Number(rawSessions) || 0))
   }
-  if (subscriptionType) payload.subscription_type = subscriptionType
-  if (joinRaw) payload.join_date = joinRaw.slice(0, 10)
 
+  let duration: number | null = null
+  const rawDur = formData.get('session_duration')
+  if (rawDur !== null && String(rawDur).trim() !== '') {
+    duration = Math.max(0, Math.floor(Number(rawDur) || 0))
+  }
+
+  let perSession: number | null = null
+  const rawPrice = formData.get('price_per_session')
+  if (rawPrice !== null && String(rawPrice).trim() !== '') {
+    perSession = Math.round((Number(rawPrice) || 0) * 100) / 100
+  }
+  if (perSession != null && perSession < 0) return { error: 'سعر الحصة غير صالح' }
+
+  let teacherRate: number | null = null
   const rawRate = formData.get('teacher_session_rate')
   if (rawRate !== null && String(rawRate).trim() !== '') {
-    const r = Math.round((Number(rawRate) || 0) * 100) / 100
-    if (!(r > 0)) return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
-    payload.teacher_session_rate = r
+    teacherRate = Math.round((Number(rawRate) || 0) * 100) / 100
+  }
+  if (teacherRate != null && !(teacherRate > 0)) {
+    return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
   }
 
-  const origDueRaw = formData.get('orig_amount_due')
-  if (origDueRaw !== null && String(origDueRaw).trim() !== '' && Number(origDueRaw) === amountDue) {
-    delete payload.amount_due
-  }
+  const pkgSize = packageId ? await packageSize(sb as any, packageId) : Number(before.monthly_sessions) || 0
+  const check = validateSessionWithinPackage(newLast, pkgSize || sessions || Number(before.monthly_sessions) || 0)
+  if (!check.ok) return { error: check.error }
 
-  Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k])
+  const payload: Record<string, unknown> = {
+    name,
+    phone,
+    last_session_num: newLast,
+  }
+  if (status) payload.status = status
+  if (newTeacherId !== undefined) payload.teacher_id = newTeacherId || null
+  if (packageId) payload.package_id = packageId
+  if (sessions != null) payload.monthly_sessions = sessions
+  if (duration != null) payload.session_duration = duration
+  if (perSession != null) payload.price_per_session = perSession
+  if (teacherRate != null) payload.teacher_session_rate = teacherRate
 
   const { error } = await sb.from('students').update(payload).eq('id', studentId)
   if (error) {
@@ -132,20 +135,16 @@ export async function supervisorEditStudent(formData: FormData) {
       if (e2) return { error: e2.message }
     } else if (/teacher_session_rate/.test(error.message)) {
       return {
-        error:
-          'عمود سعر المعلم مش موجود — نفّذ migration 009_teacher_session_rate.sql في Supabase ثم جرّب تاني',
+        error: error.message + ' — عمود سعر المعلم مش موجود؟ راجع قاعدة البيانات',
       }
     } else {
       return { error: error.message }
     }
   }
 
-  const adsFee = Math.max(0, Math.round((Number(formData.get('ads_fee') || 0) || 0) * 100) / 100)
-  const supervisionFee = Math.max(
-    0,
-    Math.round((Number(formData.get('supervision_fee') || 0) || 0) * 100) / 100
-  )
-  const otherFee = Math.max(0, Math.round((Number(formData.get('other_fee') || 0) || 0) * 100) / 100)
+  const adsFee = Math.round((Number(formData.get('ads_fee') || 0) || 0) * 100) / 100
+  const supervisionFee = Math.round((Number(formData.get('supervision_fee') || 0) || 0) * 100) / 100
+  const otherFee = Math.round((Number(formData.get('other_fee') || 0) || 0) * 100) / 100
 
   await sb.from('activity_log').insert({
     actor_id: user.id,
