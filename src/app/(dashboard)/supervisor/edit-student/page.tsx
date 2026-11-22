@@ -95,6 +95,7 @@ export default async function SupervisorEditStudentPage({
 
         {selectedWithCosts ? (
           <EditStudentForm
+            key={(selectedWithCosts as any).id}
             student={selectedWithCosts as any}
             teachers={teacherOptions}
             packages={(packages as any) || []}
