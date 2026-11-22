@@ -23,6 +23,7 @@ type Student = {
   session_duration: number | null
   last_session_num: number | null
   amount_due: number | null
+  manual_due?: number | null
   price_per_session: number | null
   teacher_session_rate?: number | null
   teacher_id: string | null
@@ -77,7 +78,7 @@ export function EditStudentForm({
       ? String(student.teacher_session_rate)
       : ''
   )
-  const [amountDue, setAmountDue] = useState(String(student.amount_due ?? 0))
+  const [manualDue, setManualDue] = useState(String(student.manual_due ?? student.amount_due ?? 0))
   const [adsFee, setAdsFee] = useState(String(student.ads_fee ?? 0))
   const [supervisionFee, setSupervisionFee] = useState(String(student.supervision_fee ?? 0))
   const [otherFee, setOtherFee] = useState(String(student.other_fee ?? 0))
@@ -94,7 +95,7 @@ export function EditStudentForm({
     setMonthlySessions(String(p.sessions_count || 8))
     setSessionDuration(String(p.duration_minutes || 30))
     setPricePerSession(String(perSession(p)))
-    setAmountDue(String(Number(p.price) || 0))
+    setManualDue(String(Number(p.price) || 0))
   }
 
   const profitPreview = useMemo(() => {
@@ -130,7 +131,7 @@ export function EditStudentForm({
           session_duration: sessionDuration,
           price_per_session: pricePerSession,
           teacher_session_rate: teacherRate,
-          amount_due: amountDue,
+          manual_due: manualDue,
           last_session_num: String(fd.get('last_session_num') || ''),
           orig_last_session_num: String(fd.get('orig_last_session_num') || ''),
           ads_fee: adsFee,
@@ -296,19 +297,19 @@ export function EditStudentForm({
             style={inputStyle}
           />
         </Field>
-        <Field label="المستحق الحالي (ج)">
+        <Field label="مستحق مسجّل يدويًا (ج)">
           <input
             type="number"
             min={0}
             step="0.01"
             inputMode="decimal"
-            value={amountDue}
-            onChange={(e) => setAmountDue(e.target.value)}
+            value={manualDue}
+            onChange={(e) => setManualDue(e.target.value)}
             className={inputCls}
             style={inputStyle}
           />
           <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-            عند اختيار باقة = سعر الباقة كامل
+            بيتسجل لوحده ومبيتمسحش بالمزامنة. الإجمالي الظاهر: {Number(student.amount_due ?? 0)} ج
           </p>
         </Field>
       </div>
