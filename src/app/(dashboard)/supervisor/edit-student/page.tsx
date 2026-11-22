@@ -5,8 +5,20 @@ import { Suspense } from 'react'
 import { StudentPicker } from './StudentPicker'
 import { EditStudentForm } from './EditStudentForm'
 import { loadStudentExtraCosts } from './actions'
+import { serviceClient } from '@/lib/supabase/service'
 
 export const dynamic = 'force-dynamic'
+
+async function loadManualDue(studentId: string): Promise<number> {
+  try {
+    const sb = serviceClient()
+    const { data, error } = await sb.from('students').select('manual_due').eq('id', studentId).maybeSingle()
+    if (error) return 0
+    return Math.max(0, Number((data as any)?.manual_due) || 0)
+  } catch {
+    return 0
+  }
+}
 
 export default async function SupervisorEditStudentPage({
   searchParams,
@@ -49,9 +61,11 @@ export default async function SupervisorEditStudentPage({
 
   const selected = students?.find((s) => s.id === sp.id) || null
   const costs = selected ? await loadStudentExtraCosts(selected.id) : null
+  const manualDue = selected ? await loadManualDue(selected.id) : 0
   const selectedWithCosts = selected
     ? {
         ...selected,
+        manual_due: manualDue,
         ads_fee: costs?.ads_fee ?? 0,
         supervision_fee: costs?.supervision_fee ?? 0,
         other_fee: costs?.other_fee ?? 0,
