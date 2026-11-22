@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { supervisorEditStudent } from './actions'
 import { tenureLabel } from '@/lib/student-tenure'
 
 type Teacher = { id: string; name: string }
@@ -116,31 +115,50 @@ export function EditStudentForm({
     e.preventDefault()
     const form = e.currentTarget
     const fd = new FormData(form)
-    fd.set('package_id', packageId)
-    fd.set('monthly_sessions', monthlySessions)
-    fd.set('session_duration', sessionDuration)
-    fd.set('price_per_session', pricePerSession)
-    fd.set('teacher_session_rate', teacherRate)
-    fd.set('amount_due', amountDue)
-    fd.set('ads_fee', adsFee)
-    fd.set('supervision_fee', supervisionFee)
-    fd.set('other_fee', otherFee)
     setMsg(null)
     startTransition(async () => {
-      const r = await supervisorEditStudent(fd)
-      if (r?.error) setMsg({ type: 'err', text: r.error })
-      else {
-        setMsg({ type: 'ok', text: (r as any)?.message || 'تم الحفظ ✓' })
+      try {
+        const body = {
+          student_id: student.id,
+          name: String(fd.get('name') || ''),
+          phone: String(fd.get('phone') || ''),
+          join_date: String(fd.get('join_date') || ''),
+          teacher_id: String(fd.get('teacher_id') || ''),
+          status: String(fd.get('status') || ''),
+          package_id: packageId,
+          monthly_sessions: monthlySessions,
+          session_duration: sessionDuration,
+          price_per_session: pricePerSession,
+          teacher_session_rate: teacherRate,
+          amount_due: amountDue,
+          last_session_num: String(fd.get('last_session_num') || ''),
+          orig_last_session_num: String(fd.get('orig_last_session_num') || ''),
+          ads_fee: adsFee,
+          supervision_fee: supervisionFee,
+          other_fee: otherFee,
+        }
+        const res = await fetch('/api/admin/edit-student', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const r = await res.json().catch(() => ({}))
+        if (!res.ok || r.error) {
+          setMsg({ type: 'err', text: r.error || `فشل الحفظ (${res.status})` })
+          return
+        }
+        setMsg({ type: 'ok', text: r.message || 'تم الحفظ ✓' })
         router.refresh()
+      } catch (err: any) {
+        setMsg({ type: 'err', text: err?.message || 'فشل الاتصال بالخادم' })
       }
     })
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <input type="hidden" name="student_id" value={student.id} />
       <input type="hidden" name="orig_last_session_num" value={student.last_session_num ?? 0} />
-      <input type="hidden" name="orig_amount_due" value={student.amount_due ?? 0} />
 
       {msg && (
         <p
@@ -248,15 +266,13 @@ export function EditStudentForm({
           style={{ ...inputStyle, borderColor: '#176b52', borderWidth: 2 }}
         />
         <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-          الحفظ هنا يغيّر الرقم على ملف الطالب فقط — مش بيضيف ولا بيحذف من سجل المعلم. للمزامنة مع حصص المعلم
-          استخدم «التسوية» أو «تعديل رقم الحصة».
+          الحفظ هنا يغيّر الرقم على ملف الطالب فقط — مش بيضيف ولا بيحذف من سجل المعلم.
         </p>
       </Field>
 
       <div className="grid grid-cols-2 gap-2.5">
         <Field label="سعر الحصة على ولي الأمر (ج)">
           <input
-            name="price_per_session"
             type="number"
             min={0}
             step="0.01"
@@ -266,13 +282,9 @@ export function EditStudentForm({
             className={inputCls}
             style={inputStyle}
           />
-          <p className="text-[10px] mt-1" style={{ color: '#6f7974' }}>
-            من الباقة: سعر الباقة ÷ عدد الحصص (يقبل كسور مثل 41.67)
-          </p>
         </Field>
         <Field label="سعر الحصة للمعلم (ج)">
           <input
-            name="teacher_session_rate"
             type="number"
             min={0}
             step="0.01"
@@ -286,7 +298,6 @@ export function EditStudentForm({
         </Field>
         <Field label="المستحق الحالي (ج)">
           <input
-            name="amount_due"
             type="number"
             min={0}
             step="0.01"
@@ -305,9 +316,6 @@ export function EditStudentForm({
       <div className="rounded-2xl p-3 space-y-2" style={{ background: '#fff8e8', border: '1px solid #f0d9a8' }}>
         <p className="text-[12px] font-bold" style={{ color: '#8a5a00' }}>
           مصاريف إضافية (شهريًا لكل طالب)
-        </p>
-        <p className="text-[10px]" style={{ color: '#6f7974' }}>
-          إعلان · إشراف · أي تكلفة تانية — عشان تعرف مين بيكسب ومين بيخسّر
         </p>
         <div className="grid grid-cols-3 gap-2">
           <Field label="إعلانات (ج)">
@@ -360,12 +368,10 @@ export function EditStudentForm({
             <b>{money(profitPreview.income)} ج</b>
           </p>
           <p>
-            تكلفة معلم ({profitPreview.sessions} × {money(profitPreview.teacher)}):{' '}
-            <b>{money(profitPreview.teacherCost)} ج</b>
+            تكلفة معلم: <b>{money(profitPreview.teacherCost)} ج</b>
           </p>
           <p>
-            مصاريف إضافية (إعلان {money(profitPreview.ads)} + إشراف {money(profitPreview.sup)} + أخرى{' '}
-            {money(profitPreview.other)}): <b>{money(profitPreview.extras)} ج</b>
+            مصاريف إضافية: <b>{money(profitPreview.extras)} ج</b>
           </p>
           <p className="font-bold text-[13px] pt-1">
             {profitPreview.profit >= 0 ? 'ربح تقريبي' : 'خسارة تقريبية'}: {money(Math.abs(profitPreview.profit))} ج
