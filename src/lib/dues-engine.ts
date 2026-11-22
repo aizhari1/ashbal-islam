@@ -39,8 +39,6 @@ export function buildLastPay(
     created_at?: string | null
   }[]
 ): Record<string, LastPay> {
-  // ترتيب صريح: الأحدث أولًا (التاريخ ثم وقت التسجيل) — عشان لو في دفعتين في نفس اليوم
-  // ناخد الأخيرة فعلًا (وباقيها due_after الصحيح) مش أي واحدة عشوائيًا
   const sorted = [...pays].sort((a, b) => {
     const da = String(a.payment_date || '').slice(0, 10)
     const db = String(b.payment_date || '').slice(0, 10)
@@ -55,7 +53,6 @@ export function buildLastPay(
     if (lastPay[p.student_id]) continue
     lastPay[p.student_id] = {
       day: String(p.payment_date).slice(0, 10),
-      // الدفع المقدم لعدة شهور بيغطي أكتر من باقة — من غير كده الطالب كان بيظهر مستحق بعد أول باقة
       months: Math.max(1, Math.floor(Number(p.prepaid_months) || 1)),
       residual: Number(p.due_after) > 0 ? Number(p.due_after) : 0,
     }
@@ -90,18 +87,24 @@ export async function loadDuesInputs(supabase: SupabaseClient): Promise<DuesInpu
   let rawStudents: any[]
   try {
     rawStudents = await fetchAll<any>((from, to) =>
-      supabase.from('students').select(STUDENT_COLS).order('id').range(from, to)
+      supabase.from('students').select(`${STUDENT_COLS}, manual_due`).order('id').range(from, to)
     )
   } catch {
-    rawStudents = await fetchAll<any>((from, to) =>
-      supabase
-        .from('students')
-        .select(
-          'id, code, name, phone, status, subscription_type, monthly_sessions, amount_due, last_session_num, last_session_date, price_per_session, teachers(name)'
-        )
-        .order('id')
-        .range(from, to)
-    )
+    try {
+      rawStudents = await fetchAll<any>((from, to) =>
+        supabase.from('students').select(STUDENT_COLS).order('id').range(from, to)
+      )
+    } catch {
+      rawStudents = await fetchAll<any>((from, to) =>
+        supabase
+          .from('students')
+          .select(
+            'id, code, name, phone, status, subscription_type, monthly_sessions, amount_due, last_session_num, last_session_date, price_per_session, teachers(name)'
+          )
+          .order('id')
+          .range(from, to)
+      )
+    }
   }
 
   const students: (ReminderStudent & { prepaid_until?: string | null })[] = rawStudents.map((s: any) => ({
@@ -113,6 +116,7 @@ export async function loadDuesInputs(supabase: SupabaseClient): Promise<DuesInpu
     subscription_type: s.subscription_type,
     monthly_sessions: s.monthly_sessions,
     amount_due: Number(s.amount_due || 0),
+    manual_due: Number(s.manual_due || 0),
     last_session_num: s.last_session_num,
     last_session_date: s.last_session_date,
     price_per_session: s.price_per_session,
@@ -120,8 +124,11 @@ export async function loadDuesInputs(supabase: SupabaseClient): Promise<DuesInpu
     prepaid_until: s.prepaid_until || null,
   }))
 
-  // ترتيب ثابت (تاريخ + id) عشان الصفحات متتكررش/متفوتش صفوف عند حدود الـ1000
-  const payCols = ['id, student_id, payment_date, amount, due_after, prepaid_months, created_at', 'id, student_id, payment_date, amount, due_after, created_at', 'id, student_id, payment_date, amount, created_at']
+  const payCols = [
+    'id, student_id, payment_date, amount, due_after, prepaid_months, created_at',
+    'id, student_id, payment_date, amount, due_after, created_at',
+    'id, student_id, payment_date, amount, created_at',
+  ]
   let pays: any[] = []
   let lastErr: unknown = null
   for (const cols of payCols) {
@@ -238,7 +245,7 @@ export async function getDuesSummary(
   const collected = payments.reduce((s, p) => s + Number(p.amount || 0), 0)
 
   try {
-    const dues = await computeAndSyncDues(supabase)
+    const dues = await computeAndSyncDues(supabase, { write: false })
     return {
       monthKey,
       collected,
