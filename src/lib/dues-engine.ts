@@ -179,7 +179,8 @@ export async function computeAndSyncDues(
   supabase: SupabaseClient,
   opts: { write?: boolean } = {}
 ): Promise<DuesResult> {
-  const write = opts.write !== false
+  // افتراضي: حساب فقط بدون كتابة — الكتابة كانت بتمسح المستحق اليدوي
+  const write = opts.write === true
   const { students, lastPay, attDays } = await loadDuesInputs(supabase)
   const monthKey = currentMonthKey()
   const prepaidIds = new Set(
@@ -188,9 +189,14 @@ export async function computeAndSyncDues(
   let dueList = computeDueReminders(students, lastPay, attDays)
   dueList = dueList.filter((r) => !prepaidIds.has(r.id))
 
+  // الأساس = المستحق اليدوي (مش صفر) عشان المزامنة متمسحش manual_due من amount_due
   const dueById: Record<string, number> = {}
-  for (const s of students) dueById[s.id] = 0
+  for (const s of students) {
+    dueById[s.id] = Math.max(0, Number(s.manual_due || 0))
+  }
+  // outstanding من المحرّك بيشمل manual_due أصلًا
   for (const r of dueList) dueById[r.id] = r.outstanding
+  // الدفع المقدم: صفّر الظاهر بس متلمسش عمود manual_due
   for (const id of prepaidIds) dueById[id] = 0
 
   let updated = 0
