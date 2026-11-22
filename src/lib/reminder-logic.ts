@@ -1,51 +1,59 @@
-/** نفس قاعدة الأصل: يظهر بعد اكتمال حصص الباقة بعد آخر دفعة؛ يختفي بعد تسجيل دفعة تغطّيه */
+/** منطق تذكير المستحقات — بدون I/O (قابل للاختبار). */
 
 export type ReminderStudent = {
   id: string
   code: string
   name: string
   phone: string | null
-  status: string
+  status: string | null
   subscription_type: string | null
   monthly_sessions?: number | null
   amount_due: number
+  manual_due?: number | null
   last_session_num: number | null
   last_session_date: string | null
   price_per_session: number | null
-  teacher_name: string
+  teacher_name?: string | null
 }
 
-export type LastPay = { day: string; months: number; residual?: number }
+export type LastPay = {
+  day: string
+  months: number
+  residual: number
+}
 
-export type ReminderRow = ReminderStudent & {
+export type ReminderRow = {
+  id: string
+  code: string
+  name: string
+  phone: string | null
+  outstanding: number
   sessions_taken: number
   due_date: string
+  teacher_name: string
   reason: string
-  outstanding: number
 }
 
-export function packageSize(s: {
-  subscription_type?: string | null
-  monthly_sessions?: number | null
-}): number {
+function packageSize(s: ReminderStudent): number {
   const n = Number(s.monthly_sessions)
   if (n > 0) return n
   const m = String(s.subscription_type || '').match(/(\d+)/)
   return m ? parseInt(m[1], 10) : 0
 }
 
-export function packagePrice(s: {
-  subscription_type?: string | null
-  monthly_sessions?: number | null
-  price_per_session?: number | null
-}): number {
-  const pkg = packageSize(s)
-  const rate = Number(s.price_per_session) > 0 ? Number(s.price_per_session) : 25
-  return pkg > 0 ? pkg * rate : 0
+function packagePrice(s: ReminderStudent): number {
+  const per = Number(s.price_per_session || 0)
+  const size = packageSize(s)
+  if (per > 0 && size > 0) return Math.round(per * size * 100) / 100
+  return Number(s.amount_due || 0)
 }
 
-const EXCLUDE = /منسحب|انسحاب|متوقف|موقوف|تجريبي/
-
+/**
+ * يحسب من يجب تذكيرهم بالدفع:
+ * - خلّصوا حصص الباقة بعد آخر دفعة
+ * - أو عندهم متبقٍّ من دفعة جزئية
+ * - + مستحق يدوي (manual_due) لو موجود
+ */
 export function computeDueReminders(
   students: ReminderStudent[],
   lastPay: Record<string, LastPay>,
@@ -54,51 +62,45 @@ export function computeDueReminders(
   const out: ReminderRow[] = []
 
   for (const s of students) {
-    const status = String(s.status || 'نشط')
-    if (EXCLUDE.test(status)) continue
+    if (s.status && s.status !== 'نشط' && s.status !== 'active') continue
 
-    const pkg = packageSize(s)
-    const days = attDays[s.id] || []
+    const size = packageSize(s)
     const lp = lastPay[s.id]
-    const residual = Math.max(0, Number(lp?.residual || 0))
-    let since = 0
+    const days = attDays[s.id] || []
+
+    let sessionsAfterPay = 0
+    if (lp?.day) {
+      sessionsAfterPay = days.filter((d) => d > lp.day).length
+    } else {
+      sessionsAfterPay = days.length
+    }
+
+    const residual = Number(lp?.residual || 0)
+    let packagesOwed = 0
+    let packageDue = false
     let dueDate = ''
     let reason = ''
-    let packageDue = false
-    // عدد الباقات المستحقة (الأصل كان بيحسب باقة واحدة بس حتى لو الطالب خلّص أكتر من باقة بدون دفع)
-    let packagesOwed = 1
 
-    if (lp) {
-      const after = days.filter((d) => d > lp.day)
-      if (after.length > 0) {
-        since = after.length
-      } else if (days.length === 0 && (!s.last_session_date || String(s.last_session_date).slice(0, 10) > lp.day)) {
-        since = Number(s.last_session_num) || 0
-      } else {
-        since = 0
-      }
-      if (pkg > 0) {
-        const need = pkg * (lp.months || 1)
-        if (since >= need) {
-          packageDue = true
-          // أول باقة مستحقة عند إكمال المدفوع (need)، وبعدها باقة جديدة كل pkg حصص
-          packagesOwed = Math.max(1, Math.floor((since - need) / pkg) + 1)
-          dueDate = after[need - 1] || after[after.length - 1] || s.last_session_date || ''
-          reason = `أكمل ${since} حصة بعد آخر دفعة (${lp.day})`
-        }
-      }
-    } else {
-      since = Math.max(days.length, Number(s.last_session_num) || 0)
-      if (pkg > 0 && since >= pkg) {
-        packageDue = true
-        dueDate = days[pkg - 1] || s.last_session_date || ''
-        reason = `أكمل ${since} حصة ولا توجد دفعة مسجّلة`
-      }
+    if (size > 0 && sessionsAfterPay >= size) {
+      packagesOwed = Math.floor(sessionsAfterPay / size)
+      packageDue = packagesOwed > 0
+      // تاريخ استحقاق تقريبي: يوم آخر حصة في الباقة المكتملة
+      const idx = size * packagesOwed - 1
+      const after = lp?.day ? days.filter((d) => d > lp.day) : days
+      dueDate = after[idx] || after[after.length - 1] || s.last_session_date || ''
+      reason = `أكمل ${packagesOwed} باقة (${sessionsAfterPay}/${size} حصة بعد آخر دفعة)`
     }
 
     const price = packageDue ? packagePrice(s) * packagesOwed : 0
-    const outstanding = price + residual
+    const manual = Math.max(0, Number(s.manual_due || 0))
+    const outstanding = price + residual + manual
     if (outstanding <= 0) continue
+
+    if (manual > 0) {
+      const m = `مستحق مسجّل يدويًا ${manual}`
+      reason = reason ? `${reason} · ${m}` : m
+      if (!dueDate) dueDate = lp?.day || s.last_session_date || ''
+    }
 
     if (residual > 0) {
       const partial = `متبقٍّ ${residual} بعد دفعة جزئية (${lp?.day})`
@@ -107,15 +109,17 @@ export function computeDueReminders(
     }
 
     out.push({
-      ...s,
-      sessions_taken: since,
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      phone: s.phone,
+      outstanding: Math.round(outstanding * 100) / 100,
+      sessions_taken: sessionsAfterPay,
       due_date: dueDate,
-      reason,
-      outstanding,
-      teacher_name: s.teacher_name,
+      teacher_name: s.teacher_name || '—',
+      reason: reason || 'مستحق',
     })
   }
 
-  out.sort((a, b) => b.sessions_taken - a.sessions_taken)
-  return out
+  return out.sort((a, b) => b.outstanding - a.outstanding)
 }
