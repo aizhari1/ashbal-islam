@@ -110,8 +110,14 @@ export async function supervisorEditStudent(formData: FormData) {
     return { error: 'سعر الحصة للمعلم لازم يكون أكبر من صفر' }
   }
 
-  const pkgSize = packageId ? await packageSize(sb as any, packageId) : Number(before.monthly_sessions) || 0
-  const check = validateSessionWithinPackage(newLast, pkgSize || sessions || Number(before.monthly_sessions) || 0)
+  const pkgSize = packageSize({
+    monthly_sessions: sessions ?? before.monthly_sessions,
+    subscription_type: (before as any).subscription_type,
+  })
+  const check = validateSessionWithinPackage(
+    newLast,
+    pkgSize || sessions || Number(before.monthly_sessions) || 0
+  )
   if (!check.ok) return { error: check.error }
 
   const payload: Record<string, unknown> = {
