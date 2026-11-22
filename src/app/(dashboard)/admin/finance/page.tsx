@@ -24,17 +24,18 @@ function toWhatsApp(phone: string | null): string {
 
 export default async function FinanceReminderPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
   const role = profile?.role || ''
   const backHref = role === 'supervisor' ? '/supervisor' : '/admin'
 
-  // نفس مصدر الحساب الموحّد المستخدم في لوحة الإدارة والإشراف: بيراعي الدفع المقدم والمتبقي من الدفع
-  // الجزئي ويقرأ كل الصفحات (القديم كان مقصوص عند 500 طالب و1000 صف حضور/دفع، وبيتجاهل الدفع المقدم
-  // فكان بيظهّر طلاب مدفوع لهم مقدّمًا ويكتب لهم amount_due غلط)
-  const { dueList } = await computeAndSyncDues(supabase)
+  // حساب المستحقات للعرض فقط — بدون كتابة amount_due
+  // (الكتابة كانت بتمسح أي مستحق اتضبط يدويًا من تعديل الطالب)
+  const { dueList } = await computeAndSyncDues(supabase, { write: false })
 
   const { data: reminders } = await supabase
     .from('activity_log')
@@ -68,7 +69,9 @@ export default async function FinanceReminderPage() {
           <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
         </Link>
         <div className="flex-1">
-          <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>طلاب محتاجين تذكير بالدفع</h1>
+          <h1 className="text-[16px] font-bold" style={{ color: '#00513c' }}>
+            طلاب محتاجين تذكير بالدفع
+          </h1>
           <p className="text-[11px]" style={{ color: '#6f7974' }}>
             {dueList.length} طالب أكملوا باقتهم · {total.toLocaleString('ar-EG')} ج.م
           </p>
@@ -77,7 +80,8 @@ export default async function FinanceReminderPage() {
 
       <div className="px-3 mb-3">
         <div className="card p-3 text-[11px] leading-relaxed" style={{ color: '#3f4944', background: '#e8f7f0' }}>
-          يظهر الطالب بعد خلص حصص باقته بعد آخر دفعة. أول ما تتسجّل دفعة (من الإدارة أو الإشراف) بيتشال من القائمة عند الطرفين معًا.
+          يظهر الطالب بعد خلص حصص باقته بعد آخر دفعة. أول ما تتسجّل دفعة (من الإدارة أو الإشراف) بيتشال من
+          القائمة عند الطرفين معًا. المستحق اليدوي من «تعديل طالب» مش بيتمسح بفتح الصفحة دي.
         </div>
       </div>
 
