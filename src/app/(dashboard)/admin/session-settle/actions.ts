@@ -27,6 +27,11 @@ function revalidateTeacherPaths() {
   }
 }
 
+async function isStaff(sb: ReturnType<typeof serviceClient>, uid: string) {
+  const { data } = await sb.from('profiles').select('role').eq('id', uid).maybeSingle()
+  return !!data && ['admin', 'supervisor'].includes(String((data as any).role))
+}
+
 export async function deleteAttendanceRow(id: string, studentId?: string) {
   try {
     const supabase = await createClient()
@@ -37,6 +42,7 @@ export async function deleteAttendanceRow(id: string, studentId?: string) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: 'معرّف غير صالح' }
 
     const sb = serviceClient()
+    if (!(await isStaff(sb, user.id))) return { error: 'غير مصرح' }
     const { data: row } = await sb
       .from('attendance')
       .select('id, student_id, notes, session_date, session_num, status')
@@ -81,6 +87,7 @@ export async function addTeacherSession(studentId: string, date: string) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
     if (date > today) return { error: 'لا يمكن إضافة حصة بتاريخ مستقبلي' }
     const sb = serviceClient()
+    if (!(await isStaff(sb, user.id))) return { error: 'غير مصرح' }
     const { data: st } = await sb.from('students').select('id, teacher_id, session_duration').eq('id', studentId).maybeSingle()
     if (!st) return { error: 'طالب غير موجود' }
     if (!st.teacher_id) return { error: 'الطالب مالوش معلم' }
@@ -110,5 +117,49 @@ export async function addTeacherSession(studentId: string, date: string) {
     return { ok: true, message: `اتضافت حصة ${date} لسجل المعلم (عدّاد الطالب ما اتغيّرش)` }
   } catch (e: any) {
     return { error: e?.message || 'فشل الإضافة' }
+  }
+}
+
+/** حصص طالب في شهر معيّن (قراءة بالسيرفر عشان الـRLS متخفيش الصفوف). */
+export async function getStudentSessions(studentId: string, month: string) {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'غير مصرح', sessions: [] as any[] }
+    if (!/^[0-9a-f-]{36}$/i.test(studentId)) return { error: 'معرّف غير صالح', sessions: [] as any[] }
+    if (!/^\d{4}-\d{2}$/.test(month)) return { error: 'شهر غير صالح', sessions: [] as any[] }
+    const sb = serviceClient()
+    const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    if (!prof || !['admin', 'supervisor'].includes(String((prof as any).role))) {
+      return { error: 'غير مصرح', sessions: [] as any[] }
+    }
+    const [y, m] = month.split('-').map(Number)
+    const last = new Date(y, m, 0).getDate()
+    const { data, error } = await sb
+      .from('attendance')
+      .select('id, session_date, session_num, status, notes, session_duration, teachers(name)')
+      .eq('student_id', studentId)
+      .gte('session_date', `${month}-01`)
+      .lte('session_date', `${month}-${String(last).padStart(2, '0')}`)
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(300)
+    if (error) return { error: error.message, sessions: [] as any[] }
+    return {
+      sessions: (data || []).map((r: any) => {
+        const t = Array.isArray(r.teachers) ? r.teachers[0] : r.teachers
+        return {
+          id: r.id as string,
+          session_date: String(r.session_date).slice(0, 10),
+          session_num: r.session_num as number | null,
+          status: r.status as string,
+          notes: r.notes as string | null,
+          session_duration: r.session_duration as number | null,
+          teacher_name: (t?.name as string) || '—',
+        }
+      }),
+    }
+  } catch (e: any) {
+    return { error: e?.message || 'فشل تحميل الحصص', sessions: [] as any[] }
   }
 }
