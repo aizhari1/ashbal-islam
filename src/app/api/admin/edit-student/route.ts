@@ -44,13 +44,20 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     if (!before) return NextResponse.json({ error: 'الطالب غير موجود' }, { status: 404 })
 
+    let oldManual = 0
+    try {
+      const { data: md } = await sb.from('students').select('manual_due').eq('id', studentId).maybeSingle()
+      oldManual = Math.max(0, Number((md as any)?.manual_due) || 0)
+    } catch {
+      oldManual = 0
+    }
+
     const oldLast = Number(before.last_session_num || 0)
     let newLast =
       body.last_session_num === undefined || body.last_session_num === null || String(body.last_session_num).trim() === ''
         ? oldLast
         : Math.max(0, Math.floor(Number(body.last_session_num) || 0))
 
-    // لو الرقم المرسل = اللي كان ظاهر في الفورم، واختلف في الداتابيز (حد سجّل حصة)، ناخد الأحدث
     if (
       body.orig_last_session_num !== undefined &&
       String(body.orig_last_session_num).trim() !== '' &&
@@ -98,12 +105,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'سعر الحصة للمعلم غير صالح' }, { status: 400 })
     }
 
-    let amountDue: number | null = null
-    if (body.amount_due !== undefined && String(body.amount_due).trim() !== '') {
-      amountDue = Math.round((Number(body.amount_due) || 0) * 100) / 100
-    }
-    if (amountDue != null && amountDue < 0) {
-      return NextResponse.json({ error: 'المستحق غير صالح' }, { status: 400 })
+    let newManual: number | null = null
+    const manualSrc = body.manual_due !== undefined ? body.manual_due : body.amount_due
+    if (manualSrc !== undefined && String(manualSrc).trim() !== '') {
+      newManual = Math.max(0, Math.round((Number(manualSrc) || 0) * 100) / 100)
     }
 
     const pkgSize = packageSize({
@@ -129,7 +134,6 @@ export async function POST(req: NextRequest) {
     if (duration != null) payload.session_duration = duration
     if (perSession != null) payload.price_per_session = perSession
     if (teacherRate != null) payload.teacher_session_rate = teacherRate
-    if (amountDue != null) payload.amount_due = amountDue
     if (joinDate && /^\d{4}-\d{2}-\d{2}$/.test(joinDate)) payload.join_date = joinDate
 
     let { error } = await sb.from('students').update(payload).eq('id', studentId)
@@ -145,6 +149,34 @@ export async function POST(req: NextRequest) {
         error = r3.error
       }
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    let manualNote = ''
+    if (newManual !== null) {
+      const { error: mErr } = await sb.from('students').update({ manual_due: newManual }).eq('id', studentId)
+      if (mErr) {
+        if (/manual_due/.test(mErr.message)) {
+          await sb.from('students').update({ amount_due: newManual }).eq('id', studentId)
+          manualNote =
+            ' · مستحق ' +
+            newManual +
+            ' ج (نفّذ SQL: alter table students add column if not exists manual_due numeric not null default 0;)'
+        } else {
+          manualNote = ` · ⚠️ المستحق: ${mErr.message}`
+        }
+      } else {
+        const cur = Number(before.amount_due || 0)
+        const nextTotal = Math.max(0, cur - oldManual + newManual)
+        await sb.from('students').update({ amount_due: nextTotal }).eq('id', studentId)
+        await sb.from('activity_log').insert({
+          actor_id: staff.id,
+          action: 'student_manual_due',
+          entity_type: 'student',
+          entity_id: studentId,
+          details: { manual_due: { from: oldManual, to: newManual } },
+        })
+        manualNote = ` · مستحق يدوي ${oldManual} → ${newManual}`
+      }
     }
 
     const adsFee = Math.round((Number(body.ads_fee || 0) || 0) * 100) / 100
@@ -163,7 +195,7 @@ export async function POST(req: NextRequest) {
         price_per_session: perSession,
         teacher_session_rate: payload.teacher_session_rate ?? null,
         monthly_sessions: sessions,
-        amount_due: amountDue,
+        manual_due: newManual,
       },
     })
 
@@ -179,7 +211,7 @@ export async function POST(req: NextRequest) {
         package_id: packageId,
         price_per_session: perSession,
         teacher_session_rate: payload.teacher_session_rate ?? null,
-        amount_due: { from: before.amount_due, to: amountDue },
+        manual_due: newManual,
         monthly_sessions: sessions,
         ads_fee: adsFee,
         supervision_fee: supervisionFee,
@@ -187,27 +219,14 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    const sess = sessions && sessions > 0 ? sessions : Number(before.monthly_sessions) || 0
-    const parent = Number(perSession ?? before.price_per_session) || 0
-    const teacher = Number(payload.teacher_session_rate) || 0
-    const income = parent * sess
-    const cost = teacher * sess + adsFee + supervisionFee + otherFee
-    const profit = income - cost
-    const profitNote =
-      sess > 0
-        ? ` · ربح تقريبي ${Math.round(profit * 100) / 100} ج (${profit >= 0 ? 'مكسب' : 'خسارة'})`
-        : ''
-
     return NextResponse.json({
       success: true,
       message:
         (newLast !== oldLast
           ? `تم الحفظ · رقم الحصة ${oldLast} → ${newLast}`
-          : amountDue != null
-            ? `تم الحفظ · المستحق ${amountDue} ج`
-            : packageId
-              ? 'تم حفظ بيانات الطالب والباقة'
-              : 'تم حفظ بيانات الطالب') + profitNote,
+          : packageId
+            ? 'تم حفظ بيانات الطالب والباقة'
+            : 'تم حفظ بيانات الطالب') + manualNote,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'فشل الحفظ' }, { status: 500 })
