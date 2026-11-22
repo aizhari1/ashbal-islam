@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
-import { addTeacherSession, deleteAttendanceRow, getStudentSessions } from './actions'
 
 export type SettleStudent = {
   id: string
@@ -25,12 +24,6 @@ type Session = {
 }
 
 const isPresent = (s: string) => s === 'حاضر' || s === 'متأخر'
-
-function monthEnd(key: string): string {
-  const [y, m] = key.split('-').map(Number)
-  const last = new Date(y, m, 0).getDate()
-  return `${key}-${String(last).padStart(2, '0')}`
-}
 
 function cairoToday(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' })
@@ -68,9 +61,11 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
   }, [q, students])
 
   async function loadStudentSessions(s: SettleStudent, m: string = month) {
-    const r = await getStudentSessions(s.id, m)
-    if (r.error) throw new Error(r.error)
-    setSessions(r.sessions as Session[])
+    const url = `/api/admin/session-settle/sessions?studentId=${encodeURIComponent(s.id)}&month=${encodeURIComponent(m)}`
+    const res = await fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+    const r = await res.json().catch(() => ({}))
+    if (!res.ok || r.error) throw new Error(r.error || `فشل التحميل (${res.status})`)
+    setSessions((r.sessions || []) as Session[])
   }
 
   function shiftMonth(delta: number) {
@@ -99,16 +94,18 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
     if (!confirm('حذف الحصة من سجل المعلم؟ (عدّاد الطالب مش هيتأثر)')) return
     start(async () => {
       setMsg('')
-      const r = await deleteAttendanceRow(id, selected.id)
-      if (r.error) {
-        setMsg(r.error)
-        return
-      }
-      setMsg(r.message || 'تم الحذف')
       try {
+        const url = `/api/admin/session-settle/sessions?id=${encodeURIComponent(id)}&studentId=${encodeURIComponent(selected.id)}`
+        const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' })
+        const r = await res.json().catch(() => ({}))
+        if (!res.ok || r.error) {
+          setMsg(r.error || 'فشل الحذف')
+          return
+        }
+        setMsg(r.message || 'تم الحذف')
         await loadStudentSessions(selected)
       } catch (e: any) {
-        setMsg(e?.message || 'تم الحذف')
+        setMsg(e?.message || 'فشل الحذف')
       }
     })
   }
@@ -117,16 +114,22 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
     if (!selected) return
     start(async () => {
       setMsg('')
-      const r = await addTeacherSession(selected.id, newDate)
-      if (r.error) {
-        setMsg(r.error)
-        return
-      }
-      setMsg(r.message || 'تمت الإضافة')
       try {
+        const res = await fetch('/api/admin/session-settle/sessions', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: selected.id, date: newDate }),
+        })
+        const r = await res.json().catch(() => ({}))
+        if (!res.ok || r.error) {
+          setMsg(r.error || 'فشل الإضافة')
+          return
+        }
+        setMsg(r.message || 'تمت الإضافة')
         await loadStudentSessions(selected)
       } catch (e: any) {
-        setMsg(e?.message || 'تمت الإضافة')
+        setMsg(e?.message || 'فشل الإضافة')
       }
     })
   }
@@ -170,7 +173,10 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
       </div>
 
       {msg && (
-        <p className="text-[12px] font-bold text-center px-2" style={{ color: msg.includes('فشل') || msg.includes('غير') ? '#ba1a1a' : '#176b52' }}>
+        <p
+          className="text-[12px] font-bold text-center px-2"
+          style={{ color: msg.includes('فشل') || msg.includes('غير') ? '#ba1a1a' : '#176b52' }}
+        >
           {msg}
         </p>
       )}
@@ -186,7 +192,12 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
                   {selected.teacher_name ? ` · ${selected.teacher_name}` : ''}
                 </p>
               </div>
-              <button type="button" className="text-[11px] font-bold" style={{ color: '#176b52' }} onClick={() => setSelected(null)}>
+              <button
+                type="button"
+                className="text-[11px] font-bold"
+                style={{ color: '#176b52' }}
+                onClick={() => setSelected(null)}
+              >
                 إغلاق
               </button>
             </div>
@@ -249,7 +260,12 @@ export function SettleShell({ initialStudents }: { initialStudents: SettleStuden
                       {s.status} · {s.teacher_name} · {s.session_duration || 30} د
                     </p>
                   </div>
-                  <button type="button" disabled={pending} style={{ color: '#ba1a1a', fontWeight: 700 }} onClick={() => del(s.id)}>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    style={{ color: '#ba1a1a', fontWeight: 700 }}
+                    onClick={() => del(s.id)}
+                  >
                     حذف
                   </button>
                 </div>
