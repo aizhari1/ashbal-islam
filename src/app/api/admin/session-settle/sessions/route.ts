@@ -1,37 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { serviceClient } from '@/lib/supabase/service'
+import { requireStaff } from '@/lib/auth-guards'
 
 export const dynamic = 'force-dynamic'
-
-async function requireStaffUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    if (!session?.user) return null
-    const sb = serviceClient()
-    const { data: prof } = await sb.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
-    const role = String(prof?.role || '')
-    if (role !== 'admin' && role !== 'supervisor') return null
-    return session.user
-  }
-  const sb = serviceClient()
-  const { data: prof } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  const role = String(prof?.role || '')
-  if (role !== 'admin' && role !== 'supervisor') return null
-  return user
-}
 
 /** GET ?studentId=&month=YYYY-MM */
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireStaffUser()
-    if (!user) return NextResponse.json({ error: 'غير مصرح', sessions: [] }, { status: 401 })
+    const staff = await requireStaff()
+    if (!staff.ok || !staff.userId) {
+      return NextResponse.json({ error: staff.error || 'غير مصرح', sessions: [] }, { status: 401 })
+    }
 
     const studentId = req.nextUrl.searchParams.get('studentId') || ''
     const month = req.nextUrl.searchParams.get('month') || ''
@@ -79,8 +58,11 @@ export async function GET(req: NextRequest) {
 /** POST { studentId, date } — إضافة حصة منسية */
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireStaffUser()
-    if (!user) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+    const staff = await requireStaff()
+    if (!staff.ok || !staff.userId) {
+      return NextResponse.json({ error: staff.error || 'غير مصرح' }, { status: 401 })
+    }
+    const user = { id: staff.userId }
 
     const body = await req.json().catch(() => ({}))
     const studentId = String(body.studentId || '')
@@ -144,8 +126,11 @@ export async function POST(req: NextRequest) {
 /** DELETE ?id=&studentId= — حذف حصة من سجل المعلم */
 export async function DELETE(req: NextRequest) {
   try {
-    const user = await requireStaffUser()
-    if (!user) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 })
+    const staff = await requireStaff()
+    if (!staff.ok || !staff.userId) {
+      return NextResponse.json({ error: staff.error || 'غير مصرح' }, { status: 401 })
+    }
+    const user = { id: staff.userId }
 
     const id = req.nextUrl.searchParams.get('id') || ''
     const studentId = req.nextUrl.searchParams.get('studentId') || ''
