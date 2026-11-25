@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { dueAfterPayment, todayKey } from './dues'
 import { normalizeMethod } from './payment-methods'
 import { computePrepaidUntil } from './prepaid'
+import { syncStudentDue } from './dues-engine'
 
 export type PaymentSource = 'admin' | 'supervisor'
 
@@ -89,6 +90,9 @@ export async function applyPayment(supabase: SupabaseClient, input: ApplyPayment
     const tag = `دفع مقدم ${prepaidMonths} شهر · حتى ${prepaidUntil}`
     notes = notes ? `${notes}\n${tag}` : tag
   }
+
+  // نظبط amount_due على المستحق الفعلي قبل ما نحسب المتبقي بعد الدفعة (الرقم المتخزّن ممكن يكون قديم)
+  await syncStudentDue(supabase, input.student_id)
 
   const clearDue = !!input.clear_due || isPrepaid
   const idem = (input.idempotency_key || '').trim() || null
