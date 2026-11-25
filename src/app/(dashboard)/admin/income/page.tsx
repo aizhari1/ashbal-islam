@@ -210,7 +210,7 @@ export default async function IncomePage({ searchParams }: { searchParams: Promi
                   </div>
                   <div className="text-left shrink-0">
                     <p><b style={{ color: '#176b52' }}>{c}</b> حصة <Delta cur={c} prev={p} /></p>
-                    <p className="text-[11px]" style={{ color: '#755b1b' }}>{paid[s.id] ? `دفع ${fmt(paid[s.id])} ${mainCur}` : 'لم يدفع'}</p>
+                    <p className="text-[11px]" style={{ color: '#755b1b' }}>{paid[s.id] ? `دفع ${fmt(paid[s.id])} ${mainCur}` : 'لا دفعات في الفترة'}</p>
                   </div>
                 </Link>
               )
