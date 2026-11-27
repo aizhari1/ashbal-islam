@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import { studentSessionRate } from '@/lib/teacher-payroll'
 import { PayrollShare } from '../PayrollShare'
 import { StudentGroupsList } from '../StudentGroupsList'
 
@@ -54,16 +55,22 @@ export default async function TeacherPayrollDetailPage({
   const attendance: any[] = []
   let off = 0
   while (true) {
-    const { data: chunk } = await supabase
-      .from('attendance')
-      .select(
-        'id, student_id, session_date, status, session_num, rating, notes, students(name, code, session_duration, monthly_sessions, price_per_session)'
-      )
-      .eq('teacher_id', teacherId)
-      .gte('session_date', start)
-      .lte('session_date', end)
-      .order('session_date', { ascending: false })
-      .range(off, off + 999)
+    const sel = (withRate: boolean) =>
+      supabase
+        .from('attendance')
+        .select(
+          `id, student_id, session_date, status, session_num, rating, notes, students(name, code, session_duration, monthly_sessions, price_per_session${withRate ? ', teacher_session_rate' : ''})`
+        )
+        .eq('teacher_id', teacherId)
+        .gte('session_date', start)
+        .lte('session_date', end)
+        .order('session_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(off, off + 999)
+    let res = await sel(true)
+    // العمود لسه مش موجود (migration 009)؟ نرجع للسلوك القديم بدل ما الصفحة تقع
+    if (res.error) res = await sel(false)
+    const chunk = res.data as any[] | null
     if (!chunk?.length) break
     attendance.push(...chunk)
     if (chunk.length < 1000) break
@@ -86,8 +93,7 @@ export default async function TeacherPayrollDetailPage({
   for (const a of present) {
     const sid = a.student_id || 'unknown'
     const st = a.students as any
-    let price = Number(st?.price_per_session || 0) > 0 ? Number(st.price_per_session) : teacherDefault
-    if (price < DEFAULT_RATE) price = DEFAULT_RATE
+    const price = studentSessionRate(st, teacherDefault)
     if (!byStudent[sid]) {
       byStudent[sid] = {
         id: sid,
