@@ -2,10 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { fetchAll } from '@/lib/dues-engine'
+import { studentSessionRate } from '@/lib/teacher-payroll'
 
 export const dynamic = 'force-dynamic'
-
-const DEFAULT_RATE = 25
 
 function monthBounds(key?: string) {
   if (!key || key === 'all') {
@@ -37,16 +36,17 @@ export default async function SessionsDetailPage({
 
   const { start, end, label, key } = monthBounds(sp.month || 'all')
 
+  const studentSelect = (withRate: boolean) =>
+    `id, code, name, teacher_id, monthly_sessions, session_duration, price_per_session${withRate ? ', teacher_session_rate' : ''}, status`
+  const loadStudents = async (withRate: boolean) =>
+    fetchAll<any>((from, to) =>
+      supabase.from('students').select(studentSelect(withRate)).order('name').order('id').range(from, to)
+    )
+  const studentsData = await loadStudents(true).catch(() => loadStudents(false))
+
   const [{ data: teachers }, { data: students }] = await Promise.all([
     supabase.from('teachers').select('id, code, name, is_active').order('name'),
-    fetchAll<any>((from, to) =>
-      supabase
-        .from('students')
-        .select('id, code, name, teacher_id, monthly_sessions, session_duration, price_per_session, status')
-        .order('name')
-        .order('id')
-        .range(from, to)
-    ).then((data) => ({ data })),
+    Promise.resolve({ data: studentsData }),
   ])
 
   const attendance: any[] = []
@@ -113,7 +113,7 @@ export default async function SessionsDetailPage({
         name: st?.name || 'طالب',
         code: st?.code || '—',
         count: 0,
-        price: Number(st?.price_per_session || DEFAULT_RATE),
+        price: studentSessionRate(st as any),
         duration: Number(st?.session_duration || 30),
         packageSize: Number(st?.monthly_sessions || 0),
         dates: [],
