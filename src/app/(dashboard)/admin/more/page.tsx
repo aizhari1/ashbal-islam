@@ -26,7 +26,6 @@ export default async function MorePage() {
     { href: '/admin/finance', icon: 'payments', label: 'المالية' },
     { href: '/admin/schedule', icon: 'calendar_month', label: 'الحضور والجدول' },
     { href: '/teacher/session', icon: 'mic', label: 'غرفة التسميع' },
-    { href: '/supervisor', icon: 'supervisor_account', label: 'لوحة المشرف' },
     { href: '/parent', icon: 'family_restroom', label: 'بوابة ولي الأمر' },
   ]
 
