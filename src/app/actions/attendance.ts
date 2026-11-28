@@ -295,8 +295,7 @@ export async function recordAttendance(data: {
   if (error) return { error: error.message }
 
   if (teacherId && row && (row as any).teacher_id !== teacherId && svc) {
-    await svc.from('attendance').update({ teacher_id: teacherId })
-      .eq('id', row.id)
+    await svc.from('attendance').update({ teacher_id: teacherId }).eq('id', row.id)
   }
   if (svc && isPresent) {
     const { data: sameDay } = await svc.from('attendance').select('id, notes').eq('student_id', data.student_id).eq('session_date', today).neq('id', row.id)
@@ -329,7 +328,6 @@ export async function recordAttendance(data: {
     entity_id: data.student_id,
     details: { attendance_id: row.id, status: data.status, session_num: nextSession, date: today, package_complete: completedPackage, package_size: quota },
   })
-  // المعلم بيشوف عدد حصصه هو (من أول الشهر/بعد التسوية) — من غير حد الباقة ولا المستحق
   let teacherMsg: string | null = null
   if (role === 'teacher' && isPresent && row?.teacher_id) {
     const k = await teacherCountWithStudent(svc ?? supabase, row.teacher_id, data.student_id)
@@ -377,7 +375,32 @@ export async function getSessionPreview(studentId: string) {
     const prev = await maxSessionBefore(sb, studentId, today, stored)
     sessionNum = nextPackageSessionNum(prev, quota).next
   }
-  return { sessionNum, alreadyToday, lastSessionNum: stored, quota, today }
+  // آخر تقرير فعلي (مش تسوية إدارية) عشان الخانات تتملى منه والمعلم يعدّل بس
+  let lastReport: Record<string, any> | null = null
+  try {
+    const { data: recent } = await sb
+      .from('attendance')
+      .select(
+        'session_date, status, notes, new_memorization, recent_past, far_past, arabic_lang, tarbiya_note, sharii_note, hifz_from, hifz_to, muraja_from, muraja_to, tajweed_notes'
+      )
+      .eq('student_id', studentId)
+      .in('status', ['حاضر', 'متأخر'])
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(15)
+    const row = (recent || []).find(
+      (r: any) =>
+        !isAdminFabricatedNote(r.notes) &&
+        (r.new_memorization || r.recent_past || r.far_past || r.hifz_from || r.muraja_from || r.tarbiya_note || r.sharii_note)
+    )
+    if (row) {
+      const { notes: _n, status: _s, ...fields } = row as any
+      lastReport = fields
+    }
+  } catch {
+    lastReport = null
+  }
+  return { sessionNum, alreadyToday, lastSessionNum: stored, quota, today, lastReport }
 }
 
 export async function deleteMySession(attendanceId: string) {
