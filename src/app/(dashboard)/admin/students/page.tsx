@@ -93,6 +93,14 @@ export default async function StudentsPage({
           })}
         </div>
 
+        <Link
+          href="/admin/bulk-fees"
+          className="block text-center text-[13px] font-bold py-2.5 rounded-xl mb-3 bg-white"
+          style={{ color: '#755b1b', border: '1px solid #f0d9a8' }}
+        >
+          تعميم الرسوم (إشراف / إعلانات) وأرباح الطلاب ←
+        </Link>
+
         {params.status === 'تجريبي' && (
           <Link
             href="/admin/trials"

@@ -60,7 +60,6 @@ export async function updateSession(request: NextRequest) {
       },
     })
 
-    // getUser يجدد التوكن؛ لو فشل نجرب getSession قبل ما نرمي لوجين
     let user: { id: string } | null = null
     try {
       const { data } = await supabase.auth.getUser()
@@ -83,7 +82,6 @@ export async function updateSession(request: NextRequest) {
     const roleCookie = request.cookies.get(ROLE_COOKIE)?.value || ''
 
     if (!user && !isPublic) {
-      // لو فيه كوكي جلسة أو دور محفوظ — متطردش لوجين (الصفحة/العميل يكمّلوا)
       if (hasAuthCookie || ['teacher', 'admin', 'supervisor', 'parent'].includes(roleCookie)) {
         return supabaseResponse
       }
@@ -96,7 +94,6 @@ export async function updateSession(request: NextRequest) {
     if (user && !isPublic) {
       let role = roleCookie
 
-      // حدّث الدور من القاعدة فقط لو مش موجود/غلط — مش في كل تنقل داخل /teacher
       const needsFreshRole =
         !role ||
         !['admin', 'teacher', 'supervisor', 'parent'].includes(role)
@@ -159,7 +156,8 @@ export async function updateSession(request: NextRequest) {
             pathname.startsWith('/admin/session-settle') ||
             pathname.startsWith('/admin/sessions-detail') ||
             pathname.startsWith('/admin/attended') ||
-            pathname.startsWith('/admin/certificates')
+            pathname.startsWith('/admin/certificates') ||
+            pathname.startsWith('/admin/bulk-fees')
 
           if (!supervisorAllowed) return deny()
         } else {
