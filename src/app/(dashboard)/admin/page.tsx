@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { LogoutButton } from '@/components/LogoutButton'
 import Link from 'next/link'
 import { ensureMonthArchived } from '@/app/actions/month-archive'
 import { monthLabelAr } from '@/lib/dues'
@@ -97,9 +98,7 @@ export default async function AdminDashboard({
             {profile?.full_name || 'مسؤول'} · أشبال الإسلام
           </p>
         </div>
-        <Link href="/login" className="text-[12px] font-bold" style={{ color: '#ba1a1a' }}>
-          خروج
-        </Link>
+        <LogoutButton compact label="خروج" />
       </header>
 
       <div className="px-4 mb-4 grid grid-cols-3 gap-2">
@@ -127,12 +126,12 @@ export default async function AdminDashboard({
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div>
               <span style={{ color: '#6f7974' }}>محصّل: </span>
-              <b style={{ color: '#176b52' }}>{collected.toLocaleString('ar-EG')} ج</b>
+              <b style={{ color: '#176b52' }}>{collected.toLocaleString('en-US')} ج</b>
             </div>
             <div>
               <span style={{ color: '#6f7974' }}>مستحق: </span>
               <b style={{ color: '#b45309' }}>
-                {dueTotal.toLocaleString('ar-EG')} ج ({dueCount})
+                {dueTotal.toLocaleString('en-US')} ج ({dueCount})
               </b>
             </div>
             <div>
