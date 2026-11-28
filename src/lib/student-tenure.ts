@@ -18,7 +18,7 @@ export function formatJoinDateAr(isoDate: string | null | undefined): string {
   if (!isoDate) return '—'
   const d = String(isoDate).slice(0, 10)
   try {
-    return new Date(d + 'T12:00:00').toLocaleDateString('ar-EG', {
+    return new Date(d + 'T12:00:00').toLocaleDateString('ar-EG-u-nu-latn', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -37,7 +37,6 @@ export function formatTenureAr(isoDate: string | null | undefined): string {
   const now = new Date(
     new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' })
   )
-  // نقارن بالتاريخ فقط
   const a = new Date(start.getFullYear(), start.getMonth(), start.getDate())
   const b = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   if (b < a) return 'اليوم'
