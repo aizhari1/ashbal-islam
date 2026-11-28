@@ -43,25 +43,15 @@ export default async function SupervisorDashboard({
 
   const menu = [
     { href: '/admin/certificates', icon: 'workspace_premium', title: 'شهادات التقدير', desc: 'قوالب متعددة · تُرسل للطالب واتساب', color: '#755b1b' },
-    { href: '/admin/today', icon: 'today', title: 'مواعيد حلقات اليوم', desc: 'جدول النهاردة بالوقت', color: '#176b52' },
+    { href: '/admin/today', icon: 'today', title: 'الحلقات والمواعيد', desc: 'جدول اليوم · تعديل المواعيد · تقييم الحصة · الحضور · غيابات المعلمين', color: '#176b52' },
     { href: '/admin/session-settle', icon: 'rule', title: 'حصص المعلم عند طالب', desc: 'تبويب مستقل · حذف غلط · إضافة منسية', color: '#ba1a1a' },
-    { href: '/supervisor/edit-student', icon: 'edit', title: 'تعديل بيانات طالب', desc: 'اسم · اشتراك · سعر · عدّاد الحصص', color: '#176b52' },
-    { href: '/admin/students', icon: 'groups', title: 'قائمة كل الطلاب', desc: 'كل المسجلين مع التفاصيل', color: '#176b52' },
     { href: '/supervisor/payment', icon: 'credit_card', title: 'تسجيل اشتراك (دفعة)', desc: 'إنستا · فودافون · بنكي', color: '#c5a45d' },
-    { href: '/admin/fixed-schedule', icon: 'calendar_month', title: 'تعديل مواعيد الحلقات', desc: `${scheduleCount ?? 0} موعد ثابت`, color: '#3d665a' },
-    { href: '/admin/session-eval', icon: 'videocam', title: 'تقييم حصة المعلم', desc: 'كاميرا · أداء · جودة', color: '#755b1b' },
     { href: '/admin/finance', icon: 'notifications_active', title: 'تذكير بالمستحقات', desc: 'تقرير المالي وتذكير بالدفع', color: '#ba1a1a' },
-    { href: '/supervisor/status', icon: 'check_circle', title: 'تغيير حالة الطالب', desc: 'انسحاب / توقف / رجوع', color: '#176b52' },
-    { href: '/admin/students?status=منسحب', icon: 'person_off', title: 'قائمة المنسحبين', desc: 'أرشيف الانسحاب', color: '#6f7974' },
     { href: '/supervisor/my-evals', icon: 'star', title: 'تقييماتي ونقاطي', desc: 'نقاط الشهر وتقييم الإدارة', color: '#c5a45d' },
-    { href: '/admin/trials', icon: 'science', title: 'الحصص التجريبية', desc: 'متابعة المحتملين', color: '#3d665a' },
-    { href: '/admin/students?status=موقوف', icon: 'pause_circle', title: 'المتوقفين مؤقتًا', desc: 'للتواصل السريع', color: '#d49a35' },
     { href: '/admin/notes', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'مشكلة أو بلاغ سريع', color: '#3d665a' },
     { href: '/admin/subscriptions-log', icon: 'receipt_long', title: 'سجل الاشتراكات', desc: 'كل الدفعات المسجّلة', color: '#176b52' },
-    { href: '/admin/students/new?trial=1', icon: 'person_add', title: 'إضافة طالب تجريبي', desc: 'حصة تجريبية مستقلة', color: '#3d665a' },
-    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب مشترك', desc: 'بيانات + مواعيد ثابتة', color: '#176b52' },
-    { href: '/admin/teacher-absences', icon: 'event_busy', title: 'غيابات المعلمين', desc: 'تسجيل وعرض', color: '#b45309' },
-    { href: '/admin/schedule', icon: 'event_available', title: 'الحضور والتحضير', desc: 'أرشيف الحصص', color: '#176b52' },
+    { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'كل الطلاب · الحالة · التعديل · النقل · التجريبي', color: '#176b52' },
+    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب', desc: 'اختار: تجريبي أو مشترك فعلي', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'تقييمات أولياء الأمور', desc: 'عرض التقييمات', color: '#c5a45d' },
   ]
 
