@@ -25,7 +25,7 @@ export function formatCurrency(amount: number, currency = 'EGP') {
 export function formatDate(date: string | Date | null | undefined) {
   if (!date) return '—'
   const d = typeof date === 'string' ? new Date(date) : date
-  return new Intl.DateTimeFormat('ar-EG', {
+  return new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

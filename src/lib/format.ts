@@ -13,12 +13,12 @@ export function fmtDate(d: Date | string | null | undefined, opts?: Intl.DateTim
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleDateString('ar-EG', { numberingSystem: 'latn', ...opts })
+  return date.toLocaleDateString('ar-EG-u-nu-latn', { numberingSystem: 'latn', ...opts })
 }
 
 export function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return '—'
   const date = typeof d === 'string' ? new Date(d) : d
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString('ar-EG', { numberingSystem: 'latn' })
+  return date.toLocaleString('en-US', { numberingSystem: 'latn' })
 }
