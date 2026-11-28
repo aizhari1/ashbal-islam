@@ -22,6 +22,7 @@ type Student = {
 export default function TeacherSessionPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [monthCounts, setMonthCounts] = useState<Record<string, number>>({})
+  const [links, setLinks] = useState<Record<string, string>>({})
   const [selected, setSelected] = useState<Student | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -71,6 +72,7 @@ export default function TeacherSessionPage() {
       const list = (room.students || []) as Student[]
       setStudents(list)
       setMonthCounts(((room as any).monthCounts || {}) as Record<string, number>)
+      setLinks(((room as any).links || {}) as Record<string, string>)
       if (!list.length) {
         setLoadErr(room.error || 'مفيش طلاب نشطين مربوطين بيك')
       }
@@ -133,6 +135,7 @@ export default function TeacherSessionPage() {
     setArabicLang('')
     setPreview('')
     setMsg('')
+    setLastReport(null)
     setShowForm(true)
     setServerNum(null)
     setTodayExisting(false)
@@ -141,6 +144,24 @@ export default function TeacherSessionPage() {
       if (previewFor.current === s.id && typeof r?.sessionNum === 'number') {
         setServerNum(r.sessionNum)
         setTodayExisting(!!r.alreadyToday)
+      }
+      const lr = r?.lastReport
+      if (previewFor.current === s.id && lr) {
+        const fill = (set: (f: (c: string) => string) => void, v: any) => {
+          if (v) set((c) => c || String(v))
+        }
+        fill(setNewMem, lr.new_memorization)
+        fill(setRecentPast, lr.recent_past)
+        fill(setFarPast, lr.far_past)
+        fill(setArabicLang, lr.arabic_lang)
+        fill(setTarbiya, lr.tarbiya_note)
+        fill(setSharii, lr.sharii_note)
+        fill(setHifzFrom, lr.hifz_from)
+        fill(setHifzTo, lr.hifz_to)
+        fill(setMurajaFrom, lr.muraja_from)
+        fill(setMurajaTo, lr.muraja_to)
+        fill(setTajweed, lr.tajweed_notes)
+        setLastReport({ title: String(lr.session_date || '').slice(0, 10), text: '' })
       }
     })
   }
@@ -324,6 +345,17 @@ export default function TeacherSessionPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {links[s.id] && (
+                <a
+                  href={links[s.id]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-full text-[12px] font-bold"
+                  style={{ background: '#e8f0fe', color: '#1a56c4' }}
+                >
+                  🔗 دخول الحلقة
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => openReport(s, 'تم الحضور')}
@@ -380,6 +412,12 @@ export default function TeacherSessionPage() {
             {todayExisting && (
               <p className="text-[12px] font-bold px-3 py-2 rounded-xl mb-2" style={{ background: '#fff4d6', color: '#7a5600' }}>
                 عنده تقرير النهارده بالفعل (حصة {serverNum}) — الحفظ هيعدّل نفس التقرير ومش هيضيف حصة جديدة.
+              </p>
+            )}
+
+            {lastReport && !todayExisting && (
+              <p className="text-[12px] font-bold px-3 py-2 rounded-xl mb-2" style={{ background: '#e8f7f0', color: '#176b52' }}>
+                الخانات اتملت من آخر تقرير ({lastReport.title}) — عدّل بس اللي اتغيّر.
               </p>
             )}
 
