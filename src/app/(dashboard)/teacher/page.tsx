@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { LogoutButton } from '@/components/LogoutButton'
 import Link from 'next/link'
 import { currentMonthKey, monthBounds, monthLabelAr } from '@/lib/dues'
 import { resolveTeacherForUser } from '@/lib/resolve-teacher'
@@ -86,20 +87,13 @@ export default async function TeacherDashboard() {
     { href: '/teacher/attendance', icon: 'menu_book', title: 'سجل حصصي', desc: monthLabelAr(monthKey) },
     { href: '/teacher/chat', icon: 'chat', title: 'محادثة الإدارة', desc: 'استقبال والرد على الإدارة' },
     { href: '/teacher/notifications', icon: 'notifications', title: 'الإشعارات', desc: 'حصص فائتة وتنبيهات مهمة' },
-    { href: '/teacher/note', icon: 'edit_note', title: 'ملاحظة للإدارة', desc: 'طلب أو ملاحظة' },
   ]
 
   return (
     <div className="min-h-dvh max-w-lg mx-auto pb-8 dash-page">
       <div className="px-4 pt-5 pb-6 dash-hero">
         <div className="flex justify-between items-start text-white mb-5">
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <Link href="/login" className="text-[12px] opacity-80">
-              خروج
-            </Link>
-          </div>
-          <div className="text-left">
+          <div className="text-right">
             <h1 className="text-[18px] font-bold text-white">أشبال الإسلام</h1>
             <p className="text-[12px] opacity-85 mt-0.5 text-white">
               أهلاً، {profile?.full_name || teacher?.name || 'معلم'}
@@ -108,6 +102,14 @@ export default async function TeacherDashboard() {
             {(resolved.linked || resolved.created) && (
               <p className="text-[10px] opacity-90 mt-1 text-white">✓ {resolved.message}</p>
             )}
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <LogoutButton
+              compact
+              label="خروج"
+              className="text-[12px] font-bold px-3 py-1.5 rounded-full bg-white text-[#ba1a1a]"
+            />
           </div>
         </div>
         <div className="grid grid-cols-3 text-center text-white">
