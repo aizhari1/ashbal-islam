@@ -1,17 +1,14 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/auth-guards'
 import { serviceClient } from '@/lib/supabase/service'
 import CertificateBuilder from './CertificateBuilder'
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewCertificatePage({ searchParams }: { searchParams: Promise<{ student?: string }> }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!['admin', 'supervisor'].includes(String(p?.role))) redirect('/login')
+  const auth = await requireStaff()
+  if (!auth.ok) redirect('/login')
 
   const sp = await searchParams
   const { data } = await serviceClient().from('students').select('id, code, name, phone, status, teachers(name)').in('status', ['نشط', 'موقوف']).order('name').limit(2000)

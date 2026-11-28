@@ -1,5 +1,5 @@
 export type Gender = 'male' | 'female'
-export type TemplateKey = 'gold' | 'emerald' | 'royal' | 'rose' | 'medal' | 'kids'
+export type TemplateKey = 'gold' | 'emerald' | 'royal' | 'rose' | 'medal' | 'kids' | 'boys' | 'girls' | 'men' | 'women'
 
 export type CertificateData = {
   template: TemplateKey
@@ -14,7 +14,11 @@ export type CertificateData = {
   signer: string
 }
 
-export const TEMPLATES: { key: TemplateKey; name: string; desc: string }[] = [
+export const TEMPLATES: { key: TemplateKey; name: string; desc: string; gender?: Gender }[] = [
+  { key: 'boys', name: 'الأشبال (أولاد)', desc: 'للأولاد الصغار · أزرق مرح', gender: 'male' },
+  { key: 'girls', name: 'الزهرات (بنات)', desc: 'للبنات الصغيرات · وردي مرح', gender: 'female' },
+  { key: 'men', name: 'الرجال', desc: 'أخضر وذهبي وقور', gender: 'male' },
+  { key: 'women', name: 'السيدات', desc: 'ورود هادئة بالوردي', gender: 'female' },
   { key: 'gold', name: 'ذهبي كلاسيك', desc: 'إطار مزخرف بالذهبي على ورق عاجي' },
   { key: 'emerald', name: 'أخضر قرآني', desc: 'نجمة إسلامية وإطار ذهبي على الأخضر' },
   { key: 'royal', name: 'أزرق ملكي', desc: 'شريط عنوان وأوسمة بالأزرق' },

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/auth-guards'
 import { serviceClient } from '@/lib/supabase/service'
 import { TEMPLATES, fmtArabicDate } from '@/lib/certificates'
 import CertRowActions from './CertRowActions'
@@ -8,12 +8,9 @@ import CertRowActions from './CertRowActions'
 export const dynamic = 'force-dynamic'
 
 export default async function CertificatesPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  const role = String(p?.role)
-  if (!['admin', 'supervisor'].includes(role)) redirect('/login')
+  const auth = await requireStaff()
+  if (!auth.ok) redirect('/login')
+  const role = String(auth.role)
 
   const { data } = await serviceClient()
     .from('certificates')
