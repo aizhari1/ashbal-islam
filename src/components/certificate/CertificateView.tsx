@@ -15,6 +15,10 @@ const THEMES: Record<TemplateKey, Theme> = {
   royal: { bg: '#f6f9ff', title: '#ffffff', name: '#14357a', text: '#1b2a4a', label: '#1d4ed8', boxBg: 'rgba(29,78,216,.07)', boxBorder: '#93b0ee', line: '#1d4ed8', fontTitle: "'Reem Kufi', serif" },
   rose: { bg: '#fff3f6', title: '#a63d62', name: '#8a2c4d', text: '#4a2231', label: '#c2557b', boxBg: 'rgba(226,120,155,.10)', boxBorder: '#eaa3bb', line: '#d9748f', fontTitle: "'Aref Ruqaa', serif" },
   medal: { bg: '#fdfcf6', title: '#1f5c47', name: '#17493a', text: '#26332e', label: '#b4862c', boxBg: 'rgba(31,92,71,.06)', boxBorder: '#b4862c', line: '#1f5c47', fontTitle: "'Reem Kufi', serif" },
+  boys: { bg: '#eef6ff', title: '#1d5fc4', name: '#0b3d91', text: '#27364f', label: '#1d6fd8', boxBg: 'rgba(255,255,255,.8)', boxBorder: '#8ecae6', line: '#1d6fd8', fontTitle: "'Aref Ruqaa', serif" },
+  girls: { bg: '#fff0f6', title: '#d6457f', name: '#a3205a', text: '#4a2231', label: '#e0568a', boxBg: 'rgba(255,255,255,.8)', boxBorder: '#f4a3bd', line: '#e0568a', fontTitle: "'Aref Ruqaa', serif" },
+  men: { bg: '#073d30', title: '#f1d58a', name: '#ffffff', text: '#e9f5ef', label: '#f1d58a', boxBg: 'rgba(255,255,255,.08)', boxBorder: '#d4b25c', line: '#d4b25c', fontTitle: "'Reem Kufi', serif" },
+  women: { bg: '#fff3f6', title: '#a63d62', name: '#8a2c4d', text: '#4a2231', label: '#c2557b', boxBg: 'rgba(226,120,155,.10)', boxBorder: '#eaa3bb', line: '#d9748f', fontTitle: "'Aref Ruqaa', serif" },
   kids: { bg: '#fff8e1', title: '#e4572e', name: '#2b59c3', text: '#3b3b3b', label: '#e4572e', boxBg: 'rgba(255,255,255,.75)', boxBorder: '#ffb703', line: '#fb8500', fontTitle: "'Aref Ruqaa', serif" },
 }
 
@@ -40,8 +44,10 @@ function Star8({ cx, cy, r, fill, opacity = 1 }: { cx: number; cy: number; r: nu
   )
 }
 
-function Decor({ t }: { t: TemplateKey }) {
+function Decor({ t: key }: { t: TemplateKey }) {
   const w = CERT_W, h = CERT_H
+  const kp = key === 'boys' ? { a: '#1d6fd8', b: '#ffb703', c: '#8ecae6' } : key === 'girls' ? { a: '#e0568a', b: '#ffb703', c: '#f4a3bd' } : { a: '#fb8500', b: '#ffb703', c: '#8ecae6' }
+  const t: TemplateKey = key === 'boys' || key === 'girls' ? 'kids' : key === 'men' ? 'emerald' : key === 'women' ? 'rose' : key
   if (t === 'gold')
     return (
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: 'absolute', inset: 0 }}>
@@ -90,11 +96,9 @@ function Decor({ t }: { t: TemplateKey }) {
         <rect x="0" y="0" width="64" height={h} fill="url(#r2)" />
         <rect x={w - 64} y="0" width="64" height={h} fill="url(#r2)" />
         <rect x="64" y="22" width={w - 128} height={h - 44} fill="none" stroke="#1d4ed8" strokeWidth="2" />
-        {/* شريط العنوان */}
         <polygon points={`150,78 ${w - 150},78 ${w - 120},128 ${w - 150},178 150,178 120,128`} fill="url(#r1)" />
         <polygon points={`150,178 132,196 150,196`} fill="#0b2a6f" />
         <polygon points={`${w - 150},178 ${w - 132},196 ${w - 150},196`} fill="#0b2a6f" />
-        {[0, 1, 2, 3, 4].map((i) => <Star8 key={i} cx={100 + i * 0} cy={110 + i * 0} r={0} fill="#fff" />)}
         {[200, 330, 770, 900].map((x, i) => <Star8 key={i} cx={x} cy={128} r={8} fill="#fde68a" />)}
         {[110, 220, 330, 440, 550, 660, 770].map((y, i) => (
           <g key={i}><Star8 cx={32} cy={y} r={7} fill="#fff" opacity={0.55} /><Star8 cx={w - 32} cy={y} r={7} fill="#fff" opacity={0.55} /></g>
@@ -128,10 +132,8 @@ function Decor({ t }: { t: TemplateKey }) {
         </defs>
         <rect x="26" y="26" width={w - 52} height={h - 52} rx="14" fill="none" stroke="#1f5c47" strokeWidth="5" />
         <rect x="42" y="42" width={w - 84} height={h - 84} rx="8" fill="none" stroke="#b4862c" strokeWidth="1.8" />
-        {/* شرائط الميدالية */}
         <polygon points={`${w / 2 - 34},76 ${w / 2 - 6},76 ${w / 2 - 28},160 ${w / 2 - 62},140`} fill="#1f5c47" />
         <polygon points={`${w / 2 + 34},76 ${w / 2 + 6},76 ${w / 2 + 28},160 ${w / 2 + 62},140`} fill="#2a7a5e" />
-        {/* أكاليل الغار */}
         {[-1, 1].map((d) => (
           <g key={d} transform={`translate(${w / 2} 128) scale(${d} 1)`}>
             {Array.from({ length: 9 }).map((_, i) => {
@@ -145,12 +147,11 @@ function Decor({ t }: { t: TemplateKey }) {
         <Star8 cx={w / 2} cy={128} r={24} fill="#fff6d6" />
       </svg>
     )
-  // kids
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: 'absolute', inset: 0 }}>
-      <rect x="22" y="22" width={w - 44} height={h - 44} rx="40" fill="none" stroke="#fb8500" strokeWidth="10" />
-      <rect x="22" y="22" width={w - 44} height={h - 44} rx="40" fill="none" stroke="#ffb703" strokeWidth="10" strokeDasharray="36 28" />
-      <rect x="44" y="44" width={w - 88} height={h - 88} rx="26" fill="none" stroke="#8ecae6" strokeWidth="3" />
+      <rect x="22" y="22" width={w - 44} height={h - 44} rx="40" fill="none" stroke={kp.a} strokeWidth="10" />
+      <rect x="22" y="22" width={w - 44} height={h - 44} rx="40" fill="none" stroke={kp.b} strokeWidth="10" strokeDasharray="36 28" />
+      <rect x="44" y="44" width={w - 88} height={h - 88} rx="26" fill="none" stroke={kp.c} strokeWidth="3" />
       {[[110, 120, '#ef476f', 12], [w - 120, 140, '#06d6a0', 14], [150, h - 130, '#118ab2', 11], [w - 150, h - 110, '#ffd166', 13], [330, 70, '#06d6a0', 8], [w - 330, 78, '#ef476f', 9], [90, 400, '#ffd166', 9], [w - 90, 420, '#118ab2', 9]].map(([x, y, c, r], i) => (
         <circle key={i} cx={x as number} cy={y as number} r={r as number} fill={c as string} opacity=".9" />
       ))}
@@ -165,16 +166,16 @@ function Decor({ t }: { t: TemplateKey }) {
 }
 
 const Seal = ({ color }: { color: string }) => (
-  <svg width="96" height="96" viewBox="-48 -48 96 96">
-    <circle r="44" fill="none" stroke={color} strokeWidth="3" />
-    <circle r="36" fill="none" stroke={color} strokeWidth="1.4" strokeDasharray="3 4" />
-    <rect x="-17" y="-17" width="34" height="34" fill={color} opacity=".9" />
-    <rect x="-17" y="-17" width="34" height="34" fill={color} opacity=".9" transform="rotate(45)" />
-    <circle r="9" fill="#fff" opacity=".9" />
-  </svg>
+  <div style={{ position: 'relative', width: 112, height: 112 }}>
+    <svg width="112" height="112" viewBox="-56 -56 112 112" style={{ position: 'absolute', inset: 0 }}>
+      <circle r="53" fill="none" stroke={color} strokeWidth="3" />
+      <circle r="47" fill="none" stroke={color} strokeWidth="1.4" strokeDasharray="3 4" />
+    </svg>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src="/logo.jpg" alt="" crossOrigin="anonymous" style={{ position: 'absolute', top: 12, left: 12, width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', background: '#fff' }} />
+  </div>
 )
 
-/** الشهادة بمقاس ثابت 1100×778 — بتتحجّم بـ ScaledCertificate */
 export const CertificateCard = forwardRef<HTMLDivElement, { data: CertificateData }>(function CertificateCard({ data }, ref) {
   const th = THEMES[data.template] || THEMES.gold
   const date = fmtArabicDate(data.issueDate)
@@ -216,7 +217,7 @@ export const CertificateCard = forwardRef<HTMLDivElement, { data: CertificateDat
             <div style={{ height: 2, background: th.line, margin: '4px 18px' }} />
             <div style={{ fontSize: 20, color: th.label }}>المعلّم</div>
           </div>
-          <div style={{ width: 150, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ width: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: -6 }}>
             <Seal color={th.line} />
           </div>
           <div style={{ width: 280 }}>
@@ -232,7 +233,6 @@ export const CertificateCard = forwardRef<HTMLDivElement, { data: CertificateDat
   )
 })
 
-/** بيحجّم الشهادة على عرض الشاشة */
 export function ScaledCertificate({ data, maxWidth }: { data: CertificateData; maxWidth?: number }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.35)
