@@ -63,14 +63,12 @@ export default async function AdminDashboard({
     { href: '/admin/sessions-detail', icon: 'list_alt', title: 'تفاصيل الحصص', desc: 'لكل معلم · طلاب · سعر ومدة', color: '#00513c' },
     { href: '/admin/payments', icon: 'credit_card', title: 'المدفوعات', desc: 'إنستا · فودافون · بنكي', color: '#755b1b' },
     { href: '/admin/activity', icon: 'history', title: 'سجل النشاط', desc: 'كل التغييرات في تايم لاين', color: '#3d665a' },
-    { href: '/supervisor/edit-student', icon: 'edit_note', title: 'تعديل عدّاد الطالب', desc: 'رقم آخر حصة · الباقة · السعر', color: '#176b52' },
-    { href: '/admin/trials', icon: 'science', title: 'الحصص التجريبية', desc: 'طلاب محتملون ومتابعة', color: '#176b52' },
     { href: '/admin/teacher-absences', icon: 'event_busy', title: 'غيابات المعلمين', desc: 'المسجّلة من الإشراف', color: '#b45309' },
     { href: '/admin/analytics', icon: 'bar_chart', title: 'تحليلات الباقات', desc: 'أكثر وأقل باقة · نسب', color: '#176b52' },
     { href: '/admin/notes', icon: 'sticky_note_2', title: 'الملاحظات', desc: 'ملاحظات الإدارة والإشراف', color: '#3d665a' },
     { href: '/admin/chat', icon: 'chat', title: 'شات المعلمين', desc: 'محادثة إدارة ↔ معلم', color: '#176b52' },
-    { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'سجلات المتابعة', color: '#176b52' },
-    { href: '/admin/students/new', icon: 'person_add', title: 'طالب جديد', desc: 'تسجيل واشتراك', color: '#176b52' },
+    { href: '/admin/students', icon: 'groups', title: 'إدارة شؤون الطلاب', desc: 'كل الطلاب · الحالة · التعديل · النقل · التجريبي', color: '#176b52' },
+    { href: '/admin/students/new', icon: 'person_add', title: 'إضافة طالب', desc: 'تجريبي أو مشترك فعلي', color: '#176b52' },
     { href: '/admin/reports', icon: 'analytics', title: 'التقارير', desc: 'ملخصات وإحصائيات', color: '#176b52' },
     { href: '/admin/evaluations', icon: 'rate_review', title: 'التقييمات', desc: 'أولياء الأمور + تقييم الإدارة', color: '#176b52' },
     { href: '/admin/finance', icon: 'payments', title: 'التذكير المالي', desc: 'مستحقات · تذكير', color: '#755b1b' },
@@ -84,7 +82,6 @@ export default async function AdminDashboard({
     { href: '/admin/subscriptions-log', icon: 'receipt_long', title: 'سجل الاشتراكات', desc: 'مدفوعات الباقات', color: '#755b1b' },
     { href: '/admin/users', icon: 'manage_accounts', title: 'إدارة المستخدمين', desc: 'أدوار وصلاحيات', color: '#3d665a' },
     { href: '/admin/packages', icon: 'inventory_2', title: 'باقات الاشتراك', desc: 'تعريف الباقات', color: '#176b52' },
-    { href: '/admin/transfer', icon: 'swap_horiz', title: 'نقل طالب', desc: 'بين معلمين', color: '#176b52' },
   ]
 
   return (
