@@ -91,5 +91,23 @@ export async function getMySessionRoom() {
     /* العدّ مش حرج */
   }
 
-  return { teacher, students, monthCounts, error: null }
+  // رابط الحلقة (Zoom/Meet) من جدول المواعيد — لكل طالب آخر رابط متسجّل
+  const links: Record<string, string> = {}
+  try {
+    const { data: sched } = await (sb as any)
+      .from('schedule_entries')
+      .select('student_id, notes, created_at')
+      .eq('teacher_id', teacher.id)
+      .not('student_id', 'is', null)
+      .order('created_at', { ascending: true })
+      .limit(1000)
+    for (const row of sched || []) {
+      const m = String(row.notes || '').match(/ZOOM=(\S+)/)
+      if (m && row.student_id && /^https?:\/\//i.test(m[1])) links[row.student_id] = m[1]
+    }
+  } catch {
+    /* الروابط مش حرجة */
+  }
+
+  return { teacher, students, monthCounts, links, error: null }
 }
