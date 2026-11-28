@@ -21,8 +21,11 @@ export default function CertificateBuilder({ students, initialStudentId }: { stu
   })
   const [created, setCreated] = useState<{ id: string; data: CertificateData; phone: string | null } | null>(null)
   const [msg, setMsg] = useState('')
+  const [prefix, setPrefix] = useState<'أستاذ' | 'أستاذة' | ''>('أستاذ')
   const [pending, start] = useTransition()
   const msgIsDefault = useRef(true)
+  const withPrefix = (n: string) => { const t = n.trim(); return !t || !prefix || /^(أستاذ|أستاذة|الأستاذ|الأستاذة|شيخ|الشيخ|ماما|مس)\b/.test(t) ? t : `${prefix} ${t}` }
+  const shown: CertificateData = { ...d, teacherName: withPrefix(d.teacherName) }
   const set = <K extends keyof CertificateData>(k: K, v: CertificateData[K]) => setD((x) => ({ ...x, [k]: v }))
 
   const matches = useMemo(() => {
@@ -53,11 +56,11 @@ export default function CertificateBuilder({ students, initialStudentId }: { stu
     if (!d.studentName.trim()) return setMsg('اختار الطالب أو اكتب اسمه')
     start(async () => {
       const r: any = await createCertificate({
-        student_id: stu?.id || null, student_name: d.studentName, teacher_name: d.teacherName, gender: d.gender, template: d.template,
+        student_id: stu?.id || null, student_name: d.studentName, teacher_name: withPrefix(d.teacherName), gender: d.gender, template: d.template,
         title: d.title, memorized: d.memorized, progress: d.progress, message: d.message, issue_date: d.issueDate, signer: d.signer,
       })
       if (r?.error) return setMsg(r.error)
-      setCreated({ id: r.id, data: { ...d }, phone: stu?.phone || null })
+      setCreated({ id: r.id, data: { ...shown }, phone: stu?.phone || null })
     })
   }
 
@@ -77,7 +80,7 @@ export default function CertificateBuilder({ students, initialStudentId }: { stu
 
   return (
     <div className="px-4 space-y-4">
-      <div className="rounded-2xl overflow-hidden shadow bg-white sticky top-2 z-10"><ScaledCertificate data={d} /></div>
+      <div className="rounded-2xl overflow-hidden shadow bg-white sticky top-2 z-10"><ScaledCertificate data={shown} /></div>
 
       <section className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
         <h2 className="text-[14px] font-bold">الطالب</h2>
@@ -99,7 +102,7 @@ export default function CertificateBuilder({ students, initialStudentId }: { stu
         <h2 className="text-[14px] font-bold mb-3">القالب ({TEMPLATES.length} أشكال)</h2>
         <div className="grid grid-cols-2 gap-2.5">
           {TEMPLATES.map((t) => (
-            <button key={t.key} type="button" onClick={() => set('template', t.key as TemplateKey)} className="text-right rounded-xl p-1.5" style={{ border: `2.5px solid ${d.template === t.key ? '#176b52' : '#e5efe8'}`, background: d.template === t.key ? '#e8f7f0' : '#fff' }}>
+            <button key={t.key} type="button" onClick={() => { set('template', t.key as TemplateKey); if (t.gender) setGender(t.gender) }} className="text-right rounded-xl p-1.5" style={{ border: `2.5px solid ${d.template === t.key ? '#176b52' : '#e5efe8'}`, background: d.template === t.key ? '#e8f7f0' : '#fff' }}>
               <div className="rounded-lg overflow-hidden pointer-events-none"><ScaledCertificate data={{ ...d, template: t.key as TemplateKey, studentName: d.studentName || 'اسم الطالب' }} /></div>
               <p className="text-[12px] font-bold mt-1">{t.name}</p>
               <p className="text-[10px]" style={{ color: '#6f7974' }}>{t.desc}</p>
@@ -112,7 +115,14 @@ export default function CertificateBuilder({ students, initialStudentId }: { stu
         <h2 className="text-[14px] font-bold">محتوى الشهادة</h2>
         <label className="block text-[12px] font-bold">العنوان<input className={input} style={bd} value={d.title} onChange={(e) => set('title', e.target.value)} /></label>
         <label className="block text-[12px] font-bold">اسم الطالب على الشهادة<input className={input} style={bd} value={d.studentName} onChange={(e) => set('studentName', e.target.value)} /></label>
-        <label className="block text-[12px] font-bold">المعلّم<input className={input} style={bd} value={d.teacherName} onChange={(e) => set('teacherName', e.target.value)} /></label>
+        <div className="grid grid-cols-[110px_1fr] gap-2 items-end">
+          <label className="block text-[12px] font-bold">اللقب
+            <select className={input} style={bd} value={prefix} onChange={(e) => setPrefix(e.target.value as any)}>
+              <option value="أستاذ">أستاذ</option><option value="أستاذة">أستاذة</option><option value="">بدون</option>
+            </select>
+          </label>
+          <label className="block text-[12px] font-bold">المعلّم<input className={input} style={bd} value={d.teacherName} onChange={(e) => set('teacherName', e.target.value)} /></label>
+        </div>
         <label className="block text-[12px] font-bold">المحفوظ<input className={input} style={bd} placeholder="مثال: جزء عمّ كاملًا" value={d.memorized} onChange={(e) => set('memorized', e.target.value)} /></label>
         <label className="block text-[12px] font-bold">التقدّم<input className={input} style={bd} placeholder="مثال: أتمّ 12 حصة · متوسط التقييم 9/10" value={d.progress} onChange={(e) => set('progress', e.target.value)} /></label>
         <label className="block text-[12px] font-bold">نص التقدير
