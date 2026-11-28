@@ -101,6 +101,29 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           </p>
         </div>
 
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Link
+            href={`/supervisor/edit-student?id=${student.id}`}
+            className="btn-primary text-center py-2.5 text-[13px]"
+          >
+            تعديل البيانات والعدّاد
+          </Link>
+          <Link
+            href={`/admin/payments?student=${student.id}`}
+            className="text-center py-2.5 text-[13px] font-bold rounded-xl bg-white"
+            style={{ color: '#755b1b', border: '1px solid #e5efe8' }}
+          >
+            تسجيل دفعة
+          </Link>
+          <Link
+            href={`/admin/session-settle`}
+            className="text-center py-2.5 text-[13px] font-bold rounded-xl bg-white col-span-2"
+            style={{ color: '#ba1a1a', border: '1px solid #e5efe8' }}
+          >
+            حصص المعلم عند الطالب (حذف/إضافة)
+          </Link>
+        </div>
+
         <StudentActions
           studentId={student.id}
           studentName={student.name}

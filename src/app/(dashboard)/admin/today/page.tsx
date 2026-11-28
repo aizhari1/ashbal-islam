@@ -97,6 +97,12 @@ export default async function TodayPage() {
         <Link href="/admin/fixed-schedule" className="btn-primary block text-center py-2.5 mt-2 text-[13px]">
           تعديل المواعيد الثابتة
         </Link>
+        <Link href="/admin/session-eval" className="block text-center py-2 text-[13px] font-bold" style={{ color: '#755b1b' }}>
+          تقييم حصة المعلم
+        </Link>
+        <Link href="/admin/schedule" className="block text-center py-2 text-[13px] font-bold" style={{ color: '#176b52' }}>
+          الحضور والتحضير (أرشيف الحصص)
+        </Link>
         <Link href="/admin/teacher-absences" className="block text-center py-2 text-[13px] font-bold" style={{ color: '#b45309' }}>
           تسجيل غياب معلم
         </Link>

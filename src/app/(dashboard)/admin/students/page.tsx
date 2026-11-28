@@ -93,6 +93,16 @@ export default async function StudentsPage({
           })}
         </div>
 
+        {params.status === 'تجريبي' && (
+          <Link
+            href="/admin/trials"
+            className="block text-center text-[13px] font-bold py-2.5 rounded-xl mb-3 bg-white"
+            style={{ color: '#176b52', border: '1px solid #cde8dc' }}
+          >
+            متابعة الحصص التجريبية والمحتملين ←
+          </Link>
+        )}
+
         <StudentsLiveSearch students={list} hrefPrefix="/admin/students" />
       </main>
 
