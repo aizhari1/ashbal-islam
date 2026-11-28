@@ -33,7 +33,10 @@ export default function ShareBar({
     if (!node) return null
     try { await (document as any).fonts?.ready } catch { /* ignore */ }
     await new Promise((r) => setTimeout(r, 250))
-    const blob = await toBlob(node, { pixelRatio: 2, cacheBust: true, width: CERT_W, height: CERT_H, style: { transform: 'none' } })
+    const base = { pixelRatio: 2, width: CERT_W, height: CERT_H, style: { transform: 'none' } }
+    let blob: Blob | null = null
+    try { blob = await toBlob(node, { ...base, cacheBust: true }) } catch { blob = null }
+    if (!blob) { try { blob = await toBlob(node, { ...base, skipFonts: true }) } catch { blob = null } }
     return blob ? new File([blob], `شهادة-${data.studentName}.png`, { type: 'image/png' }) : null
   }
 
@@ -66,8 +69,12 @@ export default function ShareBar({
       const file = await makeFile()
       if (!file) throw new Error('تعذر تجهيز الصورة')
       const a = document.createElement('a')
-      a.href = URL.createObjectURL(file); a.download = file.name; a.click()
-    } catch (e: any) { setMsg(e?.message || 'تعذر التحميل') } finally { setBusy(false) }
+      const href = URL.createObjectURL(file)
+      a.href = href; a.download = file.name; a.style.display = 'none'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(href), 10000)
+      setMsg('اتحمّلت الصورة ✓')
+    } catch (e: any) { setMsg('تعذر تجهيز الصورة — جرّب "طباعة / PDF" أو خد لقطة شاشة') } finally { setBusy(false) }
   }
 
   const sendLink = () => {

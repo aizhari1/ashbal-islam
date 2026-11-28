@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { requireStaff as guardStaff } from '@/lib/auth-guards'
 import { serviceClient } from '@/lib/supabase/service'
 import { TEMPLATES } from '@/lib/certificates'
 
@@ -10,13 +10,9 @@ const KEYS = TEMPLATES.map((t) => t.key as string)
 const clip = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n)
 
 async function requireStaff(): Promise<{ ok: true; userId: string; role: string } | { ok: false; error: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'غير مصرح' }
-  const { data: p } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  const role = String(p?.role || '')
-  if (!['admin', 'supervisor'].includes(role)) return { ok: false, error: 'للإدارة والإشراف فقط' }
-  return { ok: true, userId: user.id, role }
+  const r = await guardStaff()
+  if (!r.ok || !r.userId) return { ok: false, error: r.error || 'غير مصرح' }
+  return { ok: true, userId: r.userId, role: String(r.role || '') }
 }
 
 /** اقتراحات تلقائية للشهادة من بيانات الطالب وتقارير حصصه */
